@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LogOut } from 'lucide-react';
+import { LogOut, Loader2, QrCode, Utensils, History, TicketCheck } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,7 +13,7 @@ const supabase = createClient(
 type EstadoVista = 'cargando' | 'busqueda' | 'dashboard' | 'animando' | 'ticket';
 
 export default function MiValePage() {
-  const router = useRouter(); // Necesario para el logout
+  const router = useRouter();
   const [nombreBusqueda, setNombreBusqueda] = useState('');
   const [empleado, setEmpleado] = useState<any>(null);
   const [historial, setHistorial] = useState<any[]>([]);
@@ -22,14 +21,11 @@ export default function MiValePage() {
   const [estadoVista, setEstadoVista] = useState<EstadoVista>('cargando');
   const [pasoAnimacion, setPasoAnimacion] = useState(0);
 
-  // 1. AUTO-LOGIN INTELIGENTE AL ENTRAR
   useEffect(() => {
     const intentarAutoLogin = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (session?.user?.email) {
         const emailPrefijo = session.user.email.split('@')[0].replace(/\./g, ' ');
-        
         const { data } = await supabase
           .from('perfiles')
           .select('*')
@@ -45,11 +41,9 @@ export default function MiValePage() {
       }
       setEstadoVista('busqueda');
     };
-
     intentarAutoLogin();
   }, []);
 
-  // 2. BÚSQUEDA MANUAL (PLAN B)
   const buscarEmpleadoManual = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setError('');
@@ -74,11 +68,10 @@ export default function MiValePage() {
       .select('*')
       .eq('nombre_empleado', nombre)
       .order('fecha_hora', { ascending: false })
-      .limit(3);
+      .limit(5);
     if (data) setHistorial(data);
   };
 
-  // 3. SECUENCIA DE ANIMACIÓN
   const iniciarGeneracion = () => {
     if (empleado.tickets_restantes <= 0) {
       alert("🚫 Lo sentimos, ya no tienes vales disponibles para hoy.");
@@ -86,7 +79,6 @@ export default function MiValePage() {
     }
     setEstadoVista('animando');
     setPasoAnimacion(1);
-
     setTimeout(() => setPasoAnimacion(2), 800);
     setTimeout(() => setPasoAnimacion(3), 1600);
     setTimeout(() => setPasoAnimacion(4), 2400);
@@ -96,7 +88,6 @@ export default function MiValePage() {
     }, 3200);
   };
 
-  // NUEVA FUNCIÓN: Cerrar sesión y romper el bucle
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/');
@@ -106,7 +97,6 @@ export default function MiValePage() {
   const hoyLargo = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const folioGenerado = `FGE-${empleado?.dependencia?.substring(0,3).toUpperCase() || 'EMP'}-00${empleado?.id || '1'}`;
 
-  // --- PANTALLA DE CARGA INICIAL ---
   if (estadoVista === 'cargando') {
     return <div className="min-h-screen bg-[#F0F3F6] flex items-center justify-center font-bold text-slate-400 animate-pulse">Verificando acceso...</div>;
   }
@@ -114,10 +104,9 @@ export default function MiValePage() {
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
       
-      {/* NUEVA CABECERA INSTITUCIONAL CON LOGO Y BOTÓN SALIR */}
+      {/* CABECERA */}
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
         <div className="flex items-center gap-4">
-          {/* Logo FGE */}
           <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner shrink-0">
             <img 
               src="/logo-fge.png" 
@@ -127,104 +116,108 @@ export default function MiValePage() {
             />
           </div>
           <div className="overflow-hidden">
-            <h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight truncate">
-              {empleado ? empleado.nombre_completo : 'Panel de Empleado'}
+            <h1 className="font-black text-sm uppercase tracking-wider leading-tight truncate">
+              {empleado ? empleado.nombre_completo : 'Panel Empleado'}
             </h1>
-            <p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest truncate">
-              {empleado ? empleado.dependencia : 'Fiscalía General'}
-            </p>
+            <p className="text-[#C9A84C] text-[9px] font-bold tracking-widest truncate uppercase">Fiscalía General</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-xs font-medium text-slate-300 hidden sm:block">{hoyCorto}</div>
-          <button 
-            onClick={handleLogout} 
-            className="bg-white/10 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-white/5 shadow-sm"
-            title="Cerrar Sesión"
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
+        <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all">
+          <LogOut size={18} />
+        </button>
       </nav>
 
       <div className="max-w-md mx-auto px-4 mt-6">
 
-        {/* 🔓 VISTA 1: BÚSQUEDA MANUAL */}
-        {estadoVista === 'busqueda' && (
-          <form onSubmit={buscarEmpleadoManual} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-            <h2 className="text-2xl font-black text-[#1A2744] mb-2">Comedor FGE Yucatán</h2>
-            <p className="text-slate-500 mb-6 text-sm">Ingresa tu nombre completo para ver tu vale.</p>
-            <input 
-              type="text" 
-              value={nombreBusqueda}
-              onChange={(e) => setNombreBusqueda(e.target.value)}
-              className="w-full p-4 border border-slate-200 rounded-xl mb-4 uppercase font-bold text-slate-800 focus:border-[#C9A84C] outline-none"
-              placeholder="ESCRIBE TU NOMBRE..."
-            />
-            <button type="submit" className="w-full bg-[#C9A84C] hover:bg-amber-500 text-white py-4 rounded-xl font-bold transition-all shadow-md">
-              Consultar Mi Vale
-            </button>
-            {error && <p className="text-red-500 mt-4 text-center text-sm font-medium">{error}</p>}
-          </form>
-        )}
-
         {/* 📋 VISTA 2: DASHBOARD PRINCIPAL */}
-        {estadoVista === 'dashboard' && (
-          <div className="flex flex-col gap-6">
+        {estadoVista === 'dashboard' && empleado && (
+          <div className="flex flex-col gap-5 animate-in fade-in duration-500">
+            
+            {/* TARJETAS DE ACUMULADOS (NUEVAS) */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                <div className="w-8 h-8 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-2">
+                  <TicketCheck size={18} />
+                </div>
+                <h3 className="text-2xl font-black text-[#1A2744]">{empleado.tickets_canjeado || 0}</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Usados</p>
+              </div>
+              <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                <div className="w-8 h-8 bg-amber-50 text-[#C9A84C] rounded-full flex items-center justify-center mb-2">
+                  <Utensils size={18} />
+                </div>
+                <h3 className="text-2xl font-black text-[#1A2744]">{empleado.tickets_restantes || 0}</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Disponibles</p>
+              </div>
+            </div>
+
+            {/* BANNER PRINCIPAL */}
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
-              <p className="text-slate-400 text-xs font-medium mb-1 capitalize">{hoyLargo}</p>
-              <h2 className="text-2xl font-black text-[#1A2744] mb-6">Vale de Comida</h2>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">{hoyLargo}</p>
+              <h2 className="text-xl font-black text-[#1A2744] mb-4">Vale de Comida</h2>
               <div className="w-full bg-emerald-50 text-emerald-700 p-4 rounded-2xl border border-emerald-100">
-                <p className="font-bold text-base mb-1">Vale disponible</p>
-                <p className="text-emerald-600/80 text-xs">Tienes {empleado.tickets_restantes} comida + 1 refresco disponible para hoy</p>
+                <p className="font-bold text-sm mb-1">Estatus: Activo</p>
+                <p className="text-emerald-600/80 text-[11px]">Tienes {empleado.tickets_restantes} comida + 1 refresco para hoy</p>
               </div>
             </div>
 
             <button 
               onClick={iniciarGeneracion}
-              className="w-full bg-[#1A2744] hover:bg-slate-800 text-white py-5 rounded-2xl font-bold text-lg transition-all shadow-lg flex justify-center items-center gap-2"
+              className="w-full bg-[#1A2744] hover:bg-slate-800 text-white py-5 rounded-2xl font-bold text-lg transition-all shadow-lg flex justify-center items-center gap-3 active:scale-95"
             >
-              <span className="text-xl">🔲</span> Generar Vale del Día
+              <QrCode size={24} /> Generar Vale del Día
             </button>
 
+            {/* HISTORIAL */}
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-              <h3 className="text-sm font-medium text-slate-700 mb-4">Historial reciente</h3>
+              <div className="flex items-center gap-2 mb-4">
+                <History size={16} className="text-slate-400" />
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Historial reciente</h3>
+              </div>
               <div className="flex flex-col gap-4">
                 {historial.map((h, i) => (
                   <div key={i} className="flex justify-between items-center border-b border-slate-50 pb-3 last:border-0 last:pb-0">
                     <div>
-                      <p className="font-bold text-slate-800 text-sm">{new Date(h.fecha_hora).toLocaleDateString('es-MX')}</p>
-                      <p className="text-slate-400 text-xs">🕒 {new Date(h.fecha_hora).toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'})}</p>
+                      <p className="font-bold text-[#1A2744] text-sm">{new Date(h.fecha_hora).toLocaleDateString('es-MX')}</p>
+                      <p className="text-slate-400 text-[10px] font-medium uppercase tracking-tighter">🕒 {new Date(h.fecha_hora).toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'})}</p>
                     </div>
-                    <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1 rounded-full text-xs font-bold">Canjeado</span>
+                    <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Canjeado</span>
                   </div>
                 ))}
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-slate-800 text-sm">Ayer</p>
-                    <p className="text-slate-400 text-xs">🕒 --:--</p>
-                  </div>
-                  <span className="bg-red-50 text-red-500 border border-red-100 px-3 py-1 rounded-full text-xs font-bold">No utilizado</span>
-                </div>
+                {historial.length === 0 && <p className="text-center text-slate-300 text-xs py-4">No hay canjes previos</p>}
               </div>
             </div>
           </div>
         )}
 
-        {/* ⏳ VISTA 3: ANIMACIÓN DE GENERACIÓN */}
+        {/* MANTENEMOS EL RESTO DE VISTAS (BÚSQUEDA, ANIMANDO, TICKET) IGUAL */}
+        {estadoVista === 'busqueda' && (
+          <form onSubmit={buscarEmpleadoManual} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+            <h2 className="text-2xl font-black text-[#1A2744] mb-2">Comedor FGE</h2>
+            <p className="text-slate-500 mb-6 text-sm">Ingresa tu nombre para ver tu vale.</p>
+            <input 
+              type="text" 
+              value={nombreBusqueda}
+              onChange={(e) => setNombreBusqueda(e.target.value)}
+              className="w-full p-4 border border-slate-200 rounded-xl mb-4 uppercase font-bold text-slate-800 focus:border-[#C9A84C] outline-none"
+              placeholder="NOMBRE COMPLETO..."
+            />
+            <button type="submit" className="w-full bg-[#C9A84C] hover:bg-amber-500 text-white py-4 rounded-xl font-bold transition-all shadow-md">Consultar Mi Vale</button>
+            {error && <p className="text-red-500 mt-4 text-center text-sm font-medium">{error}</p>}
+          </form>
+        )}
+
         {estadoVista === 'animando' && (
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
             <div className="w-20 h-20 bg-[#1A2744] rounded-full flex items-center justify-center text-3xl mb-8 relative shadow-lg">
-              📊
-              <div className="absolute inset-0 rounded-full border-4 border-[#1A2744]/20 animate-ping"></div>
+              📊 <div className="absolute inset-0 rounded-full border-4 border-[#1A2744]/20 animate-ping"></div>
             </div>
-            <h3 className="text-lg font-bold text-[#1A2744] mb-8">Generando código de barras...</h3>
+            <h3 className="text-lg font-bold text-[#1A2744] mb-8 uppercase tracking-widest">Generando...</h3>
             <div className="w-full flex flex-col gap-4 mb-8">
               <PasoCheck visible={pasoAnimacion >= 1} texto="Verificando identidad..." completed={pasoAnimacion > 1} />
-              <PasoCheck visible={pasoAnimacion >= 2} texto="Comprobando cuota de dependencia..." completed={pasoAnimacion > 2} />
+              <PasoCheck visible={pasoAnimacion >= 2} texto="Comprobando cuota..." completed={pasoAnimacion > 2} />
               <PasoCheck visible={pasoAnimacion >= 3} texto="Validando fecha..." completed={pasoAnimacion > 3} />
-              <PasoCheck visible={pasoAnimacion >= 4} texto="Generando código de barras..." completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
+              <PasoCheck visible={pasoAnimacion >= 4} texto="Generando QR..." completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
               <PasoCheck visible={pasoAnimacion >= 5} texto="¡Vale generado!" completed={pasoAnimacion >= 5} />
             </div>
             <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -233,53 +226,34 @@ export default function MiValePage() {
           </div>
         )}
 
-        {/* 🎟️ VISTA 4: TICKET FINAL VIGENTE */}
         {estadoVista === 'ticket' && (
-          <div className="flex flex-col items-center gap-4">
+          <div className="flex flex-col items-center gap-4 animate-in zoom-in duration-300">
             <div className="bg-white rounded-[2rem] overflow-hidden shadow-xl w-full border border-slate-100">
               <div className="bg-[#1A2744] p-6 text-center border-b-2 border-dashed border-slate-400/30 relative">
-                <p className="text-[#C9A84C] text-[10px] uppercase font-bold tracking-[0.1em] mb-1">Fiscalía General del Estado de Yucatán</p>
-                <h2 className="text-white text-lg font-black uppercase tracking-tight">Vale por una Comida<br/><span className="text-[#C9A84C] text-xs">Y UN REFRESCO</span></h2>
+                <p className="text-[#C9A84C] text-[10px] uppercase font-bold tracking-[0.1em] mb-1">Fiscalía General de Yucatán</p>
+                <h2 className="text-white text-lg font-black uppercase tracking-tight">Vale de Comida</h2>
                 <div className="absolute -bottom-3 -left-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
                 <div className="absolute -bottom-3 -right-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
               </div>
-
-              <div className="p-8 flex flex-col items-center relative">
-                <div className="text-center mb-6 w-full">
-                  <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Dependencia</p>
-                  <p className="text-[#1A2744] text-sm font-bold">{empleado.dependencia}</p>
-                </div>
+              <div className="p-8 flex flex-col items-center">
                 <div className="flex justify-between w-full mb-8 gap-4">
                   <div className="text-center flex-1">
-                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Empleado</p>
-                    <p className="text-[#1A2744] text-sm font-bold leading-tight">{empleado.nombre_completo}</p>
+                    <p className="text-slate-400 text-[9px] uppercase font-bold tracking-wider mb-1">Empleado</p>
+                    <p className="text-[#1A2744] text-[11px] font-black leading-tight uppercase">{empleado.nombre_completo}</p>
                   </div>
                   <div className="text-center flex-1">
-                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Fecha</p>
-                    <p className="text-[#1A2744] text-sm font-bold">{hoyCorto}</p>
+                    <p className="text-slate-400 text-[9px] uppercase font-bold tracking-wider mb-1">Fecha</p>
+                    <p className="text-[#1A2744] text-xs font-black">{hoyCorto}</p>
                   </div>
                 </div>
-
-                <div className="w-full bg-[#F8FAFC] p-6 rounded-2xl flex flex-col items-center mb-6">
-                  <img 
-                    src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(empleado.nombre_completo)}&scale=3&rotate=N&includetext`} 
-                    alt="Código de Barras"
-                    className="w-full h-20 object-contain mix-blend-multiply"
-                  />
-                  <p className="text-slate-500 text-[10px] font-bold mt-3 tracking-widest">Folio: {folioGenerado}</p>
+                <div className="w-full bg-[#F8FAFC] p-6 rounded-2xl flex flex-col items-center mb-6 border border-slate-50">
+                  <img src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(empleado.nombre_completo)}&scale=3&rotate=N&includetext`} alt="QR" className="w-full h-20 object-contain mix-blend-multiply" />
+                  <p className="text-slate-500 text-[10px] font-bold mt-3 tracking-widest uppercase">Folio: {folioGenerado}</p>
                 </div>
-                <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-xl text-center font-bold text-sm">
-                  ✓ VALE VIGENTE — Válido solo para hoy
-                </div>
+                <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-xl text-center font-black text-[10px] uppercase tracking-widest border border-emerald-100">✓ Vale Vigente Hoy</div>
               </div>
             </div>
-
-            <div className="w-full bg-indigo-50/50 p-5 rounded-2xl flex items-center gap-4 border border-indigo-100/50">
-              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-500 shrink-0">📱</div>
-              <p className="text-indigo-900/80 text-xs font-medium leading-relaxed">
-                <strong className="text-indigo-900">Presenta este código</strong> en el comedor para canjear tu comida del día.
-              </p>
-            </div>
+            <button onClick={() => setEstadoVista('dashboard')} className="text-slate-400 text-xs font-black uppercase tracking-widest mt-4">Regresar</button>
           </div>
         )}
 
@@ -291,10 +265,9 @@ export default function MiValePage() {
 function PasoCheck({ visible, texto, completed, active }: { visible: boolean, texto: string, completed: boolean, active?: boolean }) {
   if (!visible) return null;
   return (
-    <div className={`flex items-center gap-3 text-sm font-medium transition-all duration-300 ${completed ? 'text-slate-700' : active ? 'text-indigo-600' : 'text-slate-300'}`}>
+    <div className={`flex items-center gap-3 text-xs font-bold transition-all duration-300 ${completed ? 'text-slate-700' : active ? 'text-indigo-600' : 'text-slate-300'}`}>
       <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${completed ? 'bg-emerald-400 text-white' : active ? 'border-2 border-indigo-500' : 'bg-slate-100'}`}>
-        {completed ? '✓' : ''}
-        {active && <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>}
+        {completed ? '✓' : ''} {active && <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>}
       </div>
       {texto}
     </div>
