@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Loader2, Utensils, ChevronRight, Fingerprint } from 'lucide-react';
+import { Loader2, ChevronRight, ShieldCheck } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,7 +30,6 @@ export default function Home() {
       } catch (err) {
         console.error("Error validando sesión", err);
       } finally {
-        // Un pequeño delay para que luzca la animación profesional
         setTimeout(() => setLoading(false), 1500);
       }
     };
@@ -39,10 +38,8 @@ export default function Home() {
 
   const handleStart = () => {
     if (!userProfile) {
-      // SEGÚN TU ESTRUCTURA: Te mando a /dashboard ya que no tienes carpeta /login
       router.push('/dashboard'); 
     } else {
-      // REDIRECCIÓN POR ROL SEGÚN TUS CARPETAS REALES
       if (userProfile.rol === 'admin') router.push('/admin');
       else if (userProfile.rol === 'cajero') router.push('/cajero');
       else router.push('/mi-vale');
@@ -52,13 +49,11 @@ export default function Home() {
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center">
-        <div className="bg-[#1A2744] w-24 h-24 rounded-[2.5rem] flex items-center justify-center shadow-2xl animate-pulse">
-          <Utensils className="text-[#C9A84C]" size={42} />
+        <div className="relative flex items-center justify-center">
+          <div className="w-20 h-20 border-4 border-slate-100 border-t-[#1A2744] rounded-full animate-spin"></div>
+          <ShieldCheck className="absolute text-[#C9A84C]" size={32} />
         </div>
-        <div className="mt-8 flex items-center gap-2">
-          <Loader2 className="text-[#1A2744] animate-spin" size={20} />
-          <p className="text-slate-400 text-xs font-bold tracking-[0.2em] uppercase">Sincronizando...</p>
-        </div>
+        <p className="mt-6 text-slate-400 text-xs font-bold tracking-[0.3em] uppercase animate-pulse">Cargando Seguridad</p>
       </div>
     );
   }
@@ -67,45 +62,47 @@ export default function Home() {
     <div className="min-h-screen bg-white flex flex-col items-center justify-between p-8 font-sans">
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-sm">
         
-        {/* ESCUDO / LOGO */}
-        <div className="relative mb-10">
-          <div className="bg-[#1A2744] w-28 h-28 rounded-[2.8rem] flex items-center justify-center shadow-2xl shadow-blue-900/20">
-            <Utensils className="text-[#C9A84C]" size={48} />
-          </div>
-          <div className="absolute -bottom-2 -right-2 bg-white p-2 rounded-2xl shadow-lg border border-slate-50">
-            <Fingerprint className="text-[#1A2744]" size={20} />
+        {/* CONTENEDOR DEL LOGO OFICIAL */}
+        <div className="mb-10">
+          <div className="bg-white w-32 h-32 rounded-full flex items-center justify-center shadow-2xl shadow-slate-200 border border-slate-50 p-2">
+            {/* Aquí puedes reemplazar 'logo-fge.png' por la ruta real de tu imagen en la carpeta public */}
+            <img 
+              src="https://fge.yucatan.gob.mx/images/logo-fge-header.png" 
+              alt="Logo FGE"
+              className="w-full h-auto object-contain"
+            />
           </div>
         </div>
 
-        {/* TEXTOS */}
+        {/* TEXTOS INSTITUCIONALES */}
         <div className="text-center space-y-3">
-          <h1 className="text-3xl font-black text-[#1A2744] leading-tight tracking-tight">
-            COMEDOR <br /> <span className="text-[#C9A84C]">FISCALÍA</span>
+          <h1 className="text-3xl font-black text-[#1A2744] leading-tight tracking-tighter italic">
+            ADMINISTRACIÓN <br /> <span className="text-[#C9A84C] not-italic font-black">FISCALÍA</span>
           </h1>
-          <div className="h-1 w-12 bg-slate-100 mx-auto rounded-full"></div>
-          <p className="text-slate-400 text-sm font-medium px-4">
+          <div className="h-[2px] w-16 bg-[#C9A84C] mx-auto rounded-full"></div>
+          <p className="text-slate-500 text-sm font-bold pt-2">
             {userProfile 
-              ? `Sesión activa como: ${userProfile.nombre_completo.split(' ')[0]}` 
-              : 'Bienvenido al sistema de control de raciones digitales.'}
+              ? `Bienvenido - ${userProfile.nombre_completo.split(' ')[0]}` 
+              : 'Bienvenido - Administración FGE'}
           </p>
         </div>
 
         {/* BOTÓN DE ACCIÓN */}
         <button 
           onClick={handleStart}
-          className="group mt-14 w-full bg-[#1A2744] text-white p-5 rounded-[2rem] font-bold flex items-center justify-between shadow-xl shadow-blue-900/20 active:scale-[0.97] transition-all hover:bg-slate-800"
+          className="group mt-14 w-full bg-[#1A2744] text-white p-5 rounded-[1.5rem] font-bold flex items-center justify-between shadow-2xl shadow-blue-900/30 active:scale-[0.97] transition-all"
         >
-          <span className="ml-4 tracking-[0.15em] text-xs uppercase font-black">
-            {userProfile ? 'Ingresar al Panel' : 'Comenzar Ahora'}
+          <span className="ml-4 tracking-[0.2em] text-[10px] uppercase font-black">
+            {userProfile ? 'Acceder al Panel' : 'Ingresar al Sistema'}
           </span>
-          <div className="bg-[#C9A84C] p-3 rounded-2xl transition-transform group-hover:translate-x-1">
+          <div className="bg-[#C9A84C] p-2 rounded-lg transition-transform group-hover:translate-x-1">
             <ChevronRight className="text-[#1A2744]" size={20} />
           </div>
         </button>
       </div>
 
-      {/* FOOTER GUBERNAMENTAL */}
-      <div className="text-center pb-4 opacity-40">
+      {/* FOOTER OFICIAL */}
+      <div className="text-center pb-4">
         <p className="text-[9px] font-black tracking-[0.4em] text-slate-300 uppercase">
           Fiscalía General del Estado de Yucatán
         </p>
