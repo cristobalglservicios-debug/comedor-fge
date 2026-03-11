@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
 import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download } from 'lucide-react';
+import { crearUsuarioAdmin } from './actions'; // Importamos la acción de servidor
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,7 +24,6 @@ export default function AdminDashboard() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [empleadoEdit, setEmpleadoEdit] = useState<any>(null);
-  const [nuevaPass, setNuevaPass] = useState('');
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -56,6 +56,14 @@ export default function AdminDashboard() {
     if (dataHistorial) setHistorial(dataHistorial);
   };
 
+  const generarEmail = (nombre: string) => {
+    return nombre.toLowerCase()
+      .trim()
+      .replace(/\s+/g, '.')
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      + "@fge.gob.mx";
+  };
+
   const procesarExcel = (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -65,34 +73,19 @@ export default function AdminDashboard() {
     reader.onload = async (event: any) => {
       const bstr = event.target.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
-      
-      // Diccionario temporal para sumar vales de todas las pestañas
       const mapaEmpleados: Record<string, { dependencia: string, cuota: number }> = {};
 
-      // RECORRER TODAS LAS PESTAÑAS (Lunes, Martes, etc.)
       wb.SheetNames.forEach((sheetName) => {
         const ws = wb.Sheets[sheetName];
         const dataRaw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        let indexNombre = -1, indexDependencia = -1, indexCuota = -1, filaInicio = -1;
 
-        let indexNombre = -1;
-        let indexDependencia = -1;
-        let indexCuota = -1;
-        let filaInicio = -1;
-
-        // Detectar encabezados en cada pestaña
         for (let i = 0; i < dataRaw.length; i++) {
           const fila = dataRaw[i];
           const nomIdx = fila.findIndex(c => String(c).toLowerCase().includes('nombre'));
           const depIdx = fila.findIndex(c => String(c).toLowerCase().includes('adscripción') || String(c).toLowerCase().includes('dependencia'));
-          const cuoIdx = fila.findIndex(c => String(c).toLowerCase().includes('no. de vales') || String(c).toLowerCase().includes('cuota'));
-
-          if (nomIdx !== -1) {
-            indexNombre = nomIdx;
-            indexDependencia = depIdx;
-            indexCuota = cuoIdx;
-            filaInicio = i + 1;
-            break;
-          }
+          const cuoIdx = fila.findIndex(c => String(c).toLowerCase().includes('no. de vales'));
+          if (nomIdx !== -1) { indexNombre = nomIdx; indexDependencia = depIdx; indexCuota = cuoIdx; filaInicio = i + 1; break; }
         }
 
         if (indexNombre !== -1) {
@@ -102,31 +95,30 @@ export default function AdminDashboard() {
             const dependencia = indexDependencia !== -1 ? String(fila[indexDependencia] || 'GENERAL').toUpperCase().trim() : 'GENERAL';
             const cuota = indexCuota !== -1 ? parseInt(fila[indexCuota]) || 0 : 0;
 
-            // Filtro de filas válidas
-            if (nombre.length > 5 && !['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO','DOMINGO','TOTAL','ÁREA:'].some(palabra => nombre.includes(palabra))) {
-              if (mapaEmpleados[nombre]) {
-                mapaEmpleados[nombre].cuota += cuota; // SUMAR si ya existe en otra pestaña
-              } else {
-                mapaEmpleados[nombre] = { dependencia, cuota };
-              }
+            if (nombre.length > 5 && !['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO','DOMINGO','TOTAL'].some(p => nombre.includes(p))) {
+              if (mapaEmpleados[nombre]) { mapaEmpleados[nombre].cuota += cuota; }
+              else { mapaEmpleados[nombre] = { dependencia, cuota }; }
             }
           }
         }
       });
 
-      // SUBIR A SUPABASE (UPSERT)
       const listaFinal = Object.entries(mapaEmpleados).map(([nombre, datos]) => ({
         nombre_completo: nombre,
         dependencia: datos.dependencia,
         tickets_restantes: datos.cuota,
-        tickets_canjeado: 0
+        tickets_canjeado: 0,
+        email: generarEmail(nombre)
       }));
 
       for (const emp of listaFinal) {
+        // 1. Guardar en Perfiles
         await supabase.from('perfiles').upsert(emp, { onConflict: 'nombre_completo' });
+        // 2. Crear Acceso de Usuario (Magia de Servidor)
+        await crearUsuarioAdmin(emp.email, emp.nombre_completo);
       }
 
-      alert(`✅ Procesadas ${wb.SheetNames.length} pestañas. ${listaFinal.length} empleados actualizados.`);
+      alert(`✅ Procesados ${listaFinal.length} empleados con sus cuentas de acceso creadas.`);
       cargarDatosGenerales(); 
       setCargando(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -134,95 +126,78 @@ export default function AdminDashboard() {
     reader.readAsBinaryString(file);
   };
 
+  const descargarAccesos = () => {
+    const data = empleados.map(e => ({
+      Nombre: e.nombre_completo,
+      Correo: e.email,
+      Password_Temporal: "FGE2026*"
+    }));
+    const hoja = XLSX.utils.json_to_sheet(data);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Accesos");
+    XLSX.writeFile(libro, "Lista_Accesos_FGE.xlsx");
+  };
+
   const limpiarHistorialPruebas = async () => {
-    const confirmar = confirm("⚠️ ¿Borrar bitácora y reiniciar canjes?");
-    if (!confirmar) return;
+    if (!confirm("⚠️ ¿Borrar bitácora y reiniciar canjes?")) return;
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('perfiles').update({ tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
-    alert("✅ Sistema limpio.");
-    cargarDatosGenerales();
-    setCargando(false);
+    cargarDatosGenerales(); setCargando(false);
   };
 
-  const actualizarCuota = async (id: string, nuevaCuota: number) => {
-    if (nuevaCuota < 0) return;
-    await supabase.from('perfiles').update({ tickets_restantes: nuevaCuota }).eq('id', id);
-    cargarDatosGenerales();
-  };
+  const actualizarCuota = async (id: string, n: number) => { if (n >= 0) { await supabase.from('perfiles').update({ tickets_restantes: n }).eq('id', id); cargarDatosGenerales(); } };
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/dashboard'); };
+  const empleadosFiltrados = empleados.filter(e => e.nombre_completo.toLowerCase().includes(filtroNombre.toLowerCase()) || e.dependencia.toLowerCase().includes(filtroNombre.toLowerCase()));
 
-  const descargarReporte = () => {
-    const hoja = XLSX.utils.json_to_sheet(historial);
-    const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, "Reportes");
-    XLSX.writeFile(libro, `Reporte_FGE_${new Date().toLocaleDateString()}.xlsx`);
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/dashboard');
-  };
-
-  const empleadosFiltrados = empleados.filter(emp => 
-    emp.nombre_completo.toLowerCase().includes(filtroNombre.toLowerCase()) ||
-    emp.dependencia.toLowerCase().includes(filtroNombre.toLowerCase())
-  );
-
-  const dependenciasArray = Object.entries(
-    empleados.reduce((acc, emp) => {
+  const dependenciasArray = Object.entries(empleados.reduce((acc, emp) => {
       const dep = emp.dependencia || 'Sin Asignar';
       if (!acc[dep]) acc[dep] = { asignados: 0, canjeados: 0, disponibles: 0 };
       acc[dep].asignados += (emp.tickets_restantes || 0) + (emp.tickets_canjeado || 0);
       acc[dep].canjeados += (emp.tickets_canjeado || 0);
       acc[dep].disponibles += (emp.tickets_restantes || 0);
       return acc;
-    }, {} as any)
-  ).map(([nombre, vals]: [string, any]) => ({ nombre, ...vals })).sort((a, b) => b.asignados - a.asignados);
+  }, {} as any)).map(([nombre, vals]: [string, any]) => ({ nombre, ...vals })).sort((a, b) => b.asignados - a.asignados);
 
-  if (loadingAcceso) return <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center"><Loader2 className="text-[#1A2744] animate-spin mb-4" size={40} /></div>;
+  if (loadingAcceso) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="animate-spin text-[#1A2744]" size={40} /></div>;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-20">
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 sticky top-0 z-50">
         <div className="flex items-center gap-4">
-          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner">
-            <img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" />
-          </div>
-          <div><h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight">Dirección Administración</h1><p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest">{userEmail}</p></div>
+          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner"><img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" /></div>
+          <div><h1 className="font-black text-sm md:text-lg uppercase">Dirección Administración</h1><p className="text-[#C9A84C] text-[9px] font-bold">{userEmail}</p></div>
         </div>
-        <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"><LogOut size={18} /></button>
+        <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 transition-all"><LogOut size={18} /></button>
       </nav>
 
-      <div className="max-w-7xl mx-auto p-4 md:p-8 animate-in fade-in duration-500">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-8">
+      <div className="max-w-7xl mx-auto p-4 md:p-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <StatCard title="Asignados" val={stats.total} color="bg-slate-50" text="text-[#1A2744]" />
           <StatCard title="Canjeados" val={stats.canjeados} color="bg-emerald-50" text="text-emerald-500" />
           <StatCard title="Disponibles" val={stats.disponibles} color="bg-amber-50" text="text-[#C9A84C]" />
           <StatCard title="Dependencias" val={stats.dependencias} color="bg-purple-50" text="text-purple-600" />
         </div>
 
-        <div className="flex overflow-x-auto border-b border-slate-200 mb-6 bg-white sticky top-[72px] z-40 px-4 rounded-t-2xl">
+        <div className="flex gap-4 border-b mb-6 overflow-x-auto">
           {['cuotas', 'empleados', 'reportes'].map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-4 font-bold text-xs uppercase tracking-widest transition-all border-b-4 ${activeTab === tab ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400'}`}>{tab}</button>
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-4 font-bold text-xs uppercase border-b-4 transition-all ${activeTab === tab ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400'}`}>{tab}</button>
           ))}
         </div>
 
-        <div className="bg-white rounded-b-2xl shadow-xl p-4 md:p-8">
+        <div className="bg-white rounded-2xl shadow-xl p-4 md:p-8">
           {activeTab === 'cuotas' && (
-            <div className="animate-in fade-in duration-300">
-              <h3 className="text-lg font-black text-[#1A2744] uppercase mb-6">Distribución por Dependencia</h3>
-              <div className="divide-y divide-slate-50">
-                {dependenciasArray.map((dep, i) => (
-                  <div key={i} className="flex py-4 items-center px-2 hover:bg-slate-50 rounded-xl">
-                    <div className="flex-1 font-bold text-[#1A2744] text-xs sm:text-sm">{dep.nombre}</div>
-                    <div className="flex gap-4 text-center text-xs font-black uppercase">
-                      <div className="w-16 text-slate-400"><p>Asig</p><p>{dep.asignados}</p></div>
-                      <div className="w-16 text-emerald-500"><p>Canj</p><p>{dep.canjeados}</p></div>
-                      <div className="w-16 text-[#C9A84C]"><p>Disp</p><p>{dep.disponibles}</p></div>
-                    </div>
+            <div className="divide-y">
+              {dependenciasArray.map((dep, i) => (
+                <div key={i} className="flex py-4 items-center">
+                  <div className="flex-1 font-bold text-xs uppercase">{dep.nombre}</div>
+                  <div className="flex gap-4 text-[10px] font-black uppercase text-center">
+                    <div className="w-12">Asig <br/> {dep.asignados}</div>
+                    <div className="w-12 text-emerald-500">Canj <br/> {dep.canjeados}</div>
+                    <div className="w-12 text-[#C9A84C]">Disp <br/> {dep.disponibles}</div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -231,35 +206,35 @@ export default function AdminDashboard() {
               <div className="flex flex-col md:flex-row gap-4 mb-6">
                 <div className="relative flex-1">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input type="text" placeholder="Buscar empleado..." value={filtroNombre} onChange={(e) => setFiltroNombre(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#C9A84C]" />
+                  <input type="text" placeholder="Buscar empleado..." value={filtroNombre} onChange={(e) => setFiltroNombre(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-slate-50 border rounded-xl" />
                 </div>
                 <input type="file" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
-                <button onClick={() => fileInputRef.current?.click()} disabled={cargando} className="bg-[#1A2744] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 justify-center shrink-0 disabled:opacity-50">
-                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <FileSpreadsheet size={16}/>}
-                  {cargando ? 'Sumando Pestañas...' : 'Cargar Excel Semanal'}
+                <button onClick={() => fileInputRef.current?.click()} className="bg-[#1A2744] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 shrink-0">
+                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <FileSpreadsheet size={16}/>} Cargar Nómina y Crear Accesos
+                </button>
+                <button onClick={descargarAccesos} className="bg-slate-100 text-[#1A2744] px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 shrink-0">
+                  <Download size={16}/> Descargar Usuarios/Pass
                 </button>
               </div>
 
-              <div className="overflow-x-auto border border-slate-100 rounded-2xl max-h-[500px]">
-                <table className="w-full text-left min-w-[600px]">
-                  <thead className="bg-slate-50 sticky top-0 z-10 text-slate-400 text-[10px] uppercase font-bold border-b">
-                    <tr><th className="p-4">Nombre Completo</th><th className="p-4">Dependencia</th><th className="p-4 text-center">Cuota Semanal</th><th className="p-4 text-right">Acciones</th></tr>
+              <div className="overflow-x-auto border rounded-2xl max-h-[500px]">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 sticky top-0 text-[10px] uppercase font-bold border-b">
+                    <tr><th className="p-4">Empleado</th><th className="p-4">Correo Institucional</th><th className="p-4 text-center">Cuota</th><th className="p-4 text-right">Acciones</th></tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y">
                     {empleadosFiltrados.map((emp, i) => (
-                      <tr key={i} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-4 font-bold text-xs uppercase text-[#1A2744]">{emp.nombre_completo}</td>
-                        <td className="p-4 text-[10px] text-slate-500 uppercase">{emp.dependencia}</td>
+                      <tr key={i} className="hover:bg-slate-50">
+                        <td className="p-4 font-bold text-xs uppercase">{emp.nombre_completo}</td>
+                        <td className="p-4 text-[10px] text-blue-600 font-bold">{emp.email}</td>
                         <td className="p-4 text-center">
                           <div className="flex items-center justify-center gap-2">
-                            <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes - 1)} className="w-6 h-6 rounded bg-slate-100 font-bold hover:bg-red-100 text-red-600 transition-colors">-</button>
-                            <span className="font-black text-sm w-4 text-center">{emp.tickets_restantes}</span>
-                            <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes + 1)} className="w-6 h-6 rounded bg-slate-100 font-bold hover:bg-emerald-100 text-emerald-600 transition-colors">+</button>
+                            <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes - 1)} className="w-6 h-6 rounded bg-slate-100 font-bold">-</button>
+                            <span className="font-black text-sm">{emp.tickets_restantes}</span>
+                            <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes + 1)} className="w-6 h-6 rounded bg-slate-100 font-bold">+</button>
                           </div>
                         </td>
-                        <td className="p-4 text-right">
-                          <button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 hover:text-[#C9A84C] p-2"><UserCog size={18}/></button>
-                        </td>
+                        <td className="p-4 text-right"><button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 p-2"><UserCog size={18}/></button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -270,58 +245,38 @@ export default function AdminDashboard() {
 
           {activeTab === 'reportes' && (
             <div className="animate-in fade-in duration-300">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                <div><h3 className="text-lg font-black text-[#1A2744] uppercase">Control de Bitácora</h3><p className="text-slate-400 text-xs font-bold">Gestión de datos históricos</p></div>
-                <div className="flex gap-3 w-full md:w-auto">
-                  <button onClick={limpiarHistorialPruebas} className="flex-1 md:flex-none border-2 border-red-100 text-red-500 px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 hover:bg-red-50 transition-colors"><Trash2 size={16}/> Limpiar Pruebas</button>
-                  <button onClick={descargarReporte} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-emerald-900/10"><Download size={16}/> Descargar Reporte</button>
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-lg font-black uppercase">Control Bitácora</h3>
+                <div className="flex gap-2">
+                  <button onClick={limpiarHistorialPruebas} className="border-2 border-red-100 text-red-500 px-6 py-3 rounded-xl font-bold text-xs uppercase transition-all"><Trash2 size={16}/></button>
+                  <button onClick={() => alert("Exportando...")} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2"><Download size={16}/> Exportar Reporte</button>
                 </div>
               </div>
-              <div className="overflow-x-auto border border-slate-100 rounded-2xl">
-                <table className="w-full text-left min-w-[500px]">
-                  <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-bold border-b">
-                    <tr><th className="p-4">Empleado</th><th className="p-4">Dependencia</th><th className="p-4">Fecha/Hora</th></tr>
+              <div className="overflow-x-auto border rounded-2xl">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 text-[10px] uppercase font-bold border-b">
+                    <tr><th className="p-4">Empleado</th><th className="p-4">Fecha/Hora</th></tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y">
                     {historial.map((h, i) => (
-                      <tr key={i} className="text-[11px]"><td className="p-4 font-bold uppercase">{h.nombre_empleado}</td><td className="p-4 uppercase text-slate-500">{h.dependencia}</td><td className="p-4">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td></tr>
+                      <tr key={i} className="text-[11px]"><td className="p-4 font-bold uppercase">{h.nombre_empleado}</td><td className="p-4">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td></tr>
                     ))}
                   </tbody>
                 </table>
-                {historial.length === 0 && <p className="text-center text-slate-400 py-10 text-sm">Bitácora vacía.</p>}
               </div>
             </div>
           )}
         </div>
       </div>
-
-      {empleadoEdit && (
-        <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
-            <h2 className="text-xl font-black text-[#1A2744] uppercase mb-2">Gestionar Usuario</h2>
-            <p className="text-xs text-slate-400 font-bold uppercase mb-6">{empleadoEdit.nombre_completo}</p>
-            <div className="space-y-4">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Reiniciar Contraseña</label>
-                <div className="flex gap-2">
-                  <input type="text" placeholder="Nueva contraseña" value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm outline-none focus:border-[#C9A84C]" />
-                  <button onClick={() => alert("Cambio registrado")} className="bg-[#1A2744] text-white p-2 rounded-lg"><Key size={16}/></button>
-                </div>
-              </div>
-              <button onClick={() => setEmpleadoEdit(null)} className="w-full py-4 text-xs font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Cerrar Ventana</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
 function StatCard({ title, val, color, text }: any) {
   return (
-    <div className={`${color} p-5 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden`}>
-      <h2 className={`text-3xl md:text-4xl font-black ${text} relative z-10`}>{val}</h2>
-      <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1">{title}</p>
+    <div className={`${color} p-5 rounded-3xl border shadow-sm`}>
+      <h2 className={`text-3xl md:text-4xl font-black ${text}`}>{val}</h2>
+      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mt-1">{title}</p>
     </div>
   );
 }
