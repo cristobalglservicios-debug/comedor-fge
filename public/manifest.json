@@ -1,6 +1,6 @@
 {
-  "name": "Comedor FGE Yucatán",
-  "short_name": "Comedor FGE",
+  "name": "Administración FGE",
+  "short_name": "Administración FGE",
   "description": "Sistema de Gestión de Raciones",
   "start_url": "/",
   "display": "standalone",

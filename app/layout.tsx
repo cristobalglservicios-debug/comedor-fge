@@ -11,7 +11,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Comedor FGE',
+  title: 'Administración FGE',
   description: 'Sistema de Gestión del Comedor Fiscalía',
   manifest: '/manifest.json', // ESTA ES LA CONEXIÓN PARA ANDROID
   icons: {
