@@ -1,105 +1,66 @@
 'use client';
 
-import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { User, ShieldCheck, ChevronRight } from 'lucide-react'; // Necesitas instalar lucide-react
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-export default function LoginUnico() {
-  const [correo, setCorreo] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [cargando, setCargando] = useState(false);
-  const router = useRouter();
-
-  const iniciarSesion = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setCargando(true);
-
-    // 1. Revisamos si la llave abre el candado
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: correo.trim(), // Le quitamos espacios accidentales
-      password: password,
-    });
-
-    if (error) {
-      setError('Correo o contraseña incorrectos. Intenta de nuevo.');
-      setCargando(false);
-      return;
-    }
-
-    // 2. EL CEREBRO DEL ENRUTAMIENTO (Ahora más inteligente)
-    const emailUsuario = data.user?.email?.toLowerCase() || '';
-
-    // Si el correo contiene la palabra "admin"
-    if (emailUsuario.includes('admin')) {
-      router.push('/admin');
-    } 
-    // Si el correo contiene la palabra "comedor"
-    else if (emailUsuario.includes('comedor')) {
-      router.push('/cajero');
-    } 
-    // Si es cualquier otra persona
-    else {
-      router.push('/mi-vale');
-    }
-  };
-
+export default function Home() {
   return (
-    <div className="min-h-screen bg-[#1A2744] flex flex-col items-center justify-center p-6">
-      <div className="text-center mb-10">
-        <h1 className="text-5xl font-black text-white mb-2 tracking-tight">COMEDOR FGE</h1>
-        <p className="text-[#C9A84C] font-bold tracking-[0.2em] uppercase text-sm">Acceso Seguro</p>
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
+      
+      {/* SECCIÓN DE LOGO / ENCABEZADO */}
+      <div className="mb-12 text-center">
+        <div className="bg-[#1A2744] w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-900/20">
+          <span className="text-white font-black text-2xl">CF</span>
+        </div>
+        <h1 className="text-2xl font-black text-[#1A2744] tracking-tight">COMEDOR FISCALÍA</h1>
+        <p className="text-[#C9A84C] text-sm font-bold tracking-widest uppercase mt-1">Gestión de Cuotas</p>
       </div>
 
-      <form onSubmit={iniciarSesion} className="bg-white p-10 rounded-[2rem] shadow-2xl w-full max-w-md">
-        <div className="mb-6">
-          <label className="block text-slate-500 text-xs font-bold mb-2 uppercase tracking-wider">
-            Correo Electrónico
-          </label>
-          <input 
-            type="email" 
-            value={correo}
-            onChange={(e) => setCorreo(e.target.value)}
-            className="w-full p-4 border-2 border-slate-100 rounded-2xl text-slate-700 focus:border-blue-500 outline-none transition-colors"
-            placeholder="ejemplo@fge.yuc.gob.mx"
-            required
-          />
-        </div>
-
-        <div className="mb-8">
-          <label className="block text-slate-500 text-xs font-bold mb-2 uppercase tracking-wider">
-            Contraseña
-          </label>
-          <input 
-            type="password" 
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-4 border-2 border-slate-100 rounded-2xl text-slate-700 focus:border-blue-500 outline-none transition-colors"
-            placeholder="••••••••"
-            required
-          />
-        </div>
-
-        <button 
-          type="submit"
-          disabled={cargando}
-          className="w-full bg-[#C9A84C] hover:bg-amber-500 text-[#1A2744] py-4 rounded-2xl font-black text-lg transition-all shadow-lg flex justify-center items-center"
-        >
-          {cargando ? 'VERIFICANDO...' : 'ENTRAR AL SISTEMA'}
-        </button>
-
-        {error && (
-          <div className="mt-6 p-4 bg-red-50 rounded-xl border border-red-100 text-red-500 text-sm text-center font-medium">
-            {error}
+      {/* CONTENEDOR DE OPCIONES */}
+      <div className="w-full max-w-sm space-y-4">
+        
+        {/* BOTÓN PERFIL CAJERO */}
+        <Link href="/cajero">
+          <div className="group bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-[#C9A84C]/30 transition-all flex items-center justify-between active:scale-[0.98]">
+            <div className="flex items-center gap-4">
+              <div className="bg-slate-100 p-3 rounded-2xl group-hover:bg-amber-50 transition-colors">
+                <User className="text-[#1A2744] group-hover:text-[#C9A84C] transition-colors" size={28} />
+              </div>
+              <div>
+                <h2 className="font-bold text-slate-800 text-lg">Perfil Cajero</h2>
+                <p className="text-slate-400 text-xs">Canje de tickets diarios</p>
+              </div>
+            </div>
+            <ChevronRight className="text-slate-300 group-hover:text-[#C9A84C]" size={20} />
           </div>
-        )}
-      </form>
+        </Link>
+
+        {/* BOTÓN PERFIL ADMIN */}
+        <Link href="/admin">
+          <div className="group bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex items-center justify-between active:scale-[0.98]">
+            <div className="flex items-center gap-4">
+              <div className="bg-slate-100 p-3 rounded-2xl group-hover:bg-blue-50 transition-colors">
+                <ShieldCheck className="text-[#1A2744] group-hover:text-blue-600 transition-colors" size={28} />
+              </div>
+              <div>
+                <h2 className="font-bold text-slate-800 text-lg">Administración</h2>
+                <p className="text-slate-400 text-xs">Reportes y gestión de nómina</p>
+              </div>
+            </div>
+            <ChevronRight className="text-slate-300 group-hover:text-blue-600" size={20} />
+          </div>
+        </Link>
+
+      </div>
+
+      {/* PIE DE PÁGINA */}
+      <div className="mt-20 text-center">
+        <p className="text-slate-300 text-[10px] font-bold tracking-widest uppercase">
+          Fiscalía General del Estado de Yucatán
+        </p>
+        <div className="h-1 w-8 bg-[#C9A84C] mx-auto mt-2 rounded-full opacity-50"></div>
+      </div>
+
     </div>
   );
 }
