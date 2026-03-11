@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
 import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download } from 'lucide-react';
-import { crearUsuarioAdmin } from './actions'; // Importamos la acción de servidor
+import { crearUsuarioAdmin } from './actions';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -112,9 +112,7 @@ export default function AdminDashboard() {
       }));
 
       for (const emp of listaFinal) {
-        // 1. Guardar en Perfiles
         await supabase.from('perfiles').upsert(emp, { onConflict: 'nombre_completo' });
-        // 2. Crear Acceso de Usuario (Magia de Servidor)
         await crearUsuarioAdmin(emp.email, emp.nombre_completo);
       }
 
@@ -138,12 +136,14 @@ export default function AdminDashboard() {
     XLSX.writeFile(libro, "Lista_Accesos_FGE.xlsx");
   };
 
+  // --- BORRADO TOTAL ACTUALIZADO ---
   const limpiarHistorialPruebas = async () => {
-    if (!confirm("⚠️ ¿Borrar bitácora y reiniciar canjes?")) return;
+    if (!confirm("⚠️ ¿ESTÁS SEGURO? Esto borrará a TODOS los empleados y la bitácora completa para empezar en blanco.")) return;
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('perfiles').update({ tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
-    cargarDatosGenerales(); setCargando(false);
+    await supabase.from('perfiles').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Elimina a todos los empleados
+    cargarDatosGenerales(); 
+    setCargando(false);
   };
 
   const actualizarCuota = async (id: string, n: number) => { if (n >= 0) { await supabase.from('perfiles').update({ tickets_restantes: n }).eq('id', id); cargarDatosGenerales(); } };
