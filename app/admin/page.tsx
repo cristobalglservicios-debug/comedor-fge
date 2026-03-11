@@ -203,7 +203,18 @@ export default function AdminDashboard() {
     XLSX.writeFile(libro, "Lista_Accesos_FGE.xlsx");
   };
 
-  // --- MOTOR DE GENERACIÓN DE PDF OFICIAL ---
+  const exportarHistorialExcel = () => {
+    if (historial.length === 0) return alert("No hay registros para exportar");
+    const data = historial.map(h => ({
+      Empleado: h.nombre_empleado,
+      Fecha_Hora: new Date(h.fecha_hora).toLocaleString('es-MX')
+    }));
+    const hoja = XLSX.utils.json_to_sheet(data);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Bitacora");
+    XLSX.writeFile(libro, "Reporte_Comedor_FGE.xlsx");
+  };
+
   const generarCortePDF = (tipo: 'diario' | 'semanal') => {
     const doc = new jsPDF();
     const fechaActual = new Date();
@@ -219,7 +230,6 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Encabezado
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text("FISCALÍA GENERAL DEL ESTADO DE YUCATÁN", 105, 20, { align: "center" });
@@ -231,7 +241,6 @@ export default function AdminDashboard() {
     doc.text(`Fecha de emisión: ${fechaActual.toLocaleDateString('es-MX')} ${fechaActual.toLocaleTimeString('es-MX')}`, 14, 40);
     doc.text(`Total de raciones consumidas: ${datosFiltrados.length}`, 14, 46);
 
-    // Tabla de datos
     const bodyDatos = datosFiltrados.map((h, i) => [
       i + 1,
       h.nombre_empleado,
@@ -244,11 +253,10 @@ export default function AdminDashboard() {
       body: bodyDatos,
       theme: 'grid',
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [26, 39, 68] }, // #1A2744
-      margin: { bottom: 60 } // Margen para asegurar espacio de firmas
+      headStyles: { fillColor: [26, 39, 68] }, 
+      margin: { bottom: 60 } 
     });
 
-    // Validar salto de página para firmas
     let finalY = (doc as any).lastAutoTable.finalY || 52;
     if (finalY > 230) {
       doc.addPage();
@@ -257,17 +265,14 @@ export default function AdminDashboard() {
 
     const firmaY = finalY + 40;
 
-    // Firmas Institucionales
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
     
-    // Firma Izquierda (Autoriza)
     doc.line(25, firmaY, 95, firmaY);
     doc.text("AUTORIZA", 60, firmaY + 5, { align: "center" });
     doc.setFont("helvetica", "normal");
     doc.text("M.D. JOSE MANUEL FLORES ACOSTA", 60, firmaY + 10, { align: "center" });
 
-    // Firma Derecha (Recibe)
     doc.setFont("helvetica", "bold");
     doc.line(115, firmaY, 185, firmaY);
     doc.text("RECIBE", 150, firmaY + 5, { align: "center" });
@@ -395,8 +400,9 @@ export default function AdminDashboard() {
                 <h3 className="text-lg font-black uppercase">Control Bitácora</h3>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={limpiarHistorialPruebas} className="border-2 border-red-100 text-red-500 px-6 py-3 rounded-xl font-bold text-xs uppercase transition-all"><Trash2 size={16}/></button>
-                  <button onClick={() => generarCortePDF('diario')} className="bg-[#1A2744] hover:bg-[#2a3f6d] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileText size={16}/> Corte Diario</button>
-                  <button onClick={() => generarCortePDF('semanal')} className="bg-[#C9A84C] hover:bg-[#e0bc5a] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileText size={16}/> Corte Semanal</button>
+                  <button onClick={exportarHistorialExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileSpreadsheet size={16}/> Excel</button>
+                  <button onClick={() => generarCortePDF('diario')} className="bg-[#1A2744] hover:bg-[#2a3f6d] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileText size={16}/> PDF Diario</button>
+                  <button onClick={() => generarCortePDF('semanal')} className="bg-[#C9A84C] hover:bg-[#e0bc5a] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileText size={16}/> PDF Semanal</button>
                 </div>
               </div>
               <div className="overflow-x-auto border rounded-2xl">
