@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { LogOut, Loader2 } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,6 +14,7 @@ const supabase = createClient(
 type Tab = 'escanear' | 'historial';
 
 export default function PantallaCajero() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('escanear');
   const [inputLectura, setInputLectura] = useState('');
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error' | null, texto: string, empleado?: any, hora?: string }>({ tipo: null, texto: '' });
@@ -19,11 +22,45 @@ export default function PantallaCajero() {
   const [historial, setHistorial] = useState<any[]>([]);
   const [cargando, setCargando] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // NUEVOS ESTADOS DE SEGURIDAD
+  const [loadingAcceso, setLoadingAcceso] = useState(true);
+  const [userEmail, setUserEmail] = useState('');
 
+  // 1. SEGURIDAD Y CARGA DE DATOS INICIAL
   useEffect(() => {
-    cargarDatosDia();
-    inputRef.current?.focus();
-  }, []);
+    const inicializarCajero = async () => {
+      // Verificación de sesión
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        router.push('/dashboard');
+        return;
+      }
+
+      const email = session.user.email?.toLowerCase() || '';
+      
+      // Filtro de cadenero (comedor o admin)
+      if (!email.includes('comedor') && !email.includes('admin')) {
+        router.push('/');
+        return;
+      }
+
+      setUserEmail(email);
+      setLoadingAcceso(false);
+
+      // Carga de tu lógica original
+      await cargarDatosDia();
+      setTimeout(() => inputRef.current?.focus(), 500);
+    };
+
+    inicializarCajero();
+  }, [router]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
 
   const cargarDatosDia = async () => {
     const hoy = new Date().toISOString().split('T')[0];
@@ -109,22 +146,53 @@ export default function PantallaCajero() {
 
   const hoyFormateado = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+  // --- PANTALLA DE CARGA INICIAL ---
+  if (loadingAcceso) {
+    return (
+      <div className="min-h-screen bg-[#F0F3F6] flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-[#1A2744] mb-4" size={40} />
+        <p className="text-slate-400 text-[10px] font-black tracking-widest uppercase animate-pulse">
+          Verificando credenciales...
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
       
-      {/* CABECERA AZUL MARINO */}
-      <div className="bg-[#1A2744] text-white p-3 sm:p-4 shadow-sm flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-2 sm:gap-4">
-          <Link href="/" className="hover:bg-white/10 p-1 sm:p-2 rounded-full transition-colors">
-            ←
-          </Link>
-          <div>
-            <h1 className="font-bold text-base sm:text-lg leading-tight truncate max-w-[150px] sm:max-w-none">Punto de Canje</h1>
-            <p className="text-[#6366F1] text-[10px] sm:text-xs font-medium">La Ministerial</p>
+      {/* NUEVA CABECERA OFICIAL BLINDADA */}
+      <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
+        <div className="flex items-center gap-4">
+          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner shrink-0">
+            <img 
+              src="/logo-fge.png" 
+              alt="FGE" 
+              className="w-full h-full object-contain rounded-full"
+              onError={(e) => { (e.target as HTMLImageElement).src = "https://fge.yucatan.gob.mx/images/logo-fge-header.png"; }} 
+            />
+          </div>
+          <div className="overflow-hidden">
+            <h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight truncate">
+              Punto de Canje
+            </h1>
+            <p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest truncate">
+              {userEmail}
+            </p>
           </div>
         </div>
-        <div className="text-xs sm:text-sm font-medium text-slate-300">{hoyFormateado}</div>
-      </div>
+        
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-xs font-medium text-slate-300 hidden sm:block">{hoyFormateado}</div>
+          <button 
+            onClick={handleLogout} 
+            className="bg-white/10 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-white/5 shadow-sm"
+            title="Cerrar Sesión"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
+      </nav>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 mt-6 sm:mt-8">
         
