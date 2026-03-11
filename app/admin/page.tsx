@@ -56,7 +56,6 @@ export default function AdminDashboard() {
     if (dataHistorial) setHistorial(dataHistorial);
   };
 
-  // --- MOTOR DE PROCESAMIENTO INTELIGENTE ---
   const procesarExcel = (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -66,59 +65,68 @@ export default function AdminDashboard() {
     reader.onload = async (event: any) => {
       const bstr = event.target.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
       
-      // Convertimos a matriz (filas y columnas puras) para detectar los encabezados reales
-      const dataRaw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-      
-      let indexNombre = -1;
-      let indexDependencia = -1;
-      let indexCuota = -1;
-      let filaInicio = -1;
+      // Diccionario temporal para sumar vales de todas las pestañas
+      const mapaEmpleados: Record<string, { dependencia: string, cuota: number }> = {};
 
-      // Buscamos en qué fila están las palabras clave
-      for (let i = 0; i < dataRaw.length; i++) {
-        const fila = dataRaw[i];
-        const nomIdx = fila.findIndex(c => String(c).toLowerCase().includes('nombre'));
-        const depIdx = fila.findIndex(c => String(c).toLowerCase().includes('adscripción') || String(c).toLowerCase().includes('dependencia'));
-        const cuoIdx = fila.findIndex(c => String(c).toLowerCase().includes('no. de vales') || String(c).toLowerCase().includes('cuota'));
+      // RECORRER TODAS LAS PESTAÑAS (Lunes, Martes, etc.)
+      wb.SheetNames.forEach((sheetName) => {
+        const ws = wb.Sheets[sheetName];
+        const dataRaw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-        if (nomIdx !== -1) {
-          indexNombre = nomIdx;
-          indexDependencia = depIdx;
-          indexCuota = cuoIdx;
-          filaInicio = i + 1; // La data empieza en la siguiente fila
-          break;
+        let indexNombre = -1;
+        let indexDependencia = -1;
+        let indexCuota = -1;
+        let filaInicio = -1;
+
+        // Detectar encabezados en cada pestaña
+        for (let i = 0; i < dataRaw.length; i++) {
+          const fila = dataRaw[i];
+          const nomIdx = fila.findIndex(c => String(c).toLowerCase().includes('nombre'));
+          const depIdx = fila.findIndex(c => String(c).toLowerCase().includes('adscripción') || String(c).toLowerCase().includes('dependencia'));
+          const cuoIdx = fila.findIndex(c => String(c).toLowerCase().includes('no. de vales') || String(c).toLowerCase().includes('cuota'));
+
+          if (nomIdx !== -1) {
+            indexNombre = nomIdx;
+            indexDependencia = depIdx;
+            indexCuota = cuoIdx;
+            filaInicio = i + 1;
+            break;
+          }
         }
-      }
 
-      if (indexNombre === -1) {
-        alert("❌ Error: No se encontró la columna 'Nombre' en el archivo.");
-        setCargando(false);
-        return;
-      }
+        if (indexNombre !== -1) {
+          for (let i = filaInicio; i < dataRaw.length; i++) {
+            const fila = dataRaw[i];
+            const nombre = String(fila[indexNombre] || '').toUpperCase().trim();
+            const dependencia = indexDependencia !== -1 ? String(fila[indexDependencia] || 'GENERAL').toUpperCase().trim() : 'GENERAL';
+            const cuota = indexCuota !== -1 ? parseInt(fila[indexCuota]) || 0 : 0;
 
-      let procesados = 0;
-      for (let i = filaInicio; i < dataRaw.length; i++) {
-        const fila = dataRaw[i];
-        const nombre = fila[indexNombre];
-        const dependencia = indexDependencia !== -1 ? fila[indexDependencia] : 'GENERAL';
-        const cuota = indexCuota !== -1 ? parseInt(fila[indexCuota]) : 1;
-
-        // Limpieza: Ignoramos filas vacías, títulos de días (LUNES, MARTES) o totales
-        if (nombre && String(nombre).trim().length > 5 && !['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO','DOMINGO','TOTAL'].includes(String(nombre).toUpperCase().trim())) {
-          await supabase.from('perfiles').upsert({
-            nombre_completo: String(nombre).toUpperCase().trim(),
-            dependencia: String(dependencia || 'FGE').toUpperCase().trim(),
-            tickets_restantes: isNaN(cuota) ? 0 : cuota,
-            tickets_canjeado: 0
-          }, { onConflict: 'nombre_completo' });
-          procesados++;
+            // Filtro de filas válidas
+            if (nombre.length > 5 && !['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO','DOMINGO','TOTAL','ÁREA:'].some(palabra => nombre.includes(palabra))) {
+              if (mapaEmpleados[nombre]) {
+                mapaEmpleados[nombre].cuota += cuota; // SUMAR si ya existe en otra pestaña
+              } else {
+                mapaEmpleados[nombre] = { dependencia, cuota };
+              }
+            }
+          }
         }
+      });
+
+      // SUBIR A SUPABASE (UPSERT)
+      const listaFinal = Object.entries(mapaEmpleados).map(([nombre, datos]) => ({
+        nombre_completo: nombre,
+        dependencia: datos.dependencia,
+        tickets_restantes: datos.cuota,
+        tickets_canjeado: 0
+      }));
+
+      for (const emp of listaFinal) {
+        await supabase.from('perfiles').upsert(emp, { onConflict: 'nombre_completo' });
       }
 
-      alert(`✅ Carga finalizada: ${procesados} empleados actualizados.`);
+      alert(`✅ Procesadas ${wb.SheetNames.length} pestañas. ${listaFinal.length} empleados actualizados.`);
       cargarDatosGenerales(); 
       setCargando(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -127,12 +135,12 @@ export default function AdminDashboard() {
   };
 
   const limpiarHistorialPruebas = async () => {
-    const confirmar = confirm("⚠️ ¿ESTÁS SEGURO? Se borrará la bitácora y se reiniciarán los canjes.");
+    const confirmar = confirm("⚠️ ¿Borrar bitácora y reiniciar canjes?");
     if (!confirmar) return;
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('perfiles').update({ tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
-    alert("✅ Sistema en ceros.");
+    alert("✅ Sistema limpio.");
     cargarDatosGenerales();
     setCargando(false);
   };
@@ -226,20 +234,16 @@ export default function AdminDashboard() {
                   <input type="text" placeholder="Buscar empleado..." value={filtroNombre} onChange={(e) => setFiltroNombre(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#C9A84C]" />
                 </div>
                 <input type="file" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
-                <button 
-                  onClick={() => fileInputRef.current?.click()} 
-                  disabled={cargando}
-                  className="bg-[#1A2744] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 justify-center shrink-0 disabled:opacity-50"
-                >
+                <button onClick={() => fileInputRef.current?.click()} disabled={cargando} className="bg-[#1A2744] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 justify-center shrink-0 disabled:opacity-50">
                   {cargando ? <Loader2 className="animate-spin" size={16}/> : <FileSpreadsheet size={16}/>}
-                  {cargando ? 'Procesando...' : 'Cargar Nómina'}
+                  {cargando ? 'Sumando Pestañas...' : 'Cargar Excel Semanal'}
                 </button>
               </div>
 
               <div className="overflow-x-auto border border-slate-100 rounded-2xl max-h-[500px]">
                 <table className="w-full text-left min-w-[600px]">
                   <thead className="bg-slate-50 sticky top-0 z-10 text-slate-400 text-[10px] uppercase font-bold border-b">
-                    <tr><th className="p-4">Nombre Completo</th><th className="p-4">Dependencia</th><th className="p-4 text-center">Cuota</th><th className="p-4 text-right">Acciones</th></tr>
+                    <tr><th className="p-4">Nombre Completo</th><th className="p-4">Dependencia</th><th className="p-4 text-center">Cuota Semanal</th><th className="p-4 text-right">Acciones</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {empleadosFiltrados.map((emp, i) => (
@@ -270,7 +274,7 @@ export default function AdminDashboard() {
                 <div><h3 className="text-lg font-black text-[#1A2744] uppercase">Control de Bitácora</h3><p className="text-slate-400 text-xs font-bold">Gestión de datos históricos</p></div>
                 <div className="flex gap-3 w-full md:w-auto">
                   <button onClick={limpiarHistorialPruebas} className="flex-1 md:flex-none border-2 border-red-100 text-red-500 px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 hover:bg-red-50 transition-colors"><Trash2 size={16}/> Limpiar Pruebas</button>
-                  <button onClick={descargarReporte} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-emerald-900/10 transition-all"><Download size={16}/> Descargar Reporte</button>
+                  <button onClick={descargarReporte} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-emerald-900/10"><Download size={16}/> Descargar Reporte</button>
                 </div>
               </div>
               <div className="overflow-x-auto border border-slate-100 rounded-2xl">
@@ -284,7 +288,7 @@ export default function AdminDashboard() {
                     ))}
                   </tbody>
                 </table>
-                {historial.length === 0 && <p className="text-center text-slate-400 py-10 text-sm">Bitácora vacía. Lista para iniciar.</p>}
+                {historial.length === 0 && <p className="text-center text-slate-400 py-10 text-sm">Bitácora vacía.</p>}
               </div>
             </div>
           )}
