@@ -69,11 +69,9 @@ export default function AdminDashboard() {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws);
 
-      // Limpiamos la base de datos de perfiles anterior e insertamos los nuevos
-      // (En un sistema real haríamos un "upsert", pero para este inicio lo simplificamos)
       for (const fila of data as any[]) {
         if (fila.Nombre && fila.Dependencia) {
-          const cuota = fila.Cuota || 1; // Si no trae cuota, le damos 1 por defecto
+          const cuota = fila.Cuota || 1; 
           await supabase.from('perfiles').upsert({
             nombre_completo: fila.Nombre.toUpperCase(),
             dependencia: fila.Dependencia,
@@ -84,7 +82,7 @@ export default function AdminDashboard() {
       }
       
       alert('✅ Nómina cargada exitosamente');
-      cargarDatosGenerales(); // Recargamos la pantalla
+      cargarDatosGenerales(); 
       setCargando(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
@@ -112,7 +110,7 @@ export default function AdminDashboard() {
   const dependenciasArray = Object.keys(cuotasPorDependencia).map(key => ({
     nombre: key,
     ...cuotasPorDependencia[key]
-  })).sort((a, b) => b.asignados - a.asignados); // Ordenar de mayor a menor
+  })).sort((a, b) => b.asignados - a.asignados);
 
   const hoyFormateado = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
@@ -129,12 +127,12 @@ export default function AdminDashboard() {
             <p className="text-[#C9A84C] text-xs">Dirección de Administración</p>
           </div>
         </div>
-        <div className="text-sm font-medium text-slate-300">{hoyFormateado}</div>
+        <div className="text-sm font-medium text-slate-300 hidden md:block">{hoyFormateado}</div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-8">
+      <div className="max-w-7xl mx-auto p-4 md:p-8">
         {/* TARJETAS DE KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 mb-8">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
             <h2 className="text-4xl font-black text-[#1A2744]">{stats.total}</h2>
             <p className="text-slate-400 text-sm font-medium mt-1">Total Asignados</p>
@@ -153,8 +151,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* NAVEGACIÓN DE PESTAÑAS */}
-        <div className="flex border-b border-slate-200 mb-8">
+        {/* NAVEGACIÓN DE PESTAÑAS (Con scroll en móvil) */}
+        <div className="flex overflow-x-auto whitespace-nowrap border-b border-slate-200 mb-6 scrollbar-hide">
           <button onClick={() => setActiveTab('cuotas')} className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${activeTab === 'cuotas' ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
             📊 Cuotas
           </button>
@@ -167,47 +165,47 @@ export default function AdminDashboard() {
         </div>
 
         {/* CONTENIDO DE LAS PESTAÑAS */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 md:p-8">
           
-          {/* PESTAÑA 1: CUOTAS */}
+          {/* PESTAÑA 1: CUOTAS (VERSIÓN FLEXBOX GARANTIZADA) */}
           {activeTab === 'cuotas' && (
             <div>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-slate-700">Cuotas por Dependencia — {hoyFormateado}</h3>
+              <div className="mb-6">
+                <h3 className="text-base md:text-lg font-bold text-slate-700">Cuotas por Dependencia — <br className="md:hidden"/> {hoyFormateado}</h3>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="text-slate-400 text-xs uppercase border-b border-slate-100">
-                      <th className="py-4 font-bold">Dependencia</th>
-                      <th className="py-4 font-bold text-center">Asignados</th>
-                      <th className="py-4 font-bold text-center">Canjeados</th>
-                      <th className="py-4 font-bold text-center">Disponibles</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {dependenciasArray.map((dep, index) => (
-                      <tr key={index} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-4 font-medium text-slate-700">{dep.nombre}</td>
-                        <td className="py-4 font-bold text-center text-[#1A2744]">{dep.asignados}</td>
-                        <td className="py-4 font-bold text-center text-green-500">{dep.canjeados}</td>
-                        <td className="py-4 font-bold text-center text-[#C9A84C]">{dep.disponibles}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="w-full">
+                {/* Encabezados */}
+                <div className="flex w-full text-slate-400 text-[10px] sm:text-xs uppercase border-b border-slate-100 pb-2 px-2">
+                  <div className="flex-1 font-bold">Dependencia</div>
+                  <div className="w-12 sm:w-16 text-center font-bold">Asig.</div>
+                  <div className="w-12 sm:w-16 text-center font-bold">Canj.</div>
+                  <div className="w-12 sm:w-16 text-center font-bold">Disp.</div>
+                </div>
+                
+                {/* Filas */}
+                <div className="divide-y divide-slate-50">
+                  {dependenciasArray.map((dep, index) => (
+                    <div key={index} className="flex w-full py-4 items-center hover:bg-slate-50 transition-colors px-2">
+                      <div className="flex-1 font-medium text-slate-700 text-xs sm:text-sm pr-2 break-words leading-tight">
+                        {dep.nombre}
+                      </div>
+                      <div className="w-12 sm:w-16 text-center font-bold text-[#1A2744] text-sm">{dep.asignados}</div>
+                      <div className="w-12 sm:w-16 text-center font-bold text-green-500 text-sm">{dep.canjeados}</div>
+                      <div className="w-12 sm:w-16 text-center font-bold text-[#C9A84C] text-sm">{dep.disponibles}</div>
+                    </div>
+                  ))}
+                </div>
                 {dependenciasArray.length === 0 && <p className="text-center text-slate-400 py-10">No hay dependencias registradas.</p>}
               </div>
             </div>
           )}
 
-          {/* PESTAÑA 2: EMPLEADOS (AQUÍ ESTÁ EL BOTÓN DE EXCEL) */}
+          {/* PESTAÑA 2: EMPLEADOS */}
           {activeTab === 'empleados' && (
             <div>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-slate-700">Empleados Registrados ({empleados.length})</h3>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <h3 className="text-base md:text-lg font-bold text-slate-700">Empleados Registrados ({empleados.length})</h3>
                 
-                {/* BOTÓN OCULTO Y BOTÓN VISIBLE PARA EL EXCEL */}
                 <input 
                   type="file" 
                   accept=".xlsx, .xls, .csv" 
@@ -218,31 +216,31 @@ export default function AdminDashboard() {
                 <button 
                   onClick={() => fileInputRef.current?.click()}
                   disabled={cargando}
-                  className="bg-[#C9A84C] hover:bg-amber-500 text-white px-6 py-2 rounded-lg font-bold text-sm transition-colors shadow-sm flex items-center gap-2"
+                  className="bg-[#C9A84C] hover:bg-amber-500 text-white px-6 py-2 rounded-lg font-bold text-sm transition-colors shadow-sm flex items-center gap-2 w-full md:w-auto justify-center"
                 >
-                  {cargando ? 'Cargando...' : '+ Cargar Nómina (Excel)'}
+                  {cargando ? 'Cargando...' : '+ Cargar Nómina'}
                 </button>
               </div>
 
               <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-white">
+                <table className="w-full min-w-[500px] text-left border-collapse">
+                  <thead className="sticky top-0 bg-white shadow-sm">
                     <tr className="text-slate-400 text-xs uppercase border-b border-slate-100">
-                      <th className="py-4 font-bold">Nombre</th>
-                      <th className="py-4 font-bold">Dependencia</th>
-                      <th className="py-4 font-bold text-center">Rol</th>
-                      <th className="py-4 font-bold text-center">Disponibles</th>
+                      <th className="py-4 px-2 font-bold">Nombre</th>
+                      <th className="py-4 px-2 font-bold">Dependencia</th>
+                      <th className="py-4 px-2 font-bold text-center">Rol</th>
+                      <th className="py-4 px-2 font-bold text-center">Disponibles</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {empleados.map((emp, index) => (
                       <tr key={index} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3 font-bold text-slate-700 text-sm">{emp.nombre_completo}</td>
-                        <td className="py-3 text-slate-500 text-sm">{emp.dependencia}</td>
-                        <td className="py-3 text-center">
-                          <span className="bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1 rounded-full text-xs font-bold">Empleado</span>
+                        <td className="py-3 px-2 font-bold text-slate-700 text-sm">{emp.nombre_completo}</td>
+                        <td className="py-3 px-2 text-slate-500 text-sm">{emp.dependencia}</td>
+                        <td className="py-3 px-2 text-center">
+                          <span className="bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1 rounded-full text-[10px] md:text-xs font-bold">Empleado</span>
                         </td>
-                        <td className="py-3 font-bold text-center text-slate-600">{emp.tickets_restantes}</td>
+                        <td className="py-3 px-2 font-bold text-center text-slate-600">{emp.tickets_restantes}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -254,30 +252,30 @@ export default function AdminDashboard() {
           {/* PESTAÑA 3: REPORTES */}
           {activeTab === 'reportes' && (
             <div>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-slate-700">Historial Detallado de Canjes</h3>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <h3 className="text-base md:text-lg font-bold text-slate-700">Historial Detallado de Canjes</h3>
                 <button 
                   onClick={descargarReporte}
-                  className="bg-[#1A2744] hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-bold text-sm transition-colors shadow-sm flex items-center gap-2"
+                  className="bg-[#1A2744] hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-bold text-sm transition-colors shadow-sm flex items-center gap-2 w-full md:w-auto justify-center"
                 >
                   📥 Exportar a Excel
                 </button>
               </div>
               <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-white">
+                <table className="w-full min-w-[400px] text-left border-collapse">
+                  <thead className="sticky top-0 bg-white shadow-sm">
                     <tr className="text-slate-400 text-xs uppercase border-b border-slate-100">
-                      <th className="py-4 font-bold">Empleado</th>
-                      <th className="py-4 font-bold">Dependencia</th>
-                      <th className="py-4 font-bold">Fecha y Hora</th>
+                      <th className="py-4 px-2 font-bold">Empleado</th>
+                      <th className="py-4 px-2 font-bold">Dependencia</th>
+                      <th className="py-4 px-2 font-bold">Fecha y Hora</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {historial.map((h, index) => (
                       <tr key={index} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3 font-bold text-slate-700 text-sm">{h.nombre_empleado}</td>
-                        <td className="py-3 text-slate-500 text-sm">{h.dependencia}</td>
-                        <td className="py-3 text-slate-500 text-sm">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td>
+                        <td className="py-3 px-2 font-bold text-slate-700 text-sm">{h.nombre_empleado}</td>
+                        <td className="py-3 px-2 text-slate-500 text-sm">{h.dependencia}</td>
+                        <td className="py-3 px-2 text-slate-500 text-sm">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td>
                       </tr>
                     ))}
                   </tbody>
