@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
-import { Loader2, LogOut, AlertCircle } from 'lucide-react';
+import { Loader2, LogOut, AlertCircle, FileSpreadsheet } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,50 +21,42 @@ export default function AdminDashboard() {
   
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [errorAcceso, setErrorAcceso] = useState<string | null>(null); // NUEVO: Para ver el error
+  const [errorAcceso, setErrorAcceso] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // --- SEGURIDAD ANTI-BUCLES ---
   useEffect(() => {
     const checkAccess = async () => {
-      // Le damos medio segundo a Supabase para que termine de guardar la sesión en el celular
       setTimeout(async () => {
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (error) {
-          setErrorAcceso(`Error de Supabase: ${error.message}`);
-          setLoadingAcceso(false);
-          return;
-        }
-
-        if (!session) {
-          setErrorAcceso("El celular no guardó tu sesión. Supabase dice que no estás logueado.");
-          setLoadingAcceso(false);
+        if (error || !session) {
+          router.push('/dashboard');
           return;
         }
 
         const email = session.user.email?.toLowerCase() || '';
         
         if (!email.includes('admin')) {
-          setErrorAcceso(`Acceso denegado. Tu correo es: ${email} y no contiene la palabra 'admin'.`);
-          setLoadingAcceso(false);
+          router.push('/');
           return;
         }
 
         setUserEmail(email);
         setLoadingAcceso(false);
         cargarDatosGenerales();
-      }, 500); // 500 milisegundos de espera
+      }, 300); 
     };
 
     checkAccess();
-  }, []);
+  }, [router]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/dashboard');
   };
 
-  // --- LÓGICA DE DATOS ---
+  // --- LÓGICA DE DATOS Y EXCEL ---
   const cargarDatosGenerales = async () => {
     const { data: dataEmpleados } = await supabase.from('perfiles').select('*');
     if (dataEmpleados) {
@@ -135,36 +127,18 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
         <Loader2 className="text-[#1A2744] animate-spin mb-4" size={40} />
-        <p className="text-slate-400 text-xs font-bold tracking-widest uppercase">Verificando credenciales...</p>
+        <p className="text-slate-400 text-xs font-bold tracking-widest uppercase">Cargando Panel...</p>
       </div>
     );
   }
 
-  // --- PANTALLA DE ERROR (ROMPE EL BUCLE) ---
-  if (errorAcceso) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
-        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center border border-red-100">
-          <AlertCircle className="text-red-500 mx-auto mb-4" size={48} />
-          <h2 className="text-xl font-black text-slate-800 mb-2 uppercase">Acceso Detenido</h2>
-          <p className="text-slate-600 text-sm font-medium mb-8 bg-red-50 p-4 rounded-xl">{errorAcceso}</p>
-          <button 
-            onClick={() => router.push('/dashboard')}
-            className="w-full bg-[#1A2744] text-white py-4 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all"
-          >
-            Regresar al Login
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // --- EL PANEL PRINCIPAL ---
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
-      <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8">
+      
+      {/* BARRA SUPERIOR OFICIAL */}
+      <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-10">
         <div className="flex items-center gap-4">
-          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30">
+          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner">
             <img src="/Logo-FGE.jpg" alt="FGE" className="w-full h-full object-contain rounded-full" onError={(e) => { (e.target as HTMLImageElement).src = "https://fge.yucatan.gob.mx/images/logo-fge-header.png"; }} />
           </div>
           <div>
@@ -180,76 +154,143 @@ export default function AdminDashboard() {
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto p-4 md:p-8">
-        {/* NAVEGACIÓN DE PESTAÑAS */}
-        <div className="flex overflow-x-auto whitespace-nowrap border-b border-slate-200 mb-6 scrollbar-hide">
-          <button onClick={() => setActiveTab('cuotas')} className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${activeTab === 'cuotas' ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400'}`}>📊 Cuotas</button>
-          <button onClick={() => setActiveTab('empleados')} className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${activeTab === 'empleados' ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400'}`}>👥 Empleados</button>
-          <button onClick={() => setActiveTab('reportes')} className={`px-6 py-3 font-bold text-sm transition-colors border-b-2 ${activeTab === 'reportes' ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400'}`}>📥 Reportes</button>
+      <div className="max-w-7xl mx-auto p-4 md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        
+        {/* 🔥 AQUÍ ESTÁN DE REGRESO LAS TARJETAS DE ACUMULADOS 🔥 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-8">
+          <div className="bg-white p-5 rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 flex flex-col justify-center relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-slate-50 rounded-bl-full -z-0"></div>
+            <h2 className="text-3xl md:text-4xl font-black text-[#1A2744] relative z-10">{stats.total}</h2>
+            <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 relative z-10">Asignados</p>
+          </div>
+          <div className="bg-white p-5 rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 flex flex-col justify-center relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-50 rounded-bl-full -z-0"></div>
+            <h2 className="text-3xl md:text-4xl font-black text-emerald-500 relative z-10">{stats.canjeados}</h2>
+            <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 relative z-10">Canjeados</p>
+          </div>
+          <div className="bg-white p-5 rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 flex flex-col justify-center relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-amber-50 rounded-bl-full -z-0"></div>
+            <h2 className="text-3xl md:text-4xl font-black text-[#C9A84C] relative z-10">{stats.disponibles}</h2>
+            <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 relative z-10">Disponibles</p>
+          </div>
+          <div className="bg-white p-5 rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 flex flex-col justify-center relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-purple-50 rounded-bl-full -z-0"></div>
+            <h2 className="text-3xl md:text-4xl font-black text-[#1A2744]/60 relative z-10">{stats.dependencias}</h2>
+            <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mt-1 relative z-10">Dependencias</p>
+          </div>
         </div>
 
-        <div className="bg-white rounded-[2rem] shadow-xl border border-slate-100 p-4 md:p-8">
+        {/* NAVEGACIÓN DE PESTAÑAS */}
+        <div className="flex overflow-x-auto whitespace-nowrap border-b border-slate-200 mb-6 scrollbar-hide">
+          <button onClick={() => setActiveTab('cuotas')} className={`px-6 py-4 font-bold text-sm transition-all border-b-4 ${activeTab === 'cuotas' ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>📊 Dependencias</button>
+          <button onClick={() => setActiveTab('empleados')} className={`px-6 py-4 font-bold text-sm transition-all border-b-4 ${activeTab === 'empleados' ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>👥 Empleados</button>
+          <button onClick={() => setActiveTab('reportes')} className={`px-6 py-4 font-bold text-sm transition-all border-b-4 ${activeTab === 'reportes' ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>📥 Reportes</button>
+        </div>
+
+        {/* CONTENEDOR DE LA INFORMACIÓN */}
+        <div className="bg-white rounded-[2rem] shadow-xl shadow-slate-200/40 border border-slate-100 p-4 md:p-8">
           
+          {/* PESTAÑA: CUOTAS */}
           {activeTab === 'cuotas' && (
-            <div>
-              <h3 className="text-lg font-black text-[#1A2744] uppercase mb-4">Cuotas por Dependencia</h3>
-              <div className="divide-y divide-slate-50">
+            <div className="animate-in fade-in duration-300">
+              <h3 className="text-lg font-black text-[#1A2744] uppercase mb-6 tracking-wide">Distribución de Raciones</h3>
+              <div className="flex w-full text-slate-400 text-[10px] sm:text-xs uppercase border-b border-slate-100 pb-3 px-2 tracking-widest">
+                <div className="flex-1 font-bold">Dependencia</div>
+                <div className="w-12 sm:w-16 text-center font-bold">Asig.</div>
+                <div className="w-12 sm:w-16 text-center font-bold">Canj.</div>
+                <div className="w-12 sm:w-16 text-center font-bold">Disp.</div>
+              </div>
+              <div className="divide-y divide-slate-50 mt-2">
                 {dependenciasArray.map((dep, index) => (
-                  <div key={index} className="flex w-full py-4 items-center">
-                    <div className="flex-1 font-bold text-[#1A2744] text-sm">{dep.nombre}</div>
-                    <div className="w-16 text-center font-bold text-slate-400">{dep.asignados}</div>
-                    <div className="w-16 text-center font-black text-emerald-500">{dep.canjeados}</div>
-                    <div className="w-16 text-center font-black text-[#C9A84C]">{dep.disponibles}</div>
+                  <div key={index} className="flex w-full py-4 items-center hover:bg-slate-50 transition-colors px-2 rounded-xl">
+                    <div className="flex-1 font-bold text-[#1A2744] text-xs sm:text-sm">{dep.nombre}</div>
+                    <div className="w-12 sm:w-16 text-center font-bold text-slate-400 text-sm">{dep.asignados}</div>
+                    <div className="w-12 sm:w-16 text-center font-black text-emerald-500 text-sm">{dep.canjeados}</div>
+                    <div className="w-12 sm:w-16 text-center font-black text-[#C9A84C] text-sm">{dep.disponibles}</div>
                   </div>
                 ))}
               </div>
+              {dependenciasArray.length === 0 && <p className="text-center text-slate-400 py-10 font-medium text-sm">No hay dependencias registradas aún.</p>}
             </div>
           )}
 
+          {/* PESTAÑA: EMPLEADOS */}
           {activeTab === 'empleados' && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-black text-[#1A2744] uppercase">Plantilla Registrada ({empleados.length})</h3>
-                <input type="file" accept=".xlsx" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
-                <button onClick={() => fileInputRef.current?.click()} className="bg-[#1A2744] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest">+ Cargar Excel</button>
+            <div className="animate-in fade-in duration-300">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div>
+                  <h3 className="text-lg font-black text-[#1A2744] uppercase tracking-wide">Plantilla Autorizada</h3>
+                  <p className="text-slate-400 text-xs font-bold">{empleados.length} Registros Activos</p>
+                </div>
+                <input type="file" accept=".xlsx, .xls, .csv" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
+                <button 
+                  onClick={() => fileInputRef.current?.click()} 
+                  disabled={cargando}
+                  className="bg-[#1A2744] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-blue-900/20 active:scale-95 transition-all w-full md:w-auto justify-center"
+                >
+                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <FileSpreadsheet size={16}/>}
+                  {cargando ? 'Procesando...' : 'Cargar Nómina'}
+                </button>
               </div>
-              <table className="w-full text-left">
-                <thead className="border-b border-slate-100 text-slate-400 text-xs uppercase">
-                  <tr><th className="py-4">Nombre</th><th className="py-4">Dependencia</th><th className="py-4 text-center">Cuota</th></tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {empleados.map((emp, i) => (
-                    <tr key={i}>
-                      <td className="py-3 font-bold text-sm">{emp.nombre_completo}</td>
-                      <td className="py-3 text-sm text-slate-500">{emp.dependencia}</td>
-                      <td className="py-3 font-black text-center text-[#C9A84C]">{emp.tickets_restantes}</td>
+              <div className="overflow-x-auto border border-slate-100 rounded-2xl max-h-[500px]">
+                <table className="w-full text-left min-w-[500px]">
+                  <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm border-b border-slate-100 text-slate-400 text-[10px] uppercase tracking-widest">
+                    <tr>
+                      <th className="py-4 px-4 font-bold">Nombre</th>
+                      <th className="py-4 px-4 font-bold">Dependencia</th>
+                      <th className="py-4 px-4 text-center font-bold">Raciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {empleados.map((emp, i) => (
+                      <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3 px-4 font-bold text-sm text-[#1A2744] uppercase">{emp.nombre_completo}</td>
+                        <td className="py-3 px-4 text-xs font-medium text-slate-500 uppercase">{emp.dependencia}</td>
+                        <td className="py-3 px-4 font-black text-center text-[#C9A84C]">{emp.tickets_restantes}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
+          {/* PESTAÑA: REPORTES */}
           {activeTab === 'reportes' && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-black text-[#1A2744] uppercase">Bitácora de Consumo</h3>
-                <button onClick={descargarReporte} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest">📥 Exportar Excel</button>
+            <div className="animate-in fade-in duration-300">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div>
+                  <h3 className="text-lg font-black text-[#1A2744] uppercase tracking-wide">Bitácora de Consumo</h3>
+                  <p className="text-slate-400 text-xs font-bold">Registro de operaciones en tiempo real</p>
+                </div>
+                <button 
+                  onClick={descargarReporte} 
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-emerald-900/20 active:scale-95 transition-all w-full md:w-auto text-center"
+                >
+                  📥 Exportar a Excel
+                </button>
               </div>
-              <table className="w-full text-left">
-                <thead className="border-b border-slate-100 text-slate-400 text-xs uppercase">
-                  <tr><th className="py-4">Empleado</th><th className="py-4">Dependencia</th><th className="py-4">Fecha</th></tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {historial.map((h, i) => (
-                    <tr key={i}>
-                      <td className="py-3 font-bold text-sm">{h.nombre_empleado}</td>
-                      <td className="py-3 text-sm text-slate-500">{h.dependencia}</td>
-                      <td className="py-3 text-sm text-slate-600">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td>
+              <div className="overflow-x-auto border border-slate-100 rounded-2xl max-h-[500px]">
+                <table className="w-full text-left min-w-[500px]">
+                  <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm border-b border-slate-100 text-slate-400 text-[10px] uppercase tracking-widest">
+                    <tr>
+                      <th className="py-4 px-4 font-bold">Empleado</th>
+                      <th className="py-4 px-4 font-bold">Dependencia</th>
+                      <th className="py-4 px-4 font-bold">Fecha y Hora</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {historial.map((h, i) => (
+                      <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3 px-4 font-bold text-sm text-[#1A2744] uppercase">{h.nombre_empleado}</td>
+                        <td className="py-3 px-4 text-xs font-medium text-slate-500 uppercase">{h.dependencia}</td>
+                        <td className="py-3 px-4 text-xs text-slate-600 tracking-wide">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {historial.length === 0 && <p className="text-center text-slate-400 py-10 font-medium text-sm">Aún no hay registros en la bitácora.</p>}
+              </div>
             </div>
           )}
 
