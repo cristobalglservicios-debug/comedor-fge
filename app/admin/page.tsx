@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
-import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download } from 'lucide-react';
-import { crearUsuarioAdmin } from './actions';
+import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus } from 'lucide-react';
+import { crearUsuarioAdmin, eliminarUsuarioAdmin, actualizarPasswordAdmin } from './actions';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,8 +23,12 @@ export default function AdminDashboard() {
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [empleadoEdit, setEmpleadoEdit] = useState<any>(null);
   const [nuevaPass, setNuevaPass] = useState('');
+  
+  const [modalNuevo, setModalNuevo] = useState(false);
+  const [nuevoEmp, setNuevoEmp] = useState({ nombre: '', dependencia: '', cuota: 1 });
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -63,6 +67,58 @@ export default function AdminDashboard() {
       .replace(/\s+/g, '.')
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       + "@fge.gob.mx";
+  };
+
+  // --- ALTA MANUAL ---
+  const guardarNuevoEmpleado = async () => {
+    if (nuevoEmp.nombre.length < 5) return alert("Ingresa el nombre completo");
+    setCargando(true);
+    const emailGen = generarEmail(nuevoEmp.nombre);
+    const empData = {
+      nombre_completo: nuevoEmp.nombre.toUpperCase().trim(),
+      dependencia: nuevoEmp.dependencia.toUpperCase().trim() || 'GENERAL',
+      tickets_restantes: nuevoEmp.cuota,
+      tickets_canjeado: 0,
+      email: emailGen
+    };
+    
+    await supabase.from('perfiles').upsert(empData, { onConflict: 'nombre_completo' });
+    await crearUsuarioAdmin(emailGen, empData.nombre_completo);
+    
+    alert(`✅ Empleado agregado con acceso: ${emailGen}`);
+    setNuevoEmp({ nombre: '', dependencia: '', cuota: 1 });
+    setModalNuevo(false);
+    cargarDatosGenerales();
+    setCargando(false);
+  };
+
+  // --- BAJA DEFINITIVA ---
+  const handleEliminarEmpleado = async () => {
+    if (!empleadoEdit) return;
+    if (!confirm(`⚠️ ¿ELIMINAR DEFINITIVAMENTE a ${empleadoEdit.nombre_completo}? Perderá su acceso y vales.`)) return;
+    setCargando(true);
+    await supabase.from('perfiles').delete().eq('id', empleadoEdit.id);
+    await eliminarUsuarioAdmin(empleadoEdit.email);
+    
+    alert("✅ Empleado eliminado");
+    setEmpleadoEdit(null);
+    cargarDatosGenerales();
+    setCargando(false);
+  };
+
+  // --- REINICIO DE CONTRASEÑA ---
+  const handleCambiarPassword = async () => {
+    if (nuevaPass.length < 6) return alert("La contraseña debe tener al menos 6 caracteres");
+    setCargando(true);
+    const res = await actualizarPasswordAdmin(empleadoEdit.email, nuevaPass);
+    setCargando(false);
+    
+    if (res.success) {
+      alert("✅ Contraseña actualizada correctamente en el sistema");
+      setNuevaPass('');
+    } else {
+      alert("❌ Error: " + res.error);
+    }
   };
 
   const procesarExcel = (e: any) => {
@@ -126,11 +182,7 @@ export default function AdminDashboard() {
   };
 
   const descargarAccesos = () => {
-    const data = empleados.map(e => ({
-      Nombre: e.nombre_completo,
-      Correo: e.email,
-      Password_Temporal: "FGE2026*"
-    }));
+    const data = empleados.map(e => ({ Nombre: e.nombre_completo, Correo: e.email, Password_Temporal: "FGE2026*" }));
     const hoja = XLSX.utils.json_to_sheet(data);
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Accesos");
@@ -208,18 +260,24 @@ export default function AdminDashboard() {
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input type="text" placeholder="Buscar empleado..." value={filtroNombre} onChange={(e) => setFiltroNombre(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-slate-50 border rounded-xl" />
                 </div>
-                <input type="file" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
-                <button onClick={() => fileInputRef.current?.click()} className="bg-[#1A2744] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 shrink-0">
-                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <FileSpreadsheet size={16}/>} Cargar Nómina y Crear Accesos
+                
+                <button onClick={() => setModalNuevo(true)} className="bg-emerald-600 text-white px-4 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-emerald-900/10">
+                  <UserPlus size={16}/> Alta Manual
                 </button>
-                <button onClick={descargarAccesos} className="bg-slate-100 text-[#1A2744] px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 shrink-0">
-                  <Download size={16}/> Descargar Usuarios/Pass
+                
+                <input type="file" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
+                <button onClick={() => fileInputRef.current?.click()} className="bg-[#1A2744] text-white px-4 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shrink-0 shadow-lg">
+                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <FileSpreadsheet size={16}/>} Cargar Nómina
+                </button>
+                
+                <button onClick={descargarAccesos} className="bg-slate-100 text-[#1A2744] px-4 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shrink-0 hover:bg-slate-200">
+                  <Download size={16}/> Accesos
                 </button>
               </div>
 
               <div className="overflow-x-auto border rounded-2xl max-h-[500px]">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-50 sticky top-0 text-[10px] uppercase font-bold border-b">
+                  <thead className="bg-slate-50 sticky top-0 text-[10px] uppercase font-bold border-b z-10">
                     <tr><th className="p-4">Empleado</th><th className="p-4">Correo Institucional</th><th className="p-4 text-center">Cuota</th><th className="p-4 text-right">Acciones</th></tr>
                   </thead>
                   <tbody className="divide-y">
@@ -234,7 +292,7 @@ export default function AdminDashboard() {
                             <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes + 1)} className="w-6 h-6 rounded bg-slate-100 font-bold">+</button>
                           </div>
                         </td>
-                        <td className="p-4 text-right"><button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 p-2"><UserCog size={18}/></button></td>
+                        <td className="p-4 text-right"><button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 p-2 hover:text-[#C9A84C] transition-colors"><UserCog size={18}/></button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -269,24 +327,66 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* MODAL GESTION DE EMPLEADO (EDITAR/ELIMINAR/PASSWORD) */}
       {empleadoEdit && (
         <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
             <h2 className="text-xl font-black text-[#1A2744] uppercase mb-2">Gestionar Usuario</h2>
             <p className="text-xs text-slate-400 font-bold uppercase mb-6">{empleadoEdit.nombre_completo}</p>
             <div className="space-y-4">
+              
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                 <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Reiniciar Contraseña</label>
                 <div className="flex gap-2">
-                  <input type="text" placeholder="Nueva contraseña" value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm outline-none focus:border-[#C9A84C]" />
-                  <button onClick={() => alert("Cambio registrado")} className="bg-[#1A2744] text-white p-2 rounded-lg"><Key size={16}/></button>
+                  <input type="text" placeholder="Nueva contraseña (mínimo 6)" value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm outline-none focus:border-[#C9A84C]" />
+                  <button onClick={handleCambiarPassword} disabled={cargando} className="bg-[#1A2744] hover:bg-[#C9A84C] text-white px-4 rounded-lg transition-colors flex items-center justify-center">
+                    {cargando ? <Loader2 className="animate-spin" size={16} /> : <Key size={16}/>}
+                  </button>
                 </div>
               </div>
-              <button onClick={() => setEmpleadoEdit(null)} className="w-full py-4 text-xs font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Cerrar Ventana</button>
+
+              <div className="p-4 bg-red-50 rounded-2xl border border-red-100">
+                <label className="text-[10px] font-black uppercase text-red-400 block mb-2">Zona de Peligro</label>
+                <button onClick={handleEliminarEmpleado} disabled={cargando} className="w-full bg-red-500 hover:bg-red-600 text-white p-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors">
+                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <Trash2 size={16}/>} Eliminar Empleado
+                </button>
+              </div>
+
+              <button onClick={() => setEmpleadoEdit(null)} className="w-full py-4 text-xs font-black uppercase text-slate-400 hover:text-[#1A2744] transition-colors">Cerrar Ventana</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* MODAL ALTA MANUAL */}
+      {modalNuevo && (
+        <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
+            <h2 className="text-xl font-black text-[#1A2744] uppercase mb-6">Alta Manual de Empleado</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Nombre Completo</label>
+                <input type="text" placeholder="Ej. JUAN PEREZ LOPEZ" value={nuevoEmp.nombre} onChange={e => setNuevoEmp({...nuevoEmp, nombre: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm uppercase outline-none focus:border-[#C9A84C]" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Dependencia</label>
+                <input type="text" placeholder="Ej. ADMINISTRACION" value={nuevoEmp.dependencia} onChange={e => setNuevoEmp({...nuevoEmp, dependencia: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm uppercase outline-none focus:border-[#C9A84C]" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Cuota de Vales (Semanal)</label>
+                <input type="number" min="0" value={nuevoEmp.cuota} onChange={e => setNuevoEmp({...nuevoEmp, cuota: parseInt(e.target.value) || 0})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-[#C9A84C]" />
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => setModalNuevo(false)} className="flex-1 py-3 text-xs font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Cancelar</button>
+                <button onClick={guardarNuevoEmpleado} disabled={cargando} className="flex-1 bg-[#1A2744] hover:bg-[#2a3f6d] text-white py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors">
+                  {cargando ? <Loader2 className="animate-spin" size={16} /> : 'Guardar Empleado'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
