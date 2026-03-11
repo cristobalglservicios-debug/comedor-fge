@@ -13,14 +13,14 @@ const supabase = createClient(
 export default function Home() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [session, setSession] = useState<any>(null);
 
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.email) {
-          setUserEmail(session.user.email);
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          setSession(data.session);
         }
       } catch (err) {
         console.error("Error validando sesión", err);
@@ -33,13 +33,13 @@ export default function Home() {
   }, []);
 
   const handleStart = () => {
-    if (!userEmail) {
+    if (!session) {
       router.push('/dashboard'); 
       return;
     }
 
     // Ruteo DIRECTO SEGÚN EL CORREO
-    const email = userEmail.toLowerCase();
+    const email = session.user.email?.toLowerCase() || '';
     
     if (email.includes('admin')) {
       router.push('/admin');
@@ -64,7 +64,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-between p-8 font-sans">
-      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-sm">
+      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-sm animate-in fade-in duration-700">
         
         {/* LOGO FGE OFICIAL LOCAL */}
         <div className="mb-10 animate-fade-in">
@@ -90,9 +90,7 @@ export default function Home() {
           
           {/* TEXTO DE BIENVENIDA SIMPLIFICADO */}
           <p className="text-slate-500 text-sm font-bold pt-1">
-            {userEmail 
-              ? `Bienvenido, ${userEmail.split('@')[0]}` // Muestra "Bienvenido, admin.cristobal"
-              : 'Bienvenido'} // Muestra solo "Bienvenido" por defecto
+            Bienvenido
           </p>
         </div>
 
@@ -102,7 +100,7 @@ export default function Home() {
           className="group mt-16 w-full bg-[#1A2744] text-white p-5 rounded-full font-bold flex items-center justify-between shadow-2xl shadow-blue-900/40 active:scale-[0.96] transition-all hover:bg-[#25365d]"
         >
           <span className="ml-6 tracking-[0.25em] text-[10px] uppercase font-black">
-            {userEmail ? 'Ingresar al Panel' : 'Ingresar al Sistema'}
+            {session ? 'Ingresar al Panel' : 'Ingresar al Sistema'}
           </span>
           <div className="bg-[#C9A84C] p-3 rounded-full transition-transform group-hover:translate-x-1 shadow-inner">
             <ChevronRight className="text-[#1A2744]" size={20} />
