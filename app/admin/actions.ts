@@ -4,13 +4,13 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // Usa la clave secreta que acabas de guardar
+  process.env.SUPABASE_SERVICE_ROLE_KEY! 
 )
 
 export async function crearUsuarioAdmin(email: string, nombre: string) {
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email: email,
-    password: 'FGE2026*', // Contraseña genérica
+    password: 'FGE2026*', 
     email_confirm: true,
     user_metadata: { full_name: nombre }
   })
