@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { LogOut } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,6 +14,7 @@ const supabase = createClient(
 type EstadoVista = 'cargando' | 'busqueda' | 'dashboard' | 'animando' | 'ticket';
 
 export default function MiValePage() {
+  const router = useRouter(); // Necesario para el logout
   const [nombreBusqueda, setNombreBusqueda] = useState('');
   const [empleado, setEmpleado] = useState<any>(null);
   const [historial, setHistorial] = useState<any[]>([]);
@@ -25,7 +28,6 @@ export default function MiValePage() {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user?.email) {
-        // Extraemos el nombre del correo (ej: "juan.perez@fge..." -> "juan perez")
         const emailPrefijo = session.user.email.split('@')[0].replace(/\./g, ' ');
         
         const { data } = await supabase
@@ -38,10 +40,9 @@ export default function MiValePage() {
           setEmpleado(data);
           cargarHistorialReciente(data.nombre_completo);
           setEstadoVista('dashboard');
-          return; // Si lo encuentra, termina aquí y muestra el dashboard
+          return;
         }
       }
-      // Si no hay sesión o no encontró coincidencia, muestra el buscador manual
       setEstadoVista('busqueda');
     };
 
@@ -86,16 +87,21 @@ export default function MiValePage() {
     setEstadoVista('animando');
     setPasoAnimacion(1);
 
-    setTimeout(() => setPasoAnimacion(2), 800);  // Comprobando cuota...
-    setTimeout(() => setPasoAnimacion(3), 1600); // Validando fecha...
-    setTimeout(() => setPasoAnimacion(4), 2400); // Generando código de barras...
+    setTimeout(() => setPasoAnimacion(2), 800);
+    setTimeout(() => setPasoAnimacion(3), 1600);
+    setTimeout(() => setPasoAnimacion(4), 2400);
     setTimeout(() => {
-      setPasoAnimacion(5); // ¡Vale generado!
-      setEstadoVista('ticket'); // Salto al ticket final
+      setPasoAnimacion(5);
+      setEstadoVista('ticket');
     }, 3200);
   };
 
-  // Formateadores de fecha para que se vea como en tu captura
+  // NUEVA FUNCIÓN: Cerrar sesión y romper el bucle
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
   const hoyCorto = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const hoyLargo = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const folioGenerado = `FGE-${empleado?.dependencia?.substring(0,3).toUpperCase() || 'EMP'}-00${empleado?.id || '1'}`;
@@ -108,29 +114,43 @@ export default function MiValePage() {
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
       
-      {/* CABECERA (Estilo App Móvil) */}
-      <div className="bg-[#1A2744] text-white p-4 shadow-md sticky top-0 z-50">
-        <div className="max-w-md mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="hover:bg-white/10 p-2 rounded-full transition-colors font-bold text-xl">
-              ←
-            </Link>
-            <div>
-              <h1 className="font-bold text-base leading-tight">
-                {empleado ? empleado.nombre_completo : 'Acceso Empleados'}
-              </h1>
-              <p className="text-teal-400 text-xs font-medium truncate max-w-[200px]">
-                {empleado ? empleado.dependencia : 'Comedor FGE'}
-              </p>
-            </div>
+      {/* NUEVA CABECERA INSTITUCIONAL CON LOGO Y BOTÓN SALIR */}
+      <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
+        <div className="flex items-center gap-4">
+          {/* Logo FGE */}
+          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner shrink-0">
+            <img 
+              src="/logo-fge.png" 
+              alt="FGE" 
+              className="w-full h-full object-contain rounded-full"
+              onError={(e) => { (e.target as HTMLImageElement).src = "https://fge.yucatan.gob.mx/images/logo-fge-header.png"; }} 
+            />
           </div>
-          <div className="text-xs font-medium text-slate-300">{hoyCorto}</div>
+          <div className="overflow-hidden">
+            <h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight truncate">
+              {empleado ? empleado.nombre_completo : 'Panel de Empleado'}
+            </h1>
+            <p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest truncate">
+              {empleado ? empleado.dependencia : 'Fiscalía General'}
+            </p>
+          </div>
         </div>
-      </div>
+        
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-xs font-medium text-slate-300 hidden sm:block">{hoyCorto}</div>
+          <button 
+            onClick={handleLogout} 
+            className="bg-white/10 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-white/5 shadow-sm"
+            title="Cerrar Sesión"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
+      </nav>
 
       <div className="max-w-md mx-auto px-4 mt-6">
 
-        {/* 🔓 VISTA 1: BÚSQUEDA MANUAL (Solo si falla el auto-login) */}
+        {/* 🔓 VISTA 1: BÚSQUEDA MANUAL */}
         {estadoVista === 'busqueda' && (
           <form onSubmit={buscarEmpleadoManual} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
             <h2 className="text-2xl font-black text-[#1A2744] mb-2">Comedor FGE Yucatán</h2>
@@ -152,7 +172,6 @@ export default function MiValePage() {
         {/* 📋 VISTA 2: DASHBOARD PRINCIPAL */}
         {estadoVista === 'dashboard' && (
           <div className="flex flex-col gap-6">
-            
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
               <p className="text-slate-400 text-xs font-medium mb-1 capitalize">{hoyLargo}</p>
               <h2 className="text-2xl font-black text-[#1A2744] mb-6">Vale de Comida</h2>
@@ -181,7 +200,6 @@ export default function MiValePage() {
                     <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1 rounded-full text-xs font-bold">Canjeado</span>
                   </div>
                 ))}
-                {/* Elemento decorativo visual simulando uno no utilizado como en tu captura */}
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="font-bold text-slate-800 text-sm">Ayer</p>
@@ -201,9 +219,7 @@ export default function MiValePage() {
               📊
               <div className="absolute inset-0 rounded-full border-4 border-[#1A2744]/20 animate-ping"></div>
             </div>
-            
             <h3 className="text-lg font-bold text-[#1A2744] mb-8">Generando código de barras...</h3>
-
             <div className="w-full flex flex-col gap-4 mb-8">
               <PasoCheck visible={pasoAnimacion >= 1} texto="Verificando identidad..." completed={pasoAnimacion > 1} />
               <PasoCheck visible={pasoAnimacion >= 2} texto="Comprobando cuota de dependencia..." completed={pasoAnimacion > 2} />
@@ -211,7 +227,6 @@ export default function MiValePage() {
               <PasoCheck visible={pasoAnimacion >= 4} texto="Generando código de barras..." completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
               <PasoCheck visible={pasoAnimacion >= 5} texto="¡Vale generado!" completed={pasoAnimacion >= 5} />
             </div>
-
             <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <div className="h-full bg-indigo-500 transition-all duration-[800ms] ease-out" style={{ width: `${pasoAnimacion * 20}%` }}></div>
             </div>
@@ -221,24 +236,19 @@ export default function MiValePage() {
         {/* 🎟️ VISTA 4: TICKET FINAL VIGENTE */}
         {estadoVista === 'ticket' && (
           <div className="flex flex-col items-center gap-4">
-            
             <div className="bg-white rounded-[2rem] overflow-hidden shadow-xl w-full border border-slate-100">
-              {/* Header Ticket */}
               <div className="bg-[#1A2744] p-6 text-center border-b-2 border-dashed border-slate-400/30 relative">
                 <p className="text-[#C9A84C] text-[10px] uppercase font-bold tracking-[0.1em] mb-1">Fiscalía General del Estado de Yucatán</p>
                 <h2 className="text-white text-lg font-black uppercase tracking-tight">Vale por una Comida<br/><span className="text-[#C9A84C] text-xs">Y UN REFRESCO</span></h2>
-                {/* Muescas del ticket */}
                 <div className="absolute -bottom-3 -left-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
                 <div className="absolute -bottom-3 -right-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
               </div>
 
-              {/* Body Ticket */}
               <div className="p-8 flex flex-col items-center relative">
                 <div className="text-center mb-6 w-full">
                   <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Dependencia</p>
                   <p className="text-[#1A2744] text-sm font-bold">{empleado.dependencia}</p>
                 </div>
-
                 <div className="flex justify-between w-full mb-8 gap-4">
                   <div className="text-center flex-1">
                     <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Empleado</p>
@@ -250,7 +260,6 @@ export default function MiValePage() {
                   </div>
                 </div>
 
-                {/* Código de Barras */}
                 <div className="w-full bg-[#F8FAFC] p-6 rounded-2xl flex flex-col items-center mb-6">
                   <img 
                     src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(empleado.nombre_completo)}&scale=3&rotate=N&includetext`} 
@@ -259,21 +268,18 @@ export default function MiValePage() {
                   />
                   <p className="text-slate-500 text-[10px] font-bold mt-3 tracking-widest">Folio: {folioGenerado}</p>
                 </div>
-
                 <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-xl text-center font-bold text-sm">
                   ✓ VALE VIGENTE — Válido solo para hoy
                 </div>
               </div>
             </div>
 
-            {/* Banner Informativo Inferior */}
             <div className="w-full bg-indigo-50/50 p-5 rounded-2xl flex items-center gap-4 border border-indigo-100/50">
               <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-500 shrink-0">📱</div>
               <p className="text-indigo-900/80 text-xs font-medium leading-relaxed">
                 <strong className="text-indigo-900">Presenta este código</strong> en el comedor para canjear tu comida del día.
               </p>
             </div>
-
           </div>
         )}
 
@@ -282,7 +288,6 @@ export default function MiValePage() {
   );
 }
 
-// Componente para la lista de checks de la animación
 function PasoCheck({ visible, texto, completed, active }: { visible: boolean, texto: string, completed: boolean, active?: boolean }) {
   if (!visible) return null;
   return (
