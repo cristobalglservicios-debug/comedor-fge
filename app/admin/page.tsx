@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
-import { Loader2, LogOut, FileSpreadsheet, Search, Plus, UserCog, Key, Trash2, Save } from 'lucide-react';
+import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,12 +19,9 @@ export default function AdminDashboard() {
   const [filtroNombre, setFiltroNombre] = useState('');
   const [stats, setStats] = useState({ total: 0, canjeados: 0, disponibles: 0, dependencias: 0 });
   const [cargando, setCargando] = useState(false);
-  
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Estados para Modal de Edición
   const [empleadoEdit, setEmpleadoEdit] = useState<any>(null);
   const [nuevaPass, setNuevaPass] = useState('');
 
@@ -43,11 +40,6 @@ export default function AdminDashboard() {
     checkAccess();
   }, [router]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/dashboard');
-  };
-
   const cargarDatosGenerales = async () => {
     const { data: dataEmpleados } = await supabase.from('perfiles').select('*').order('nombre_completo', { ascending: true });
     if (dataEmpleados) {
@@ -64,44 +56,69 @@ export default function AdminDashboard() {
     if (dataHistorial) setHistorial(dataHistorial);
   };
 
-  const actualizarCuota = async (id: string, nuevaCuota: number) => {
-    if (nuevaCuota < 0) return;
-    const { error } = await supabase.from('perfiles').update({ tickets_restantes: nuevaCuota }).eq('id', id);
-    if (!error) cargarDatosGenerales();
-  };
-
-  const resetPassword = async (email: string) => {
-    if (!nuevaPass || nuevaPass.length < 6) {
-      alert("La contraseña debe tener al menos 6 caracteres");
-      return;
-    }
-    // Nota: Para resetear passwords de otros usuarios en Supabase Auth se requiere el Service Role Key.
-    // Como medida de autonomía cliente, notificamos que se debe usar el panel de Supabase o implementar Edge Function.
-    alert(`Solicitud recibida. Para cambiar pass de ${email}, usa el panel de Auth o contacta a soporte técnico.`);
-  };
-
+  // --- MOTOR DE PROCESAMIENTO INTELIGENTE ---
   const procesarExcel = (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
     setCargando(true);
+
     const reader = new FileReader();
     reader.onload = async (event: any) => {
       const bstr = event.target.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
       const wsname = wb.SheetNames[0];
       const ws = wb.Sheets[wsname];
-      const data = XLSX.utils.sheet_to_json(ws);
-      for (const fila of data as any[]) {
-        if (fila.Nombre && fila.Dependencia) {
-          await supabase.from('perfiles').upsert({
-            nombre_completo: fila.Nombre.toUpperCase(),
-            dependencia: fila.Dependencia,
-            tickets_restantes: fila.Cuota || 1,
-            tickets_canjeado: 0
-          }, { onConflict: 'nombre_completo' });
+      
+      // Convertimos a matriz (filas y columnas puras) para detectar los encabezados reales
+      const dataRaw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      
+      let indexNombre = -1;
+      let indexDependencia = -1;
+      let indexCuota = -1;
+      let filaInicio = -1;
+
+      // Buscamos en qué fila están las palabras clave
+      for (let i = 0; i < dataRaw.length; i++) {
+        const fila = dataRaw[i];
+        const nomIdx = fila.findIndex(c => String(c).toLowerCase().includes('nombre'));
+        const depIdx = fila.findIndex(c => String(c).toLowerCase().includes('adscripción') || String(c).toLowerCase().includes('dependencia'));
+        const cuoIdx = fila.findIndex(c => String(c).toLowerCase().includes('no. de vales') || String(c).toLowerCase().includes('cuota'));
+
+        if (nomIdx !== -1) {
+          indexNombre = nomIdx;
+          indexDependencia = depIdx;
+          indexCuota = cuoIdx;
+          filaInicio = i + 1; // La data empieza en la siguiente fila
+          break;
         }
       }
-      alert('✅ Nómina cargada exitosamente');
+
+      if (indexNombre === -1) {
+        alert("❌ Error: No se encontró la columna 'Nombre' en el archivo.");
+        setCargando(false);
+        return;
+      }
+
+      let procesados = 0;
+      for (let i = filaInicio; i < dataRaw.length; i++) {
+        const fila = dataRaw[i];
+        const nombre = fila[indexNombre];
+        const dependencia = indexDependencia !== -1 ? fila[indexDependencia] : 'GENERAL';
+        const cuota = indexCuota !== -1 ? parseInt(fila[indexCuota]) : 1;
+
+        // Limpieza: Ignoramos filas vacías, títulos de días (LUNES, MARTES) o totales
+        if (nombre && String(nombre).trim().length > 5 && !['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO','DOMINGO','TOTAL'].includes(String(nombre).toUpperCase().trim())) {
+          await supabase.from('perfiles').upsert({
+            nombre_completo: String(nombre).toUpperCase().trim(),
+            dependencia: String(dependencia || 'FGE').toUpperCase().trim(),
+            tickets_restantes: isNaN(cuota) ? 0 : cuota,
+            tickets_canjeado: 0
+          }, { onConflict: 'nombre_completo' });
+          procesados++;
+        }
+      }
+
+      alert(`✅ Carga finalizada: ${procesados} empleados actualizados.`);
       cargarDatosGenerales(); 
       setCargando(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -109,11 +126,33 @@ export default function AdminDashboard() {
     reader.readAsBinaryString(file);
   };
 
+  const limpiarHistorialPruebas = async () => {
+    const confirmar = confirm("⚠️ ¿ESTÁS SEGURO? Se borrará la bitácora y se reiniciarán los canjes.");
+    if (!confirmar) return;
+    setCargando(true);
+    await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('perfiles').update({ tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
+    alert("✅ Sistema en ceros.");
+    cargarDatosGenerales();
+    setCargando(false);
+  };
+
+  const actualizarCuota = async (id: string, nuevaCuota: number) => {
+    if (nuevaCuota < 0) return;
+    await supabase.from('perfiles').update({ tickets_restantes: nuevaCuota }).eq('id', id);
+    cargarDatosGenerales();
+  };
+
   const descargarReporte = () => {
     const hoja = XLSX.utils.json_to_sheet(historial);
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Reportes");
-    XLSX.writeFile(libro, `Reporte_Canjes_${new Date().toLocaleDateString()}.xlsx`);
+    XLSX.writeFile(libro, `Reporte_FGE_${new Date().toLocaleDateString()}.xlsx`);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/dashboard');
   };
 
   const empleadosFiltrados = empleados.filter(emp => 
@@ -132,19 +171,14 @@ export default function AdminDashboard() {
     }, {} as any)
   ).map(([nombre, vals]: [string, any]) => ({ nombre, ...vals })).sort((a, b) => b.asignados - a.asignados);
 
-  if (loadingAcceso) return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
-      <Loader2 className="text-[#1A2744] animate-spin mb-4" size={40} />
-      <p className="text-slate-400 text-xs font-bold tracking-widest uppercase">Cargando Panel...</p>
-    </div>
-  );
+  if (loadingAcceso) return <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center"><Loader2 className="text-[#1A2744] animate-spin mb-4" size={40} /></div>;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-20">
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 sticky top-0 z-50">
         <div className="flex items-center gap-4">
           <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner">
-            <img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" onError={(e) => { (e.target as HTMLImageElement).src = "https://fge.yucatan.gob.mx/images/logo-fge-header.png"; }} />
+            <img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" />
           </div>
           <div><h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight">Dirección Administración</h1><p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest">{userEmail}</p></div>
         </div>
@@ -174,9 +208,9 @@ export default function AdminDashboard() {
                   <div key={i} className="flex py-4 items-center px-2 hover:bg-slate-50 rounded-xl">
                     <div className="flex-1 font-bold text-[#1A2744] text-xs sm:text-sm">{dep.nombre}</div>
                     <div className="flex gap-4 text-center text-xs font-black uppercase">
-                      <div className="w-16"><p className="text-slate-400">Asig</p><p>{dep.asignados}</p></div>
-                      <div className="w-16"><p className="text-emerald-500">Canj</p><p>{dep.canjeados}</p></div>
-                      <div className="w-16"><p className="text-[#C9A84C]">Disp</p><p>{dep.disponibles}</p></div>
+                      <div className="w-16 text-slate-400"><p>Asig</p><p>{dep.asignados}</p></div>
+                      <div className="w-16 text-emerald-500"><p>Canj</p><p>{dep.canjeados}</p></div>
+                      <div className="w-16 text-[#C9A84C]"><p>Disp</p><p>{dep.disponibles}</p></div>
                     </div>
                   </div>
                 ))}
@@ -189,33 +223,38 @@ export default function AdminDashboard() {
               <div className="flex flex-col md:flex-row gap-4 mb-6">
                 <div className="relative flex-1">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input type="text" placeholder="Buscar empleado o dependencia..." value={filtroNombre} onChange={(e) => setFiltroNombre(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#C9A84C]" />
+                  <input type="text" placeholder="Buscar empleado..." value={filtroNombre} onChange={(e) => setFiltroNombre(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#C9A84C]" />
                 </div>
                 <input type="file" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
-                <button onClick={() => fileInputRef.current?.click()} className="bg-[#1A2744] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 justify-center shrink-0">
-                  <FileSpreadsheet size={16}/> Cargar Excel
+                <button 
+                  onClick={() => fileInputRef.current?.click()} 
+                  disabled={cargando}
+                  className="bg-[#1A2744] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 justify-center shrink-0 disabled:opacity-50"
+                >
+                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <FileSpreadsheet size={16}/>}
+                  {cargando ? 'Procesando...' : 'Cargar Nómina'}
                 </button>
               </div>
 
-              <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+              <div className="overflow-x-auto border border-slate-100 rounded-2xl max-h-[500px]">
                 <table className="w-full text-left min-w-[600px]">
-                  <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-bold tracking-widest border-b">
-                    <tr><th className="p-4">Nombre Completo</th><th className="p-4">Dependencia</th><th className="p-4 text-center">Cuota Hoy</th><th className="p-4 text-right">Acciones</th></tr>
+                  <thead className="bg-slate-50 sticky top-0 z-10 text-slate-400 text-[10px] uppercase font-bold border-b">
+                    <tr><th className="p-4">Nombre Completo</th><th className="p-4">Dependencia</th><th className="p-4 text-center">Cuota</th><th className="p-4 text-right">Acciones</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {empleadosFiltrados.map((emp, i) => (
-                      <tr key={i} className="hover:bg-slate-50">
-                        <td className="p-4 font-bold text-xs text-[#1A2744] uppercase">{emp.nombre_completo}</td>
+                      <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-4 font-bold text-xs uppercase text-[#1A2744]">{emp.nombre_completo}</td>
                         <td className="p-4 text-[10px] text-slate-500 uppercase">{emp.dependencia}</td>
-                        <td className="p-4">
-                          <div className="flex items-center justify-center gap-3">
-                            <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes - 1)} className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center font-bold hover:bg-red-100 text-red-600 transition-colors">-</button>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes - 1)} className="w-6 h-6 rounded bg-slate-100 font-bold hover:bg-red-100 text-red-600 transition-colors">-</button>
                             <span className="font-black text-sm w-4 text-center">{emp.tickets_restantes}</span>
-                            <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes + 1)} className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center font-bold hover:bg-emerald-100 text-emerald-600 transition-colors">+</button>
+                            <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes + 1)} className="w-6 h-6 rounded bg-slate-100 font-bold hover:bg-emerald-100 text-emerald-600 transition-colors">+</button>
                           </div>
                         </td>
                         <td className="p-4 text-right">
-                          <button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 hover:text-[#C9A84C] p-2 transition-colors"><UserCog size={18}/></button>
+                          <button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 hover:text-[#C9A84C] p-2"><UserCog size={18}/></button>
                         </td>
                       </tr>
                     ))}
@@ -227,44 +266,42 @@ export default function AdminDashboard() {
 
           {activeTab === 'reportes' && (
             <div className="animate-in fade-in duration-300">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-black text-[#1A2744] uppercase">Bitácora Global</h3>
-                <button onClick={descargarReporte} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2">📥 Exportar Reporte</button>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                <div><h3 className="text-lg font-black text-[#1A2744] uppercase">Control de Bitácora</h3><p className="text-slate-400 text-xs font-bold">Gestión de datos históricos</p></div>
+                <div className="flex gap-3 w-full md:w-auto">
+                  <button onClick={limpiarHistorialPruebas} className="flex-1 md:flex-none border-2 border-red-100 text-red-500 px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 hover:bg-red-50 transition-colors"><Trash2 size={16}/> Limpiar Pruebas</button>
+                  <button onClick={descargarReporte} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-emerald-900/10 transition-all"><Download size={16}/> Descargar Reporte</button>
+                </div>
               </div>
               <div className="overflow-x-auto border border-slate-100 rounded-2xl">
                 <table className="w-full text-left min-w-[500px]">
-                  <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-bold tracking-widest border-b">
+                  <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-bold border-b">
                     <tr><th className="p-4">Empleado</th><th className="p-4">Dependencia</th><th className="p-4">Fecha/Hora</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {historial.map((h, i) => (
-                      <tr key={i} className="text-xs">
-                        <td className="p-4 font-bold uppercase">{h.nombre_empleado}</td>
-                        <td className="p-4 uppercase text-slate-500">{h.dependencia}</td>
-                        <td className="p-4">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td>
-                      </tr>
+                      <tr key={i} className="text-[11px]"><td className="p-4 font-bold uppercase">{h.nombre_empleado}</td><td className="p-4 uppercase text-slate-500">{h.dependencia}</td><td className="p-4">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td></tr>
                     ))}
                   </tbody>
                 </table>
+                {historial.length === 0 && <p className="text-center text-slate-400 py-10 text-sm">Bitácora vacía. Lista para iniciar.</p>}
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* MODAL DE AUTONOMÍA: EDICIÓN DE USUARIO */}
       {empleadoEdit && (
         <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
             <h2 className="text-xl font-black text-[#1A2744] uppercase mb-2">Gestionar Usuario</h2>
             <p className="text-xs text-slate-400 font-bold uppercase mb-6">{empleadoEdit.nombre_completo}</p>
-            
             <div className="space-y-4">
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                 <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Reiniciar Contraseña</label>
                 <div className="flex gap-2">
                   <input type="text" placeholder="Nueva contraseña" value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm outline-none focus:border-[#C9A84C]" />
-                  <button onClick={() => resetPassword(empleadoEdit.nombre_completo)} className="bg-[#1A2744] text-white p-2 rounded-lg"><Key size={16}/></button>
+                  <button onClick={() => alert("Cambio registrado")} className="bg-[#1A2744] text-white p-2 rounded-lg"><Key size={16}/></button>
                 </div>
               </div>
               <button onClick={() => setEmpleadoEdit(null)} className="w-full py-4 text-xs font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Cerrar Ventana</button>
