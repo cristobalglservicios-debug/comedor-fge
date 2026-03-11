@@ -4,8 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
-import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus } from 'lucide-react';
+import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText } from 'lucide-react';
 import { crearUsuarioAdmin, eliminarUsuarioAdmin, actualizarPasswordAdmin } from './actions';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -141,17 +143,12 @@ export default function AdminDashboard() {
           const cuoIdx = fila.findIndex(c => typeof c === 'string' && (c.toLowerCase().includes('vales') || c.toLowerCase().includes('cuota') || c.toLowerCase().includes('cantidad')));
           
           if (nomIdx !== -1) { 
-            indexNombre = nomIdx; 
-            indexDependencia = depIdx; 
-            indexCuota = cuoIdx; 
-            filaInicio = i + 1; 
-            break; 
+            indexNombre = nomIdx; indexDependencia = depIdx; indexCuota = cuoIdx; filaInicio = i + 1; break; 
           }
         }
 
         if (indexNombre !== -1) {
-          let ultimaDependencia = 'GENERAL'; // Memoria para celdas combinadas/vacías
-
+          let ultimaDependencia = 'GENERAL'; 
           for (let i = filaInicio; i < dataRaw.length; i++) {
             const fila = dataRaw[i];
             if (!fila) continue;
@@ -159,11 +156,8 @@ export default function AdminDashboard() {
             const nombreRaw = fila[indexNombre];
             const nombre = String(nombreRaw || '').toUpperCase().trim();
             
-            // Si la celda de dependencia tiene texto, actualizamos la memoria. Si está vacía, usamos la memoria.
             const depRaw = indexDependencia !== -1 ? fila[indexDependencia] : null;
-            if (depRaw && String(depRaw).trim() !== '') {
-              ultimaDependencia = String(depRaw).toUpperCase().trim();
-            }
+            if (depRaw && String(depRaw).trim() !== '') { ultimaDependencia = String(depRaw).toUpperCase().trim(); }
 
             const cuotaRaw = indexCuota !== -1 ? fila[indexCuota] : 0;
             const cuota = parseInt(String(cuotaRaw)) || 0;
@@ -171,12 +165,8 @@ export default function AdminDashboard() {
             if (nombre.length > 5 && !['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO','DOMINGO','TOTAL'].some(p => nombre.includes(p))) {
               if (mapaEmpleados[nombre]) { 
                 mapaEmpleados[nombre].cuota += cuota; 
-                // Corregir dependencia si antes se guardó como GENERAL por error
-                if (mapaEmpleados[nombre].dependencia === 'GENERAL' && ultimaDependencia !== 'GENERAL') {
-                  mapaEmpleados[nombre].dependencia = ultimaDependencia;
-                }
-              }
-              else { 
+                if (mapaEmpleados[nombre].dependencia === 'GENERAL' && ultimaDependencia !== 'GENERAL') { mapaEmpleados[nombre].dependencia = ultimaDependencia; }
+              } else { 
                 mapaEmpleados[nombre] = { dependencia: ultimaDependencia, cuota }; 
               }
             }
@@ -211,6 +201,80 @@ export default function AdminDashboard() {
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Accesos");
     XLSX.writeFile(libro, "Lista_Accesos_FGE.xlsx");
+  };
+
+  // --- MOTOR DE GENERACIÓN DE PDF OFICIAL ---
+  const generarCortePDF = (tipo: 'diario' | 'semanal') => {
+    const doc = new jsPDF();
+    const fechaActual = new Date();
+    
+    let datosFiltrados = historial;
+    if (tipo === 'diario') {
+      const hoy = fechaActual.toLocaleDateString('es-MX');
+      datosFiltrados = historial.filter(h => new Date(h.fecha_hora).toLocaleDateString('es-MX') === hoy);
+    }
+
+    if (datosFiltrados.length === 0) {
+      alert(`No hay registros para generar un corte ${tipo}.`);
+      return;
+    }
+
+    // Encabezado
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("FISCALÍA GENERAL DEL ESTADO DE YUCATÁN", 105, 20, { align: "center" });
+    doc.setFontSize(12);
+    doc.text(`CORTE OFICIAL DE RACIONES DE COMEDOR - ${tipo.toUpperCase()}`, 105, 28, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Fecha de emisión: ${fechaActual.toLocaleDateString('es-MX')} ${fechaActual.toLocaleTimeString('es-MX')}`, 14, 40);
+    doc.text(`Total de raciones consumidas: ${datosFiltrados.length}`, 14, 46);
+
+    // Tabla de datos
+    const bodyDatos = datosFiltrados.map((h, i) => [
+      i + 1,
+      h.nombre_empleado,
+      new Date(h.fecha_hora).toLocaleString('es-MX')
+    ]);
+
+    autoTable(doc, {
+      startY: 52,
+      head: [['#', 'Nombre del Empleado', 'Fecha y Hora de Canje']],
+      body: bodyDatos,
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [26, 39, 68] }, // #1A2744
+      margin: { bottom: 60 } // Margen para asegurar espacio de firmas
+    });
+
+    // Validar salto de página para firmas
+    let finalY = (doc as any).lastAutoTable.finalY || 52;
+    if (finalY > 230) {
+      doc.addPage();
+      finalY = 20;
+    }
+
+    const firmaY = finalY + 40;
+
+    // Firmas Institucionales
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    
+    // Firma Izquierda (Autoriza)
+    doc.line(25, firmaY, 95, firmaY);
+    doc.text("AUTORIZA", 60, firmaY + 5, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.text("M.D. JOSE MANUEL FLORES ACOSTA", 60, firmaY + 10, { align: "center" });
+
+    // Firma Derecha (Recibe)
+    doc.setFont("helvetica", "bold");
+    doc.line(115, firmaY, 185, firmaY);
+    doc.text("RECIBE", 150, firmaY + 5, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.text("KARLA XACUR TAMAYO", 150, firmaY + 10, { align: "center" });
+
+    doc.save(`Corte_${tipo.toUpperCase()}_Comedor_${fechaActual.getTime()}.pdf`);
   };
 
   const limpiarHistorialPruebas = async () => {
@@ -327,11 +391,12 @@ export default function AdminDashboard() {
 
           {activeTab === 'reportes' && (
             <div className="animate-in fade-in duration-300">
-              <div className="flex justify-between items-center mb-8">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <h3 className="text-lg font-black uppercase">Control Bitácora</h3>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button onClick={limpiarHistorialPruebas} className="border-2 border-red-100 text-red-500 px-6 py-3 rounded-xl font-bold text-xs uppercase transition-all"><Trash2 size={16}/></button>
-                  <button onClick={() => alert("Exportando...")} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2"><Download size={16}/> Exportar Reporte</button>
+                  <button onClick={() => generarCortePDF('diario')} className="bg-[#1A2744] hover:bg-[#2a3f6d] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileText size={16}/> Corte Diario</button>
+                  <button onClick={() => generarCortePDF('semanal')} className="bg-[#C9A84C] hover:bg-[#e0bc5a] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileText size={16}/> Corte Semanal</button>
                 </div>
               </div>
               <div className="overflow-x-auto border rounded-2xl">
