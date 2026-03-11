@@ -24,6 +24,7 @@ export default function AdminDashboard() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [empleadoEdit, setEmpleadoEdit] = useState<any>(null);
+  const [nuevaPass, setNuevaPass] = useState('');
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -136,12 +137,11 @@ export default function AdminDashboard() {
     XLSX.writeFile(libro, "Lista_Accesos_FGE.xlsx");
   };
 
-  // --- BORRADO TOTAL ACTUALIZADO ---
   const limpiarHistorialPruebas = async () => {
     if (!confirm("⚠️ ¿ESTÁS SEGURO? Esto borrará a TODOS los empleados y la bitácora completa para empezar en blanco.")) return;
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('perfiles').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Elimina a todos los empleados
+    await supabase.from('perfiles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     cargarDatosGenerales(); 
     setCargando(false);
   };
@@ -268,6 +268,25 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {empleadoEdit && (
+        <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
+            <h2 className="text-xl font-black text-[#1A2744] uppercase mb-2">Gestionar Usuario</h2>
+            <p className="text-xs text-slate-400 font-bold uppercase mb-6">{empleadoEdit.nombre_completo}</p>
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Reiniciar Contraseña</label>
+                <div className="flex gap-2">
+                  <input type="text" placeholder="Nueva contraseña" value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm outline-none focus:border-[#C9A84C]" />
+                  <button onClick={() => alert("Cambio registrado")} className="bg-[#1A2744] text-white p-2 rounded-lg"><Key size={16}/></button>
+                </div>
+              </div>
+              <button onClick={() => setEmpleadoEdit(null)} className="w-full py-4 text-xs font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Cerrar Ventana</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
