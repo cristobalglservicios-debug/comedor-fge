@@ -69,7 +69,6 @@ export default function AdminDashboard() {
       + "@fge.gob.mx";
   };
 
-  // --- ALTA MANUAL ---
   const guardarNuevoEmpleado = async () => {
     if (nuevoEmp.nombre.length < 5) return alert("Ingresa el nombre completo");
     setCargando(true);
@@ -92,7 +91,6 @@ export default function AdminDashboard() {
     setCargando(false);
   };
 
-  // --- BAJA DEFINITIVA ---
   const handleEliminarEmpleado = async () => {
     if (!empleadoEdit) return;
     if (!confirm(`⚠️ ¿ELIMINAR DEFINITIVAMENTE a ${empleadoEdit.nombre_completo}? Perderá su acceso y vales.`)) return;
@@ -106,7 +104,6 @@ export default function AdminDashboard() {
     setCargando(false);
   };
 
-  // --- REINICIO DE CONTRASEÑA ---
   const handleCambiarPassword = async () => {
     if (nuevaPass.length < 6) return alert("La contraseña debe tener al menos 6 caracteres");
     setCargando(true);
@@ -139,22 +136,49 @@ export default function AdminDashboard() {
 
         for (let i = 0; i < dataRaw.length; i++) {
           const fila = dataRaw[i];
-          const nomIdx = fila.findIndex(c => String(c).toLowerCase().includes('nombre'));
-          const depIdx = fila.findIndex(c => String(c).toLowerCase().includes('adscripción') || String(c).toLowerCase().includes('dependencia'));
-          const cuoIdx = fila.findIndex(c => String(c).toLowerCase().includes('no. de vales'));
-          if (nomIdx !== -1) { indexNombre = nomIdx; indexDependencia = depIdx; indexCuota = cuoIdx; filaInicio = i + 1; break; }
+          const nomIdx = fila.findIndex(c => typeof c === 'string' && c.toLowerCase().includes('nombre'));
+          const depIdx = fila.findIndex(c => typeof c === 'string' && (c.toLowerCase().includes('adscripción') || c.toLowerCase().includes('dependencia') || c.toLowerCase().includes('área')));
+          const cuoIdx = fila.findIndex(c => typeof c === 'string' && (c.toLowerCase().includes('vales') || c.toLowerCase().includes('cuota') || c.toLowerCase().includes('cantidad')));
+          
+          if (nomIdx !== -1) { 
+            indexNombre = nomIdx; 
+            indexDependencia = depIdx; 
+            indexCuota = cuoIdx; 
+            filaInicio = i + 1; 
+            break; 
+          }
         }
 
         if (indexNombre !== -1) {
+          let ultimaDependencia = 'GENERAL'; // Memoria para celdas combinadas/vacías
+
           for (let i = filaInicio; i < dataRaw.length; i++) {
             const fila = dataRaw[i];
-            const nombre = String(fila[indexNombre] || '').toUpperCase().trim();
-            const dependencia = indexDependencia !== -1 ? String(fila[indexDependencia] || 'GENERAL').toUpperCase().trim() : 'GENERAL';
-            const cuota = indexCuota !== -1 ? parseInt(fila[indexCuota]) || 0 : 0;
+            if (!fila) continue;
+
+            const nombreRaw = fila[indexNombre];
+            const nombre = String(nombreRaw || '').toUpperCase().trim();
+            
+            // Si la celda de dependencia tiene texto, actualizamos la memoria. Si está vacía, usamos la memoria.
+            const depRaw = indexDependencia !== -1 ? fila[indexDependencia] : null;
+            if (depRaw && String(depRaw).trim() !== '') {
+              ultimaDependencia = String(depRaw).toUpperCase().trim();
+            }
+
+            const cuotaRaw = indexCuota !== -1 ? fila[indexCuota] : 0;
+            const cuota = parseInt(String(cuotaRaw)) || 0;
 
             if (nombre.length > 5 && !['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO','DOMINGO','TOTAL'].some(p => nombre.includes(p))) {
-              if (mapaEmpleados[nombre]) { mapaEmpleados[nombre].cuota += cuota; }
-              else { mapaEmpleados[nombre] = { dependencia, cuota }; }
+              if (mapaEmpleados[nombre]) { 
+                mapaEmpleados[nombre].cuota += cuota; 
+                // Corregir dependencia si antes se guardó como GENERAL por error
+                if (mapaEmpleados[nombre].dependencia === 'GENERAL' && ultimaDependencia !== 'GENERAL') {
+                  mapaEmpleados[nombre].dependencia = ultimaDependencia;
+                }
+              }
+              else { 
+                mapaEmpleados[nombre] = { dependencia: ultimaDependencia, cuota }; 
+              }
             }
           }
         }
@@ -327,7 +351,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* MODAL GESTION DE EMPLEADO (EDITAR/ELIMINAR/PASSWORD) */}
       {empleadoEdit && (
         <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
@@ -358,7 +381,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* MODAL ALTA MANUAL */}
       {modalNuevo && (
         <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
