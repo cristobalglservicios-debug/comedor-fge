@@ -3,147 +3,144 @@
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Loader2, Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
+import { Loader2, Lock, Mail, ArrowRight } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export default function Login() {
-  const router = useRouter();
+export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
+    setError('');
 
-    try {
-      // 1. Inicia sesión con Supabase
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: password
+    });
 
-      if (authError) {
-        setError('Correo o contraseña incorrectos.');
-        setLoading(false);
-        return;
-      }
-
-      // 2. Ruteo DIRECTO Y SIN ESCALAS (Aquí estaba el fallo de diseño)
-      if (data.session && data.user) {
-        const userEmail = data.user.email?.toLowerCase() || '';
-
-        if (userEmail.includes('admin')) {
-          router.push('/admin');
-        } else if (userEmail.includes('comedor')) {
-          router.push('/cajero');
-        } else {
-          router.push('/mi-vale');
-        }
-      }
-      
-    } catch (err) {
-      setError('Error de conexión con el servidor.');
+    if (error) {
+      setError('Credenciales incorrectas. Verifica tu acceso.');
       setLoading(false);
+      return;
+    }
+
+    if (data.user) {
+      const userEmail = data.user.email?.toLowerCase() || '';
+      
+      if (userEmail.includes('admin')) {
+        router.push('/admin');
+      } else if (userEmail.includes('comedor')) {
+        router.push('/cajero');
+      } else {
+        router.push('/mi-vale');
+      }
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
-      <div className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden">
+      
+      {/* Fondo decorativo sutil */}
+      <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-[#1A2744]/5 to-transparent -z-10"></div>
+      
+      <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-8 duration-700">
         
-        {/* ENCABEZADO Y LOGO */}
-        <div className="text-center mb-10">
-          <div className="bg-white w-28 h-28 mx-auto rounded-full flex items-center justify-center shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-slate-100 p-1 mb-6 overflow-hidden">
+        {/* LOGO OFICIAL FGE (Igual que en la portada) */}
+        <div className="mb-8 flex justify-center">
+          <div className="bg-white w-32 h-32 rounded-full flex items-center justify-center shadow-[0_20px_40px_-12px_rgba(0,0,0,0.1)] border border-slate-50 p-2 overflow-hidden">
             <img 
-              src="/Logo-FGE.jpg" 
-              alt="Logo FGE"
-              className="w-full h-full object-contain"
+              src="/logo-fge.png" 
+              alt="Fiscalía General del Estado de Yucatán"
+              className="w-full h-full object-contain rounded-full"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src = "https://fge.yucatan.gob.mx/images/logo-fge-header.png";
               }}
             />
           </div>
-          <h1 className="text-2xl font-black text-[#1A2744] tracking-tight uppercase">
-            Acceso al Sistema
-          </h1>
-          <p className="text-[#C9A84C] text-sm font-bold tracking-widest mt-1">
-            COMEDOR FISCALÍA
-          </p>
         </div>
 
-        {/* TARJETA DEL FORMULARIO */}
-        <div className="bg-white p-8 rounded-[2rem] shadow-2xl shadow-blue-900/10 border border-slate-100">
+        {/* Textos Institucionales */}
+        <div className="text-center mb-10">
+          <h1 className="text-2xl font-black text-[#1A2744] tracking-tight uppercase">Acceso al Sistema</h1>
+          <p className="text-[#C9A84C] text-sm font-bold tracking-widest uppercase mt-2">Comedor Fiscalía</p>
+        </div>
+
+        {/* Tarjeta del Formulario */}
+        <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100">
           <form onSubmit={handleLogin} className="space-y-6">
             
+            {/* Input Correo */}
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Correo Institucional</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="text-slate-300" size={18} />
+              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2">Correo Institucional</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-[#1A2744] transition-colors">
+                  <Mail size={18} />
                 </div>
                 <input
                   type="email"
+                  required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl text-sm font-medium text-[#1A2744] focus:ring-2 focus:ring-[#C9A84C] transition-all outline-none"
+                  className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-800 font-medium focus:bg-white focus:border-[#C9A84C] focus:ring-4 focus:ring-[#C9A84C]/10 outline-none transition-all"
                   placeholder="ejemplo@fge.gob.mx"
-                  required
                 />
               </div>
             </div>
 
+            {/* Input Contraseña */}
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Contraseña</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="text-slate-300" size={18} />
+              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2">Contraseña</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-[#1A2744] transition-colors">
+                  <Lock size={18} />
                 </div>
                 <input
                   type="password"
+                  required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl text-sm font-medium text-[#1A2744] focus:ring-2 focus:ring-[#C9A84C] transition-all outline-none"
+                  className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-800 font-medium focus:bg-white focus:border-[#C9A84C] focus:ring-4 focus:ring-[#C9A84C]/10 outline-none transition-all"
                   placeholder="••••••••"
-                  required
                 />
               </div>
             </div>
 
+            {/* Mensaje de Error */}
             {error && (
-              <div className="flex items-center gap-2 bg-red-50 text-red-600 p-3 rounded-xl text-xs font-medium">
-                <AlertCircle size={16} className="shrink-0" />
-                <span>{error}</span>
+              <div className="bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl text-xs font-bold text-center animate-in shake">
+                {error}
               </div>
             )}
 
+            {/* Botón de Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#1A2744] text-white py-4 rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-blue-900/20 active:scale-[0.97] transition-all flex items-center justify-center gap-2 hover:bg-[#25365d] disabled:opacity-70 disabled:active:scale-100"
+              className="w-full mt-4 bg-[#1A2744] hover:bg-[#25365d] active:scale-[0.98] text-white py-4 px-6 rounded-2xl font-bold uppercase tracking-widest text-[11px] transition-all flex justify-center items-center gap-3 shadow-lg shadow-blue-900/20 disabled:opacity-70 disabled:active:scale-100"
             >
               {loading ? (
-                <><Loader2 className="animate-spin" size={18} /> Entrando...</>
+                <><Loader2 className="animate-spin" size={16} /> Verificando Identidad...</>
               ) : (
-                <>Iniciar Sesión <ArrowRight size={18} className="text-[#C9A84C]" /></>
+                <>Iniciar Sesión <ArrowRight size={16} /></>
               )}
             </button>
           </form>
         </div>
 
-        <div className="mt-10 text-center opacity-40">
-          <p className="text-[9px] font-black tracking-[0.4em] text-slate-400 uppercase">
-            Fiscalía General del Estado de Yucatán
-          </p>
-        </div>
-
+        {/* Footer */}
+        <p className="text-center text-[9px] font-black tracking-[0.4em] text-slate-300 uppercase mt-12">
+          Fiscalía General del Estado de Yucatán
+        </p>
       </div>
     </div>
   );
