@@ -37,8 +37,19 @@ export default function AdminDashboard() {
       setTimeout(async () => {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error || !session) { router.push('/dashboard'); return; }
+        
         const email = session.user.email?.toLowerCase() || '';
-        if (!email.includes('admin')) { router.push('/'); return; }
+        
+        // SEGURIDAD REFORZADA:
+        // 1. Cubre tu cuenta actual: admin.cristobal@...
+        // 2. Cubre futuras cuentas: nombre.admin@...
+        const esAdminOficial = email.startsWith('admin.') || email.includes('.admin@');
+        
+        if (!esAdminOficial) {
+          router.push('/dashboard');
+          return;
+        }
+        
         setUserEmail(email);
         setLoadingAcceso(false);
         cargarDatosGenerales();
