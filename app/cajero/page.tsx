@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -28,6 +28,9 @@ export default function PantallaCajero() {
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState('');
 
+  // ESTADO PARA EL LECTOR DE CÁMARA
+  const [usarCamara, setUsarCamara] = useState(false);
+
   useEffect(() => {
     const inicializarCajero = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -46,6 +49,36 @@ export default function PantallaCajero() {
     };
     inicializarCajero();
   }, [router]);
+
+  // MOTOR DEL ESCÁNER DE CÁMARA
+  useEffect(() => {
+    if (!usarCamara) return;
+    let scanner: any = null;
+
+    const initScanner = async () => {
+      const { Html5QrcodeScanner } = await import('html5-qrcode');
+      scanner = new Html5QrcodeScanner("reader", { 
+        fps: 10, 
+        qrbox: { width: 250, height: 250 } 
+      }, false);
+      
+      scanner.render(
+        (decodedText: string) => {
+          scanner.clear();
+          setUsarCamara(false);
+          setInputLectura(decodedText);
+          procesarEscaneo(undefined, decodedText); // Pasa el código directo a la función
+        },
+        (err: any) => { /* errores silenciosos de lectura */ }
+      );
+    };
+
+    initScanner();
+
+    return () => {
+      if (scanner) scanner.clear().catch(console.error);
+    };
+  }, [usarCamara]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -66,9 +99,10 @@ export default function PantallaCajero() {
     }
   };
 
-  const procesarEscaneo = async (e?: React.FormEvent) => {
+  // ACTUALIZADO PARA ACEPTAR EL EVENTO DEL FORMULARIO O EL CÓDIGO DIRECTO DE LA CÁMARA
+  const procesarEscaneo = async (e?: React.FormEvent, codigoDirecto?: string) => {
     if (e) e.preventDefault();
-    const nombreEscaneado = inputLectura.trim().toUpperCase();
+    const nombreEscaneado = (codigoDirecto || inputLectura).trim().toUpperCase();
     if (!nombreEscaneado) return;
 
     setCargando(true);
@@ -112,7 +146,7 @@ export default function PantallaCajero() {
     }
     setCargando(false);
     setInputLectura('');
-    inputRef.current?.focus();
+    if (!usarCamara) inputRef.current?.focus();
   };
 
   const exportarExcel = () => {
@@ -198,22 +232,40 @@ export default function PantallaCajero() {
             <div className="p-8 animate-fade-in">
               <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-4">Escanear código de barras</h3>
               <form onSubmit={procesarEscaneo} className="flex flex-col sm:row gap-4">
-                <div className="flex flex-1 gap-4">
+                <div className="flex flex-1 gap-2 sm:gap-4">
                   <input
                     ref={inputRef}
                     type="text"
                     value={inputLectura}
                     onChange={(e) => setInputLectura(e.target.value)}
-                    className="flex-1 p-4 border-2 border-[#6366F1]/40 rounded-2xl text-lg font-mono outline-none focus:border-[#6366F1] transition-colors uppercase tracking-widest"
+                    className="flex-1 w-full p-4 border-2 border-[#6366F1]/40 rounded-2xl text-lg font-mono outline-none focus:border-[#6366F1] transition-colors uppercase tracking-widest min-w-0"
                     placeholder="Escanea o escribe el código..."
                     autoFocus
                   />
-                  <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all">
+                  <button 
+                    type="button" 
+                    onClick={() => setUsarCamara(!usarCamara)} 
+                    className={`px-4 rounded-2xl transition-all shadow-sm ${usarCamara ? 'bg-red-500 text-white' : 'bg-slate-100 text-[#1A2744] hover:bg-slate-200'}`}
+                    title="Usar Cámara del Celular"
+                  >
+                    <Camera size={24}/>
+                  </button>
+                  <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-6 sm:px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all">
                     {cargando ? '...' : 'Validar'}
                   </button>
                 </div>
               </form>
-              <p className="text-slate-400 text-[10px] mt-2 mb-8">El escáner USB llena este campo automáticamente</p>
+              <p className="text-slate-400 text-[10px] mt-2 mb-8">El escáner USB o la cámara llenarán este campo automáticamente</p>
+
+              {/* CONTENEDOR DE LA CÁMARA */}
+              {usarCamara && (
+                <div className="mb-8 p-4 border-2 border-dashed border-[#6366F1]/40 rounded-3xl bg-slate-50 animate-fade-in">
+                  <div id="reader" className="w-full max-w-sm mx-auto overflow-hidden rounded-xl"></div>
+                  <button type="button" onClick={() => setUsarCamara(false)} className="w-full mt-4 py-3 text-red-500 font-bold uppercase text-xs tracking-widest hover:bg-red-50 rounded-xl transition-colors">
+                    Cancelar Cámara
+                  </button>
+                </div>
+              )}
 
               {mensaje.tipo === 'exito' && (
                 <div className="bg-emerald-50 border-2 border-emerald-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in">
