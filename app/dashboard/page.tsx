@@ -72,7 +72,7 @@ export default function LoginScreen() {
         {/* Textos Institucionales */}
         <div className="text-center mb-10">
           <h1 className="text-2xl font-black text-[#1A2744] tracking-tight uppercase">Acceso al Sistema</h1>
-          <p className="text-[#C9A84C] text-sm font-bold tracking-widest uppercase mt-2">Comedor Fiscalía</p>
+          <p className="text-[#C9A84C] text-sm font-bold tracking-widest uppercase mt-2">Administración Fiscalía</p>
         </div>
 
         {/* Tarjeta del Formulario */}
