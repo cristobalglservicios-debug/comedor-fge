@@ -2,16 +2,18 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2 } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Tab = 'escanear' | 'historial';
+type Tab = 'escanear' | 'historial' | 'reportes';
 
 export default function PantallaCajero() {
   const router = useRouter();
@@ -23,37 +25,25 @@ export default function PantallaCajero() {
   const [cargando, setCargando] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   
-  // NUEVOS ESTADOS DE SEGURIDAD
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState('');
 
-  // 1. SEGURIDAD Y CARGA DE DATOS INICIAL
   useEffect(() => {
     const inicializarCajero = async () => {
-      // Verificación de sesión
       const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        router.push('/dashboard');
-        return;
-      }
+      if (!session) { router.push('/dashboard'); return; }
 
       const email = session.user.email?.toLowerCase() || '';
-      
-      // Filtro de cadenero (comedor o admin)
-      if (!email.includes('comedor') && !email.includes('admin')) {
+      if (!email.includes('comedor') && !email.includes('cajero') && !email.includes('admin')) {
         router.push('/');
         return;
       }
 
       setUserEmail(email);
       setLoadingAcceso(false);
-
-      // Carga de tu lógica original
       await cargarDatosDia();
       setTimeout(() => inputRef.current?.focus(), 500);
     };
-
     inicializarCajero();
   }, [router]);
 
@@ -64,8 +54,7 @@ export default function PantallaCajero() {
 
   const cargarDatosDia = async () => {
     const hoy = new Date().toISOString().split('T')[0];
-    
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('historial_comedor')
       .select('*')
       .gte('fecha_hora', `${hoy}T00:00:00`)
@@ -73,207 +62,188 @@ export default function PantallaCajero() {
 
     if (data) {
       setHistorial(data);
-      setStats({
-        canjeadosHoy: data.length,
-        transacciones: data.length
-      });
+      setStats({ canjeadosHoy: data.length, transacciones: data.length });
     }
   };
 
-  const procesarEscaneo = async (e?: React.FormEvent, nombreFuerza?: string) => {
+  const procesarEscaneo = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    
-    const nombreEscaneado = nombreFuerza ? nombreFuerza.toUpperCase() : inputLectura.trim().toUpperCase();
+    const nombreEscaneado = inputLectura.trim().toUpperCase();
     if (!nombreEscaneado) return;
 
     setCargando(true);
     setMensaje({ tipo: null, texto: '' });
 
-    const { data: empleado, error: errorBusqueda } = await supabase
+    const { data: empleado } = await supabase
       .from('perfiles')
       .select('*')
       .eq('nombre_completo', nombreEscaneado)
       .maybeSingle();
 
-    if (errorBusqueda || !empleado) {
+    if (!empleado) {
       setMensaje({ tipo: 'error', texto: `No se encontró: ${nombreEscaneado}` });
-      setCargando(false);
-      setInputLectura('');
-      inputRef.current?.focus();
-      return;
-    }
-
-    if (empleado.tickets_restantes <= 0) {
+    } else if (empleado.tickets_restantes <= 0) {
       setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} sin vales disponibles.` });
-      setCargando(false);
-      setInputLectura('');
-      inputRef.current?.focus();
-      return;
-    }
-
-    const { error: errorUpdate } = await supabase
-      .from('perfiles')
-      .update({ 
-        tickets_restantes: empleado.tickets_restantes - 1,
-        tickets_canjeado: empleado.tickets_canjeado + 1 
-      })
-      .eq('nombre_completo', empleado.nombre_completo);
-
-    if (!errorUpdate) {
-      await supabase.from('historial_comedor').insert({
-        nombre_empleado: empleado.nombre_completo,
-        dependencia: empleado.dependencia
-      });
-
-      const horaActual = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-      
-      setMensaje({ 
-        tipo: 'exito', 
-        texto: '¡Vale canjeado!', 
-        empleado: empleado,
-        hora: horaActual
-      });
-      
-      cargarDatosDia();
     } else {
-      setMensaje({ tipo: 'error', texto: 'Error de conexión.' });
-    }
+      const { error: errorUpdate } = await supabase
+        .from('perfiles')
+        .update({ 
+          tickets_restantes: empleado.tickets_restantes - 1,
+          tickets_canjeado: (empleado.tickets_canjeado || 0) + 1 
+        })
+        .eq('id', empleado.id);
 
+      if (!errorUpdate) {
+        await supabase.from('historial_comedor').insert({
+          nombre_empleado: empleado.nombre_completo,
+          dependencia: empleado.dependencia,
+          empleado_id: empleado.id
+        });
+        setMensaje({ 
+          tipo: 'exito', 
+          texto: '¡Vale canjeado!', 
+          empleado: empleado,
+          hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+        });
+        cargarDatosDia();
+      } else {
+        setMensaje({ tipo: 'error', texto: 'Error al actualizar.' });
+      }
+    }
     setCargando(false);
     setInputLectura('');
     inputRef.current?.focus();
   };
 
+  // --- FUNCIONES DE AUDITORÍA (REPORTES) ---
+  const exportarExcel = () => {
+    if (historial.length === 0) return alert("No hay datos hoy");
+    const data = historial.map(h => ({
+      Empleado: h.nombre_empleado,
+      Dependencia: h.dependencia,
+      Fecha_Hora: new Date(h.fecha_hora).toLocaleString('es-MX')
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Canjes");
+    XLSX.writeFile(wb, `Reporte_Cajero_${new Date().getTime()}.xlsx`);
+  };
+
+  const generarPDF = (tipo: 'diario' | 'semanal') => {
+    const doc = new jsPDF();
+    const fechaActual = new Date();
+    
+    doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text("FISCALÍA GENERAL DEL ESTADO DE YUCATÁN", 105, 20, { align: "center" });
+    doc.setFontSize(11);
+    doc.text(`REPORTE DE COMEDOR (${tipo.toUpperCase()}) - CONTROL CAJA`, 105, 28, { align: "center" });
+    
+    autoTable(doc, {
+      startY: 40,
+      head: [['#', 'Empleado', 'Dependencia', 'Fecha/Hora']],
+      body: historial.map((h, i) => [i + 1, h.nombre_empleado, h.dependencia, new Date(h.fecha_hora).toLocaleString('es-MX')]),
+      headStyles: { fillColor: [26, 39, 68] },
+      styles: { fontSize: 8 }
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY + 35;
+    doc.setFontSize(9);
+    doc.line(25, finalY, 90, finalY);
+    doc.text("AUTORIZA", 57, finalY + 5, { align: "center" });
+    doc.text("M.D. JOSE MANUEL FLORES ACOSTA", 57, finalY + 10, { align: "center" });
+
+    doc.line(120, finalY, 185, finalY);
+    doc.text("RECIBE", 152, finalY + 5, { align: "center" });
+    doc.text("KARLA XACUR TAMAYO", 152, finalY + 10, { align: "center" });
+
+    doc.save(`Corte_Cajero_${tipo}_${Date.now()}.pdf`);
+  };
+
   const hoyFormateado = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  // --- PANTALLA DE CARGA INICIAL ---
   if (loadingAcceso) {
     return (
       <div className="min-h-screen bg-[#F0F3F6] flex flex-col items-center justify-center">
         <Loader2 className="animate-spin text-[#1A2744] mb-4" size={40} />
-        <p className="text-slate-400 text-[10px] font-black tracking-widest uppercase animate-pulse">
-          Verificando credenciales...
-        </p>
+        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Verificando...</p>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
-      
-      {/* NUEVA CABECERA OFICIAL BLINDADA */}
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
         <div className="flex items-center gap-4">
           <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner shrink-0">
-            <img 
-              src="/logo-fge.png" 
-              alt="FGE" 
-              className="w-full h-full object-contain rounded-full"
-              onError={(e) => { (e.target as HTMLImageElement).src = "https://fge.yucatan.gob.mx/images/logo-fge-header.png"; }} 
-            />
+            <img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" />
           </div>
-          <div className="overflow-hidden">
-            <h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight truncate">
-              Punto de Canje
-            </h1>
-            <p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest truncate">
-              {userEmail}
-            </p>
+          <div>
+            <h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight">Punto de Canje</h1>
+            <p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest">{userEmail}</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-xs font-medium text-slate-300 hidden sm:block">{hoyFormateado}</div>
-          <button 
-            onClick={handleLogout} 
-            className="bg-white/10 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-white/5 shadow-sm"
-            title="Cerrar Sesión"
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
+        <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 transition-all border border-white/5"><LogOut size={18} /></button>
       </nav>
 
-      <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 mt-6 sm:mt-8">
-        
-        {/* KPIs SUPERIORES */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-6 mb-6 sm:mb-8">
-          <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
-            <h2 className="text-3xl sm:text-5xl font-black text-[#6366F1]">{stats.canjeadosHoy}</h2>
-            <p className="text-slate-400 text-xs sm:text-sm font-medium mt-1 sm:mt-2 leading-tight">Canjeados hoy</p>
+      <div className="w-full max-w-4xl mx-auto px-4 mt-6">
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+            <h2 className="text-4xl font-black text-[#6366F1]">{stats.canjeadosHoy}</h2>
+            <p className="text-slate-400 text-xs font-medium mt-1">Canjeados hoy</p>
           </div>
-          <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
-            <h2 className="text-3xl sm:text-5xl font-black text-emerald-500">{stats.transacciones}</h2>
-            <p className="text-slate-400 text-xs sm:text-sm font-medium mt-1 sm:mt-2 leading-tight">Transacciones</p>
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+            <h2 className="text-4xl font-black text-emerald-500">{stats.transacciones}</h2>
+            <p className="text-slate-400 text-xs font-medium mt-1">Sincronizados</p>
           </div>
         </div>
 
-        {/* CONTENEDOR PRINCIPAL CON PESTAÑAS */}
-        <div className="bg-white rounded-2xl sm:rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
-          
-          <div className="flex border-b border-slate-100 bg-slate-50/50 p-1 sm:p-2 gap-1 sm:gap-2">
-            <button 
-              onClick={() => { setActiveTab('escanear'); inputRef.current?.focus(); }} 
-              className={`flex-1 py-2 sm:py-3 px-2 sm:px-6 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1 sm:gap-2 ${
-                activeTab === 'escanear' ? 'bg-[#6366F1] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'
-              }`}
-            >
-              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
-              Escanear
-            </button>
-            <button 
-              onClick={() => setActiveTab('historial')} 
-              className={`flex-1 py-2 sm:py-3 px-2 sm:px-6 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1 sm:gap-2 ${
-                activeTab === 'historial' ? 'bg-[#6366F1] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'
-              }`}
-            >
-              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              Historial
-            </button>
+        <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex border-b border-slate-100 bg-slate-50/50 p-2 gap-2">
+            {[
+              { id: 'escanear', label: 'Escanear', icon: <Scan size={18}/> },
+              { id: 'historial', label: 'Historial', icon: <History size={18}/> },
+              { id: 'reportes', label: 'Reportes', icon: <ClipboardList size={18}/> }
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => { setActiveTab(t.id as Tab); if(t.id === 'escanear') inputRef.current?.focus(); }}
+                className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? 'bg-[#1A2744] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
+              >
+                {t.icon} {t.label}
+              </button>
+            ))}
           </div>
 
           {activeTab === 'escanear' && (
-            <div className="p-4 sm:p-8">
-              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-3 sm:mb-4">Escanear código de barras</h3>
-              
-              <form onSubmit={(e) => procesarEscaneo(e)} className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-2">
-                <input 
+            <div className="p-8">
+              <form onSubmit={procesarEscaneo} className="flex flex-col sm:flex-row gap-4 mb-8">
+                <input
                   ref={inputRef}
-                  type="text" 
+                  type="text"
                   value={inputLectura}
                   onChange={(e) => setInputLectura(e.target.value)}
-                  className="flex-1 w-full p-3 sm:p-4 border-2 border-[#6366F1]/40 rounded-xl text-slate-800 font-mono text-sm sm:text-lg focus:border-[#6366F1] outline-none transition-colors uppercase tracking-wider"
-                  placeholder="Escanea o escribe aquí..."
-                  disabled={cargando}
+                  className="flex-1 p-4 border-2 border-slate-200 rounded-2xl text-lg font-mono outline-none focus:border-[#6366F1] transition-colors uppercase"
+                  placeholder="Escanea aquí..."
+                  autoFocus
                 />
-                <button 
-                  type="submit" 
-                  disabled={cargando}
-                  className="w-full sm:w-auto bg-[#6366F1] hover:bg-indigo-600 text-white py-3 sm:py-4 px-6 sm:px-8 rounded-xl font-bold transition-colors shadow-md text-base sm:text-lg"
-                >
-                  {cargando ? '...' : 'Validar Vale'}
+                <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all">
+                  {cargando ? 'Validando...' : 'Canjear'}
                 </button>
               </form>
-              <p className="text-slate-400 text-[10px] sm:text-xs mb-6 sm:mb-8 text-center sm:text-left">El escáner USB llenará este campo automáticamente</p>
 
               {mensaje.tipo === 'exito' && mensaje.empleado && (
-                <div className="w-full bg-emerald-50 border border-emerald-300 rounded-2xl p-6 sm:p-8 flex flex-col items-center text-center animate-fade-in">
-                  <svg className="w-12 h-12 sm:w-16 sm:h-16 text-[#1A2744] mb-3 sm:mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  <h2 className="text-xl sm:text-2xl font-black text-[#1A2744] mb-1 sm:mb-2">{mensaje.texto}</h2>
-                  <p className="text-[#1A2744] font-bold text-base sm:text-lg leading-tight">{mensaje.empleado.nombre_completo}</p>
-                  <p className="text-slate-500 text-xs sm:text-sm mb-3 sm:mb-4 mt-1">
-                    {mensaje.empleado.dependencia} — {mensaje.hora}
-                  </p>
-                  <p className="text-[#C9A84C] font-bold text-xs sm:text-sm uppercase tracking-wider">
-                    {(mensaje.empleado.tickets_restantes + mensaje.empleado.tickets_canjeado) > 1 ? 'Recolector' : 'Empleado'}
-                  </p>
+                <div className="bg-emerald-50 border-2 border-emerald-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in">
+                  <div className="bg-emerald-500 text-white p-3 rounded-full mb-4 shadow-lg shadow-emerald-500/30">
+                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  </div>
+                  <h2 className="text-2xl font-black text-[#1A2744] uppercase mb-1">{mensaje.texto}</h2>
+                  <p className="text-slate-700 font-bold text-lg">{mensaje.empleado.nombre_completo}</p>
+                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">{mensaje.empleado.dependencia}</p>
                 </div>
               )}
 
               {mensaje.tipo === 'error' && (
-                <div className="w-full bg-red-50 border border-red-200 rounded-2xl p-4 sm:p-6 flex items-center justify-center text-red-600 font-bold text-sm sm:text-base text-center">
+                <div className="bg-red-50 border-2 border-red-500/20 rounded-3xl p-6 text-red-600 font-black text-center animate-fade-in uppercase">
                   ❌ {mensaje.texto}
                 </div>
               )}
@@ -281,47 +251,50 @@ export default function PantallaCajero() {
           )}
 
           {activeTab === 'historial' && (
-            <div className="p-4 sm:p-8">
-              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-4 sm:mb-6 border-b border-slate-100 pb-3 sm:pb-4">
-                Canjes de hoy — {hoyFormateado}
-              </h3>
-              
-              <div className="flex flex-col gap-4 sm:gap-6 max-h-[400px] sm:max-h-[500px] overflow-y-auto pr-1 sm:pr-2">
+            <div className="p-8">
+              <h3 className="text-slate-400 font-black text-[10px] uppercase tracking-widest mb-6">Canjes de hoy — {hoyFormateado}</h3>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                 {historial.map((h, i) => (
-                  <div key={i} className="flex flex-col sm:flex-row justify-between sm:items-center border-b border-slate-50 pb-3 sm:pb-4 last:border-0 gap-2 sm:gap-0">
+                  <div key={i} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
                     <div>
-                      <p className="font-bold text-[#1A2744] text-sm sm:text-base leading-tight">{h.nombre_empleado}</p>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <p className="text-slate-400 text-xs sm:text-sm">{h.dependencia}</p>
-                        {i % 3 === 0 && (
-                          <span className="bg-amber-50 text-amber-600 text-[10px] px-2 py-0.5 rounded-full font-bold border border-amber-100">Recolector</span>
-                        )}
-                      </div>
+                      <p className="font-black text-xs text-[#1A2744] uppercase">{h.nombre_empleado}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">{h.dependencia}</p>
                     </div>
-                    <div className="flex items-center text-slate-800 font-medium text-xs sm:text-sm self-start sm:self-auto">
-                      <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      {new Date(h.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                    </div>
+                    <p className="text-[10px] font-black text-[#6366F1]">{new Date(h.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
                 ))}
-                
-                {historial.length === 0 && (
-                  <div className="text-center text-slate-400 py-8 sm:py-10 font-medium text-sm">
-                    Aún no hay canjes registrados el día de hoy.
-                  </div>
-                )}
               </div>
             </div>
           )}
 
+          {activeTab === 'reportes' && (
+            <div className="p-8">
+              <h3 className="text-slate-400 font-black text-[10px] uppercase tracking-widest mb-8">Auditoría y Cierres</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <button onClick={exportarExcel} className="flex flex-col items-center justify-center p-6 bg-emerald-50 border-2 border-emerald-100 rounded-[2rem] text-emerald-600 hover:bg-emerald-100 transition-all gap-2">
+                  <FileSpreadsheet size={32}/>
+                  <span className="font-black text-[10px] uppercase">Exportar Excel</span>
+                </button>
+                <button onClick={() => generarPDF('diario')} className="flex flex-col items-center justify-center p-6 bg-blue-50 border-2 border-blue-100 rounded-[2rem] text-blue-600 hover:bg-blue-100 transition-all gap-2">
+                  <FileText size={32}/>
+                  <span className="font-black text-[10px] uppercase">PDF Diario</span>
+                </button>
+                <button onClick={() => generarPDF('semanal')} className="flex flex-col items-center justify-center p-6 bg-amber-50 border-2 border-amber-100 rounded-[2rem] text-amber-600 hover:bg-amber-100 transition-all gap-2">
+                  <FileText size={32}/>
+                  <span className="font-black text-[10px] uppercase">PDF Semanal</span>
+                </button>
+              </div>
+              <p className="mt-8 text-center text-slate-400 text-[9px] font-bold uppercase tracking-widest leading-relaxed">
+                Los reportes generados incluyen firmas de conformidad para <br/> M.D. Jose Manuel Flores Acosta y Karla Xacur Tamayo.
+              </p>
+            </div>
+          )}
         </div>
       </div>
       
       <style dangerouslySetInnerHTML={{__html: `
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
       `}} />
     </div>
   );

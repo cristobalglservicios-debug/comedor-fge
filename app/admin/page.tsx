@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
-import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText } from 'lucide-react';
+import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText, ShieldCheck, RefreshCw } from 'lucide-react';
 import { crearUsuarioAdmin, eliminarUsuarioAdmin, actualizarPasswordAdmin } from './actions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -24,6 +24,7 @@ export default function AdminDashboard() {
   const [cargando, setCargando] = useState(false);
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [empleadoEdit, setEmpleadoEdit] = useState<any>(null);
@@ -39,17 +40,15 @@ export default function AdminDashboard() {
         if (error || !session) { router.push('/dashboard'); return; }
         
         const email = session.user.email?.toLowerCase() || '';
-        
-        // SEGURIDAD REFORZADA:
-        // 1. Cubre tu cuenta actual: admin.cristobal@...
-        // 2. Cubre futuras cuentas: nombre.admin@...
+        const esTuCuenta = email === 'admin.cristobal@fge.gob.mx';
         const esAdminOficial = email.startsWith('admin.') || email.includes('.admin@');
         
-        if (!esAdminOficial) {
+        if (!esTuCuenta && !esAdminOficial) {
           router.push('/dashboard');
           return;
         }
         
+        setIsSuperAdmin(esTuCuenta);
         setUserEmail(email);
         setLoadingAcceso(false);
         cargarDatosGenerales();
@@ -75,28 +74,16 @@ export default function AdminDashboard() {
   };
 
   const generarEmail = (nombre: string) => {
-    return nombre.toLowerCase()
-      .trim()
-      .replace(/\s+/g, '.')
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      + "@fge.gob.mx";
+    return nombre.toLowerCase().trim().replace(/\s+/g, '.').normalize("NFD").replace(/[\u0300-\u036f]/g, "") + "@fge.gob.mx";
   };
 
   const guardarNuevoEmpleado = async () => {
     if (nuevoEmp.nombre.length < 5) return alert("Ingresa el nombre completo");
     setCargando(true);
     const emailGen = generarEmail(nuevoEmp.nombre);
-    const empData = {
-      nombre_completo: nuevoEmp.nombre.toUpperCase().trim(),
-      dependencia: nuevoEmp.dependencia.toUpperCase().trim() || 'GENERAL',
-      tickets_restantes: nuevoEmp.cuota,
-      tickets_canjeado: 0,
-      email: emailGen
-    };
-    
+    const empData = { nombre_completo: nuevoEmp.nombre.toUpperCase().trim(), dependencia: nuevoEmp.dependencia.toUpperCase().trim() || 'GENERAL', tickets_restantes: nuevoEmp.cuota, tickets_canjeado: 0, email: emailGen };
     await supabase.from('perfiles').upsert(empData, { onConflict: 'nombre_completo' });
     await crearUsuarioAdmin(emailGen, empData.nombre_completo);
-    
     alert(`✅ Empleado agregado con acceso: ${emailGen}`);
     setNuevoEmp({ nombre: '', dependencia: '', cuota: 1 });
     setModalNuevo(false);
@@ -106,11 +93,10 @@ export default function AdminDashboard() {
 
   const handleEliminarEmpleado = async () => {
     if (!empleadoEdit) return;
-    if (!confirm(`⚠️ ¿ELIMINAR DEFINITIVAMENTE a ${empleadoEdit.nombre_completo}? Perderá su acceso y vales.`)) return;
+    if (!confirm(`⚠️ ¿ELIMINAR DEFINITIVAMENTE a ${empleadoEdit.nombre_completo}?`)) return;
     setCargando(true);
     await supabase.from('perfiles').delete().eq('id', empleadoEdit.id);
     await eliminarUsuarioAdmin(empleadoEdit.email);
-    
     alert("✅ Empleado eliminado");
     setEmpleadoEdit(null);
     cargarDatosGenerales();
@@ -122,85 +108,49 @@ export default function AdminDashboard() {
     setCargando(true);
     const res = await actualizarPasswordAdmin(empleadoEdit.email, nuevaPass);
     setCargando(false);
-    
-    if (res.success) {
-      alert("✅ Contraseña actualizada correctamente en el sistema");
-      setNuevaPass('');
-    } else {
-      alert("❌ Error: " + res.error);
-    }
+    if (res.success) { alert("✅ Contraseña actualizada"); setNuevaPass(''); } else { alert("❌ Error: " + res.error); }
   };
 
   const procesarExcel = (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
     setCargando(true);
-
     const reader = new FileReader();
     reader.onload = async (event: any) => {
       const bstr = event.target.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
       const mapaEmpleados: Record<string, { dependencia: string, cuota: number }> = {};
-
       wb.SheetNames.forEach((sheetName) => {
         const ws = wb.Sheets[sheetName];
         const dataRaw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
         let indexNombre = -1, indexDependencia = -1, indexCuota = -1, filaInicio = -1;
-
         for (let i = 0; i < dataRaw.length; i++) {
           const fila = dataRaw[i];
           const nomIdx = fila.findIndex(c => typeof c === 'string' && c.toLowerCase().includes('nombre'));
           const depIdx = fila.findIndex(c => typeof c === 'string' && (c.toLowerCase().includes('adscripción') || c.toLowerCase().includes('dependencia') || c.toLowerCase().includes('área')));
           const cuoIdx = fila.findIndex(c => typeof c === 'string' && (c.toLowerCase().includes('vales') || c.toLowerCase().includes('cuota') || c.toLowerCase().includes('cantidad')));
-          
-          if (nomIdx !== -1) { 
-            indexNombre = nomIdx; indexDependencia = depIdx; indexCuota = cuoIdx; filaInicio = i + 1; break; 
-          }
+          if (nomIdx !== -1) { indexNombre = nomIdx; indexDependencia = depIdx; indexCuota = cuoIdx; filaInicio = i + 1; break; }
         }
-
         if (indexNombre !== -1) {
           let ultimaDependencia = 'GENERAL'; 
           for (let i = filaInicio; i < dataRaw.length; i++) {
             const fila = dataRaw[i];
             if (!fila) continue;
-
-            const nombreRaw = fila[indexNombre];
-            const nombre = String(nombreRaw || '').toUpperCase().trim();
-            
+            const nombre = String(fila[indexNombre] || '').toUpperCase().trim();
             const depRaw = indexDependencia !== -1 ? fila[indexDependencia] : null;
             if (depRaw && String(depRaw).trim() !== '') { ultimaDependencia = String(depRaw).toUpperCase().trim(); }
-
-            const cuotaRaw = indexCuota !== -1 ? fila[indexCuota] : 0;
-            const cuota = parseInt(String(cuotaRaw)) || 0;
-
+            const cuota = parseInt(String(indexCuota !== -1 ? fila[indexCuota] : 0)) || 0;
             if (nombre.length > 5 && !['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO','DOMINGO','TOTAL'].some(p => nombre.includes(p))) {
-              if (mapaEmpleados[nombre]) { 
-                mapaEmpleados[nombre].cuota += cuota; 
-                if (mapaEmpleados[nombre].dependencia === 'GENERAL' && ultimaDependencia !== 'GENERAL') { mapaEmpleados[nombre].dependencia = ultimaDependencia; }
-              } else { 
-                mapaEmpleados[nombre] = { dependencia: ultimaDependencia, cuota }; 
-              }
+              if (mapaEmpleados[nombre]) { mapaEmpleados[nombre].cuota += cuota; }
+              else { mapaEmpleados[nombre] = { dependencia: ultimaDependencia, cuota }; }
             }
           }
         }
       });
-
-      const listaFinal = Object.entries(mapaEmpleados).map(([nombre, datos]) => ({
-        nombre_completo: nombre,
-        dependencia: datos.dependencia,
-        tickets_restantes: datos.cuota,
-        tickets_canjeado: 0,
-        email: generarEmail(nombre)
-      }));
-
-      for (const emp of listaFinal) {
-        await supabase.from('perfiles').upsert(emp, { onConflict: 'nombre_completo' });
-        await crearUsuarioAdmin(emp.email, emp.nombre_completo);
-      }
-
-      alert(`✅ Procesados ${listaFinal.length} empleados con sus cuentas de acceso creadas.`);
-      cargarDatosGenerales(); 
-      setCargando(false);
+      const listaFinal = Object.entries(mapaEmpleados).map(([nombre, datos]) => ({ nombre_completo: nombre, dependencia: datos.dependencia, tickets_restantes: datos.cuota, tickets_canjeado: 0, email: generarEmail(nombre) }));
+      for (const emp of listaFinal) { await supabase.from('perfiles').upsert(emp, { onConflict: 'nombre_completo' }); await crearUsuarioAdmin(emp.email, emp.nombre_completo); }
+      alert(`✅ Procesados ${listaFinal.length} empleados.`);
+      cargarDatosGenerales(); setCargando(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsBinaryString(file);
@@ -215,11 +165,8 @@ export default function AdminDashboard() {
   };
 
   const exportarHistorialExcel = () => {
-    if (historial.length === 0) return alert("No hay registros para exportar");
-    const data = historial.map(h => ({
-      Empleado: h.nombre_empleado,
-      Fecha_Hora: new Date(h.fecha_hora).toLocaleString('es-MX')
-    }));
+    if (historial.length === 0) return alert("No hay registros");
+    const data = historial.map(h => ({ Empleado: h.nombre_empleado, Fecha_Hora: new Date(h.fecha_hora).toLocaleString('es-MX') }));
     const hoja = XLSX.utils.json_to_sheet(data);
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Bitacora");
@@ -229,100 +176,73 @@ export default function AdminDashboard() {
   const generarCortePDF = (tipo: 'diario' | 'semanal') => {
     const doc = new jsPDF();
     const fechaActual = new Date();
-    
     let datosFiltrados = historial;
     if (tipo === 'diario') {
       const hoy = fechaActual.toLocaleDateString('es-MX');
       datosFiltrados = historial.filter(h => new Date(h.fecha_hora).toLocaleDateString('es-MX') === hoy);
     }
-
-    if (datosFiltrados.length === 0) {
-      alert(`No hay registros para generar un corte ${tipo}.`);
-      return;
-    }
-
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
+    if (datosFiltrados.length === 0) return alert("Sin registros.");
+    doc.setFontSize(14); doc.setFont("helvetica", "bold");
     doc.text("FISCALÍA GENERAL DEL ESTADO DE YUCATÁN", 105, 20, { align: "center" });
-    doc.setFontSize(12);
-    doc.text(`CORTE OFICIAL DE RACIONES DE COMEDOR - ${tipo.toUpperCase()}`, 105, 28, { align: "center" });
-    
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Fecha de emisión: ${fechaActual.toLocaleDateString('es-MX')} ${fechaActual.toLocaleTimeString('es-MX')}`, 14, 40);
-    doc.text(`Total de raciones consumidas: ${datosFiltrados.length}`, 14, 46);
-
-    const bodyDatos = datosFiltrados.map((h, i) => [
-      i + 1,
-      h.nombre_empleado,
-      new Date(h.fecha_hora).toLocaleString('es-MX')
-    ]);
-
+    doc.setFontSize(12); doc.text(`CORTE OFICIAL - ${tipo.toUpperCase()}`, 105, 28, { align: "center" });
     autoTable(doc, {
       startY: 52,
       head: [['#', 'Nombre del Empleado', 'Fecha y Hora de Canje']],
-      body: bodyDatos,
-      theme: 'grid',
-      styles: { fontSize: 8 },
+      body: datosFiltrados.map((h, i) => [i + 1, h.nombre_empleado, new Date(h.fecha_hora).toLocaleString('es-MX')]),
       headStyles: { fillColor: [26, 39, 68] }, 
       margin: { bottom: 60 } 
     });
+    const finalY = (doc as any).lastAutoTable.finalY + 40;
+    doc.setFontSize(9); doc.line(25, finalY, 95, finalY); doc.text("AUTORIZA", 60, finalY + 5, { align: "center" });
+    doc.text("M.D. JOSE MANUEL FLORES ACOSTA", 60, finalY + 10, { align: "center" });
+    doc.line(115, finalY, 185, finalY); doc.text("RECIBE", 150, finalY + 5, { align: "center" });
+    doc.text("KARLA XACUR TAMAYO", 150, finalY + 10, { align: "center" });
+    doc.save(`Corte_${tipo.toUpperCase()}.pdf`);
+  };
 
-    let finalY = (doc as any).lastAutoTable.finalY || 52;
-    if (finalY > 230) {
-      doc.addPage();
-      finalY = 20;
-    }
-
-    const firmaY = finalY + 40;
-
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    
-    doc.line(25, firmaY, 95, firmaY);
-    doc.text("AUTORIZA", 60, firmaY + 5, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.text("M.D. JOSE MANUEL FLORES ACOSTA", 60, firmaY + 10, { align: "center" });
-
-    doc.setFont("helvetica", "bold");
-    doc.line(115, firmaY, 185, firmaY);
-    doc.text("RECIBE", 150, firmaY + 5, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.text("KARLA XACUR TAMAYO", 150, firmaY + 10, { align: "center" });
-
-    doc.save(`Corte_${tipo.toUpperCase()}_Comedor_${fechaActual.getTime()}.pdf`);
+  const reiniciarSemana = async () => {
+    if (!confirm("🔵 ¿Reiniciar vales para la nueva semana? Esto pondrá los contadores en 0 pero conservará a los empleados.")) return;
+    setCargando(true);
+    await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
+    alert("✅ Sistema listo para cargar el nuevo Excel de la semana.");
+    cargarDatosGenerales(); setCargando(false);
   };
 
   const limpiarHistorialPruebas = async () => {
-    if (!confirm("⚠️ ¿ESTÁS SEGURO? Esto borrará a TODOS los empleados y la bitácora completa para empezar en blanco.")) return;
+    if (!confirm("⚠️ ¿BORRAR TODO EL SISTEMA? Se eliminarán empleados y bitácora.")) return;
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('perfiles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    cargarDatosGenerales(); 
-    setCargando(false);
+    cargarDatosGenerales(); setCargando(false);
   };
 
   const actualizarCuota = async (id: string, n: number) => { if (n >= 0) { await supabase.from('perfiles').update({ tickets_restantes: n }).eq('id', id); cargarDatosGenerales(); } };
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/dashboard'); };
   const empleadosFiltrados = empleados.filter(e => e.nombre_completo.toLowerCase().includes(filtroNombre.toLowerCase()) || e.dependencia.toLowerCase().includes(filtroNombre.toLowerCase()));
-
   const dependenciasArray = Object.entries(empleados.reduce((acc, emp) => {
-      const dep = emp.dependencia || 'Sin Asignar';
-      if (!acc[dep]) acc[dep] = { asignados: 0, canjeados: 0, disponibles: 0 };
-      acc[dep].asignados += (emp.tickets_restantes || 0) + (emp.tickets_canjeado || 0);
-      acc[dep].canjeados += (emp.tickets_canjeado || 0);
-      acc[dep].disponibles += (emp.tickets_restantes || 0);
-      return acc;
+    const dep = emp.dependencia || 'Sin Asignar';
+    if (!acc[dep]) acc[dep] = { asignados: 0, canjeados: 0, disponibles: 0 };
+    acc[dep].asignados += (emp.tickets_restantes || 0) + (emp.tickets_canjeado || 0);
+    acc[dep].canjeados += (emp.tickets_canjeado || 0);
+    acc[dep].disponibles += (emp.tickets_restantes || 0);
+    return acc;
   }, {} as any)).map(([nombre, vals]: [string, any]) => ({ nombre, ...vals })).sort((a, b) => b.asignados - a.asignados);
 
-  if (loadingAcceso) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="animate-spin text-[#1A2744]" size={40} /></div>;
+  if (loadingAcceso) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="animate-spin" size={40} /></div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-20">
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-20">
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 sticky top-0 z-50">
         <div className="flex items-center gap-4">
           <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner"><img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" /></div>
-          <div><h1 className="font-black text-sm md:text-lg uppercase">Dirección Administración</h1><p className="text-[#C9A84C] text-[9px] font-bold">{userEmail}</p></div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-black text-sm md:text-lg uppercase tracking-tight">Dirección Administración</h1>
+              {isSuperAdmin && <span className="bg-[#C9A84C] text-[#1A2744] text-[8px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm"><ShieldCheck size={10} /> SUPER ADMIN</span>}
+            </div>
+            <p className="text-[#C9A84C] text-[9px] font-bold">{userEmail}</p>
+          </div>
         </div>
         <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 transition-all"><LogOut size={18} /></button>
       </nav>
@@ -358,27 +278,21 @@ export default function AdminDashboard() {
           )}
 
           {activeTab === 'empleados' && (
-            <div className="animate-in fade-in duration-300">
+            <div className="animate-in fade-in">
               <div className="flex flex-col md:flex-row gap-4 mb-6">
                 <div className="relative flex-1">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input type="text" placeholder="Buscar empleado..." value={filtroNombre} onChange={(e) => setFiltroNombre(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-slate-50 border rounded-xl" />
                 </div>
-                
-                <button onClick={() => setModalNuevo(true)} className="bg-emerald-600 text-white px-4 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-emerald-900/10">
-                  <UserPlus size={16}/> Alta Manual
-                </button>
-                
+                <button onClick={() => setModalNuevo(true)} className="bg-emerald-600 text-white px-4 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-emerald-900/10"><UserPlus size={16}/> Alta Manual</button>
                 <input type="file" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
                 <button onClick={() => fileInputRef.current?.click()} className="bg-[#1A2744] text-white px-4 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shrink-0 shadow-lg">
                   {cargando ? <Loader2 className="animate-spin" size={16}/> : <FileSpreadsheet size={16}/>} Cargar Nómina
                 </button>
-                
                 <button onClick={descargarAccesos} className="bg-slate-100 text-[#1A2744] px-4 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shrink-0 hover:bg-slate-200">
                   <Download size={16}/> Accesos
                 </button>
               </div>
-
               <div className="overflow-x-auto border rounded-2xl max-h-[500px]">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 sticky top-0 text-[10px] uppercase font-bold border-b z-10">
@@ -406,17 +320,20 @@ export default function AdminDashboard() {
           )}
 
           {activeTab === 'reportes' && (
-            <div className="animate-in fade-in duration-300">
+            <div className="animate-in fade-in">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <h3 className="text-lg font-black uppercase">Control Bitácora</h3>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={limpiarHistorialPruebas} className="border-2 border-red-100 text-red-500 px-6 py-3 rounded-xl font-bold text-xs uppercase transition-all"><Trash2 size={16}/></button>
+                  <button onClick={reiniciarSemana} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-all shadow-md"><RefreshCw size={16}/> Reiniciar para Nueva Semana</button>
+                  {isSuperAdmin && (
+                    <button onClick={limpiarHistorialPruebas} className="border-2 border-red-100 text-red-500 px-6 py-3 rounded-xl font-bold text-xs uppercase hover:bg-red-500 hover:text-white transition-all"><Trash2 size={16}/></button>
+                  )}
                   <button onClick={exportarHistorialExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileSpreadsheet size={16}/> Excel</button>
                   <button onClick={() => generarCortePDF('diario')} className="bg-[#1A2744] hover:bg-[#2a3f6d] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileText size={16}/> PDF Diario</button>
                   <button onClick={() => generarCortePDF('semanal')} className="bg-[#C9A84C] hover:bg-[#e0bc5a] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileText size={16}/> PDF Semanal</button>
                 </div>
               </div>
-              <div className="overflow-x-auto border rounded-2xl">
+              <div className="overflow-x-auto border rounded-2xl max-h-[400px]">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 text-[10px] uppercase font-bold border-b">
                     <tr><th className="p-4">Empleado</th><th className="p-4">Fecha/Hora</th></tr>
@@ -439,24 +356,17 @@ export default function AdminDashboard() {
             <h2 className="text-xl font-black text-[#1A2744] uppercase mb-2">Gestionar Usuario</h2>
             <p className="text-xs text-slate-400 font-bold uppercase mb-6">{empleadoEdit.nombre_completo}</p>
             <div className="space-y-4">
-              
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                 <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Reiniciar Contraseña</label>
                 <div className="flex gap-2">
-                  <input type="text" placeholder="Nueva contraseña (mínimo 6)" value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm outline-none focus:border-[#C9A84C]" />
-                  <button onClick={handleCambiarPassword} disabled={cargando} className="bg-[#1A2744] hover:bg-[#C9A84C] text-white px-4 rounded-lg transition-colors flex items-center justify-center">
-                    {cargando ? <Loader2 className="animate-spin" size={16} /> : <Key size={16}/>}
-                  </button>
+                  <input type="text" placeholder="Nueva contraseña" value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm outline-none focus:border-[#C9A84C]" />
+                  <button onClick={handleCambiarPassword} disabled={cargando} className="bg-[#1A2744] hover:bg-[#C9A84C] text-white px-4 rounded-lg transition-colors flex items-center justify-center">{cargando ? <Loader2 className="animate-spin" size={16} /> : <Key size={16}/>}</button>
                 </div>
               </div>
-
               <div className="p-4 bg-red-50 rounded-2xl border border-red-100">
                 <label className="text-[10px] font-black uppercase text-red-400 block mb-2">Zona de Peligro</label>
-                <button onClick={handleEliminarEmpleado} disabled={cargando} className="w-full bg-red-500 hover:bg-red-600 text-white p-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors">
-                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <Trash2 size={16}/>} Eliminar Empleado
-                </button>
+                <button onClick={handleEliminarEmpleado} disabled={cargando} className="w-full bg-red-500 hover:bg-red-600 text-white p-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors">{cargando ? <Loader2 className="animate-spin" size={16}/> : <Trash2 size={16}/>} Eliminar Empleado</button>
               </div>
-
               <button onClick={() => setEmpleadoEdit(null)} className="w-full py-4 text-xs font-black uppercase text-slate-400 hover:text-[#1A2744] transition-colors">Cerrar Ventana</button>
             </div>
           </div>
@@ -468,29 +378,17 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
             <h2 className="text-xl font-black text-[#1A2744] uppercase mb-6">Alta Manual de Empleado</h2>
             <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Nombre Completo</label>
-                <input type="text" placeholder="Ej. JUAN PEREZ LOPEZ" value={nuevoEmp.nombre} onChange={e => setNuevoEmp({...nuevoEmp, nombre: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm uppercase outline-none focus:border-[#C9A84C]" />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Dependencia</label>
-                <input type="text" placeholder="Ej. ADMINISTRACION" value={nuevoEmp.dependencia} onChange={e => setNuevoEmp({...nuevoEmp, dependencia: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm uppercase outline-none focus:border-[#C9A84C]" />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Cuota de Vales (Semanal)</label>
-                <input type="number" min="0" value={nuevoEmp.cuota} onChange={e => setNuevoEmp({...nuevoEmp, cuota: parseInt(e.target.value) || 0})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-[#C9A84C]" />
-              </div>
+              <div><label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Nombre Completo</label><input type="text" placeholder="Ej. JUAN PEREZ LOPEZ" value={nuevoEmp.nombre} onChange={e => setNuevoEmp({...nuevoEmp, nombre: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm uppercase outline-none focus:border-[#C9A84C]" /></div>
+              <div><label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Dependencia</label><input type="text" placeholder="Ej. ADMINISTRACION" value={nuevoEmp.dependencia} onChange={e => setNuevoEmp({...nuevoEmp, dependencia: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm uppercase outline-none focus:border-[#C9A84C]" /></div>
+              <div><label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Cuota Semanal</label><input type="number" min="0" value={nuevoEmp.cuota} onChange={e => setNuevoEmp({...nuevoEmp, cuota: parseInt(e.target.value) || 0})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-[#C9A84C]" /></div>
               <div className="flex gap-3 mt-6">
                 <button onClick={() => setModalNuevo(false)} className="flex-1 py-3 text-xs font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Cancelar</button>
-                <button onClick={guardarNuevoEmpleado} disabled={cargando} className="flex-1 bg-[#1A2744] hover:bg-[#2a3f6d] text-white py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors">
-                  {cargando ? <Loader2 className="animate-spin" size={16} /> : 'Guardar Empleado'}
-                </button>
+                <button onClick={guardarNuevoEmpleado} disabled={cargando} className="flex-1 bg-[#1A2744] text-white py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors">{cargando ? <Loader2 className="animate-spin" size={16} /> : 'Guardar Empleado'}</button>
               </div>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
