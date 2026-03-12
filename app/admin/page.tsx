@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
 import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText, ShieldCheck, RefreshCw } from 'lucide-react';
-import { crearUsuarioAdmin, eliminarUsuarioAdmin, actualizarPasswordAdmin } from './actions';
+import { crearUsuarioAdmin, eliminarUsuarioAdmin, actualizarPasswordAdmin, registrarLog } from './actions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -19,6 +19,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('cuotas');
   const [historial, setHistorial] = useState<any[]>([]);
   const [empleados, setEmpleados] = useState<any[]>([]);
+  const [auditoriaLogs, setAuditoriaLogs] = useState<any[]>([]);
   const [filtroNombre, setFiltroNombre] = useState('');
   const [stats, setStats] = useState({ total: 0, canjeados: 0, disponibles: 0, dependencias: 0 });
   const [cargando, setCargando] = useState(false);
@@ -58,6 +59,7 @@ export default function AdminDashboard() {
   }, [router]);
 
   const cargarDatosGenerales = async () => {
+    // Carga Empleados
     const { data: dataEmpleados } = await supabase.from('perfiles').select('*').order('nombre_completo', { ascending: true });
     if (dataEmpleados) {
       setEmpleados(dataEmpleados);
@@ -69,8 +71,13 @@ export default function AdminDashboard() {
       });
       setStats({ total: totalAsignados, canjeados: totalCanjeados, disponibles: totalAsignados - totalCanjeados, dependencias: dependenciasUnicas });
     }
+    // Carga Historial Comedor
     const { data: dataHistorial } = await supabase.from('historial_comedor').select('*').order('fecha_hora', { ascending: false });
     if (dataHistorial) setHistorial(dataHistorial);
+
+    // Carga Logs Auditoría
+    const { data: dataLogs } = await supabase.from('auditoria_logs').select('*').order('creado_en', { ascending: false }).limit(200);
+    if (dataLogs) setAuditoriaLogs(dataLogs);
   };
 
   const generarEmail = (nombre: string) => {
@@ -83,7 +90,9 @@ export default function AdminDashboard() {
     const emailGen = generarEmail(nuevoEmp.nombre);
     const empData = { nombre_completo: nuevoEmp.nombre.toUpperCase().trim(), dependencia: nuevoEmp.dependencia.toUpperCase().trim() || 'GENERAL', tickets_restantes: nuevoEmp.cuota, tickets_canjeado: 0, email: emailGen };
     await supabase.from('perfiles').upsert(empData, { onConflict: 'nombre_completo' });
-    await crearUsuarioAdmin(emailGen, empData.nombre_completo);
+    await crearUsuarioAdmin(emailGen, empData.nombre_completo, userEmail || 'Sistema');
+    await registrarLog(userEmail || 'Sistema', 'ALTA_MANUAL', `Agregó a ${empData.nombre_completo} (${nuevoEmp.cuota} vales)`);
+    
     alert(`✅ Empleado agregado con acceso: ${emailGen}`);
     setNuevoEmp({ nombre: '', dependencia: '', cuota: 1 });
     setModalNuevo(false);
@@ -96,7 +105,9 @@ export default function AdminDashboard() {
     if (!confirm(`⚠️ ¿ELIMINAR DEFINITIVAMENTE a ${empleadoEdit.nombre_completo}?`)) return;
     setCargando(true);
     await supabase.from('perfiles').delete().eq('id', empleadoEdit.id);
-    await eliminarUsuarioAdmin(empleadoEdit.email);
+    await eliminarUsuarioAdmin(empleadoEdit.email, userEmail || 'Sistema');
+    await registrarLog(userEmail || 'Sistema', 'ELIMINAR_EMPLEADO', `Eliminó el perfil de ${empleadoEdit.nombre_completo}`);
+    
     alert("✅ Empleado eliminado");
     setEmpleadoEdit(null);
     cargarDatosGenerales();
@@ -106,7 +117,7 @@ export default function AdminDashboard() {
   const handleCambiarPassword = async () => {
     if (nuevaPass.length < 6) return alert("La contraseña debe tener al menos 6 caracteres");
     setCargando(true);
-    const res = await actualizarPasswordAdmin(empleadoEdit.email, nuevaPass);
+    const res = await actualizarPasswordAdmin(empleadoEdit.email, nuevaPass, userEmail || 'Sistema');
     setCargando(false);
     if (res.success) { alert("✅ Contraseña actualizada"); setNuevaPass(''); } else { alert("❌ Error: " + res.error); }
   };
@@ -148,7 +159,12 @@ export default function AdminDashboard() {
         }
       });
       const listaFinal = Object.entries(mapaEmpleados).map(([nombre, datos]) => ({ nombre_completo: nombre, dependencia: datos.dependencia, tickets_restantes: datos.cuota, tickets_canjeado: 0, email: generarEmail(nombre) }));
-      for (const emp of listaFinal) { await supabase.from('perfiles').upsert(emp, { onConflict: 'nombre_completo' }); await crearUsuarioAdmin(emp.email, emp.nombre_completo); }
+      for (const emp of listaFinal) { 
+        await supabase.from('perfiles').upsert(emp, { onConflict: 'nombre_completo' }); 
+        await crearUsuarioAdmin(emp.email, emp.nombre_completo, userEmail || 'Sistema'); 
+      }
+      
+      await registrarLog(userEmail || 'Sistema', 'CARGAR_EXCEL', `Cargó/Actualizó nómina con ${listaFinal.length} empleados`);
       alert(`✅ Procesados ${listaFinal.length} empleados.`);
       cargarDatosGenerales(); setCargando(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -205,6 +221,8 @@ export default function AdminDashboard() {
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
+    await registrarLog(userEmail || 'Sistema', 'REINICIO_SEMANA', 'Reinició los contadores y vació la bitácora para la nueva semana');
+    
     alert("✅ Sistema listo para cargar el nuevo Excel de la semana.");
     cargarDatosGenerales(); setCargando(false);
   };
@@ -214,10 +232,20 @@ export default function AdminDashboard() {
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('perfiles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await registrarLog(userEmail || 'Sistema', 'LIMPIEZA_TOTAL', 'Eliminó toda la base de datos (Empleados y Bitácora)');
+    
     cargarDatosGenerales(); setCargando(false);
   };
 
-  const actualizarCuota = async (id: string, n: number) => { if (n >= 0) { await supabase.from('perfiles').update({ tickets_restantes: n }).eq('id', id); cargarDatosGenerales(); } };
+  const actualizarCuota = async (id: string, n: number) => { 
+    if (n >= 0) { 
+      const emp = empleados.find(e => e.id === id);
+      await supabase.from('perfiles').update({ tickets_restantes: n }).eq('id', id); 
+      if (emp) await registrarLog(userEmail || 'Sistema', 'AJUSTE_CUOTA', `Modificó cuota de ${emp.nombre_completo} a ${n} vales`);
+      cargarDatosGenerales(); 
+    } 
+  };
+  
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/dashboard'); };
   const empleadosFiltrados = empleados.filter(e => e.nombre_completo.toLowerCase().includes(filtroNombre.toLowerCase()) || e.dependencia.toLowerCase().includes(filtroNombre.toLowerCase()));
   const dependenciasArray = Object.entries(empleados.reduce((acc, emp) => {
@@ -256,12 +284,13 @@ export default function AdminDashboard() {
         </div>
 
         <div className="flex gap-4 border-b mb-6 overflow-x-auto">
-          {['cuotas', 'empleados', 'reportes'].map(tab => (
+          {['cuotas', 'empleados', 'reportes', 'auditoría'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-4 font-bold text-xs uppercase border-b-4 transition-all ${activeTab === tab ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400'}`}>{tab}</button>
           ))}
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-4 md:p-8">
+          
           {activeTab === 'cuotas' && (
             <div className="divide-y">
               {dependenciasArray.map((dep, i) => (
@@ -347,9 +376,49 @@ export default function AdminDashboard() {
               </div>
             </div>
           )}
+
+          {activeTab === 'auditoría' && (
+            <div className="animate-in fade-in">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-black uppercase flex items-center gap-2"><ShieldCheck className="text-[#C9A84C]" size={24} /> Registro de Seguridad</h3>
+                <button onClick={cargarDatosGenerales} className="text-xs font-bold text-slate-400 hover:text-[#1A2744] flex items-center gap-1 transition-colors"><RefreshCw size={14}/> Actualizar</button>
+              </div>
+              <div className="overflow-x-auto border rounded-2xl max-h-[500px]">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 sticky top-0 text-[10px] uppercase font-bold border-b z-10">
+                    <tr>
+                      <th className="p-4 w-40">Fecha / Hora</th>
+                      <th className="p-4">Administrador</th>
+                      <th className="p-4">Acción</th>
+                      <th className="p-4">Detalle del Movimiento</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {auditoriaLogs.map((log, i) => (
+                      <tr key={i} className="hover:bg-slate-50 text-[11px]">
+                        <td className="p-4 whitespace-nowrap text-slate-500 font-medium">{new Date(log.creado_en).toLocaleString('es-MX')}</td>
+                        <td className="p-4 font-black text-[#1A2744]">{log.admin_email}</td>
+                        <td className="p-4">
+                          <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-[9px] font-black tracking-wider uppercase border border-slate-200">
+                            {log.accion}
+                          </span>
+                        </td>
+                        <td className="p-4 uppercase font-bold text-slate-500">{log.detalle}</td>
+                      </tr>
+                    ))}
+                    {auditoriaLogs.length === 0 && (
+                      <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold uppercase text-xs">No hay movimientos registrados</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 
+      {/* MODALES MANTENIDOS EXACTAMENTE IGUAL */}
       {empleadoEdit && (
         <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
