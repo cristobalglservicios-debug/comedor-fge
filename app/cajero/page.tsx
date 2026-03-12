@@ -28,7 +28,6 @@ export default function PantallaCajero() {
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState('');
 
-  // ESTADO PARA EL LECTOR DE CÁMARA
   const [usarCamara, setUsarCamara] = useState(false);
 
   useEffect(() => {
@@ -50,10 +49,11 @@ export default function PantallaCajero() {
     inicializarCajero();
   }, [router]);
 
-  // MOTOR DEL ESCÁNER DE CÁMARA
+  // MOTOR DEL ESCÁNER DE CÁMARA (Bloqueo Anti-Doble Escaneo)
   useEffect(() => {
     if (!usarCamara) return;
     let scanner: any = null;
+    let escaneando = false;
 
     const initScanner = async () => {
       const { Html5QrcodeScanner } = await import('html5-qrcode');
@@ -64,12 +64,15 @@ export default function PantallaCajero() {
       
       scanner.render(
         (decodedText: string) => {
-          scanner.clear();
+          if (escaneando) return; // Evita que lea 2 veces seguidas
+          escaneando = true;
+
+          scanner.clear().catch(console.error);
           setUsarCamara(false);
           setInputLectura(decodedText);
-          procesarEscaneo(undefined, decodedText); // Pasa el código directo a la función
+          procesarEscaneo(null, decodedText);
         },
-        (err: any) => { /* errores silenciosos de lectura */ }
+        (err: any) => { /* errores silenciosos */ }
       );
     };
 
@@ -99,8 +102,7 @@ export default function PantallaCajero() {
     }
   };
 
-  // ACTUALIZADO PARA ACEPTAR EL EVENTO DEL FORMULARIO O EL CÓDIGO DIRECTO DE LA CÁMARA
-  const procesarEscaneo = async (e?: React.FormEvent, codigoDirecto?: string) => {
+  const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
     const nombreEscaneado = (codigoDirecto || inputLectura).trim().toUpperCase();
     if (!nombreEscaneado) return;
@@ -119,6 +121,7 @@ export default function PantallaCajero() {
     } else if (empleado.tickets_restantes <= 0) {
       setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} SIN VALES DISPONIBLES.` });
     } else {
+      
       const { error: errorUpdate } = await supabase
         .from('perfiles')
         .update({ 
@@ -128,18 +131,21 @@ export default function PantallaCajero() {
         .eq('id', empleado.id);
 
       if (!errorUpdate) {
+        // AQUÍ ESTABA EL ERROR: Regresamos a la estructura original de tu base de datos
         await supabase.from('historial_comedor').insert({
           nombre_empleado: empleado.nombre_completo,
-          dependencia: empleado.dependencia,
-          empleado_id: empleado.id
+          dependencia: empleado.dependencia
         });
+
         setMensaje({ 
           tipo: 'exito', 
           texto: '¡VALE CANJEADO!', 
           empleado: empleado,
           hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
         });
-        cargarDatosDia();
+        
+        // Refrescar los números de la pantalla
+        await cargarDatosDia();
       } else {
         setMensaje({ tipo: 'error', texto: 'ERROR AL ACTUALIZAR.' });
       }
@@ -183,7 +189,6 @@ export default function PantallaCajero() {
 
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
-      {/* Cabecera */}
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
         <div className="flex items-center gap-4">
           <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center shrink-0">
@@ -198,7 +203,6 @@ export default function PantallaCajero() {
       </nav>
 
       <div className="w-full max-w-4xl mx-auto px-4 mt-6">
-        {/* KPIs */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center">
             <h2 className="text-4xl font-black text-[#6366F1]">{stats.canjeadosHoy}</h2>
@@ -210,7 +214,6 @@ export default function PantallaCajero() {
           </div>
         </div>
 
-        {/* Tabs con estilo original */}
         <div className="bg-white rounded-2xl sm:rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
           <div className="flex bg-slate-50/50 p-2 gap-2">
             {[
@@ -257,7 +260,6 @@ export default function PantallaCajero() {
               </form>
               <p className="text-slate-400 text-[10px] mt-2 mb-8">El escáner USB o la cámara llenarán este campo automáticamente</p>
 
-              {/* CONTENEDOR DE LA CÁMARA */}
               {usarCamara && (
                 <div className="mb-8 p-4 border-2 border-dashed border-[#6366F1]/40 rounded-3xl bg-slate-50 animate-fade-in">
                   <div id="reader" className="w-full max-w-sm mx-auto overflow-hidden rounded-xl"></div>
