@@ -81,9 +81,9 @@ export default function PantallaCajero() {
       .maybeSingle();
 
     if (!empleado) {
-      setMensaje({ tipo: 'error', texto: `No se encontró: ${nombreEscaneado}` });
+      setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ: ${nombreEscaneado}` });
     } else if (empleado.tickets_restantes <= 0) {
-      setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} sin vales disponibles.` });
+      setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} SIN VALES DISPONIBLES.` });
     } else {
       const { error: errorUpdate } = await supabase
         .from('perfiles')
@@ -101,13 +101,13 @@ export default function PantallaCajero() {
         });
         setMensaje({ 
           tipo: 'exito', 
-          texto: '¡Vale canjeado!', 
+          texto: '¡VALE CANJEADO!', 
           empleado: empleado,
           hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
         });
         cargarDatosDia();
       } else {
-        setMensaje({ tipo: 'error', texto: 'Error al actualizar.' });
+        setMensaje({ tipo: 'error', texto: 'ERROR AL ACTUALIZAR.' });
       }
     }
     setCargando(false);
@@ -115,14 +115,9 @@ export default function PantallaCajero() {
     inputRef.current?.focus();
   };
 
-  // --- FUNCIONES DE AUDITORÍA (REPORTES) ---
   const exportarExcel = () => {
     if (historial.length === 0) return alert("No hay datos hoy");
-    const data = historial.map(h => ({
-      Empleado: h.nombre_empleado,
-      Dependencia: h.dependencia,
-      Fecha_Hora: new Date(h.fecha_hora).toLocaleString('es-MX')
-    }));
+    const data = historial.map(h => ({ Empleado: h.nombre_empleado, Dependencia: h.dependencia, Fecha_Hora: new Date(h.fecha_hora).toLocaleString('es-MX') }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Canjes");
@@ -131,50 +126,33 @@ export default function PantallaCajero() {
 
   const generarPDF = (tipo: 'diario' | 'semanal') => {
     const doc = new jsPDF();
-    const fechaActual = new Date();
-    
     doc.setFontSize(14); doc.setFont("helvetica", "bold");
     doc.text("FISCALÍA GENERAL DEL ESTADO DE YUCATÁN", 105, 20, { align: "center" });
     doc.setFontSize(11);
     doc.text(`REPORTE DE COMEDOR (${tipo.toUpperCase()}) - CONTROL CAJA`, 105, 28, { align: "center" });
-    
     autoTable(doc, {
       startY: 40,
       head: [['#', 'Empleado', 'Dependencia', 'Fecha/Hora']],
       body: historial.map((h, i) => [i + 1, h.nombre_empleado, h.dependencia, new Date(h.fecha_hora).toLocaleString('es-MX')]),
       headStyles: { fillColor: [26, 39, 68] },
-      styles: { fontSize: 8 }
     });
-
     const finalY = (doc as any).lastAutoTable.finalY + 35;
     doc.setFontSize(9);
-    doc.line(25, finalY, 90, finalY);
-    doc.text("AUTORIZA", 57, finalY + 5, { align: "center" });
+    doc.line(25, finalY, 90, finalY); doc.text("AUTORIZA", 57, finalY + 5, { align: "center" });
     doc.text("M.D. JOSE MANUEL FLORES ACOSTA", 57, finalY + 10, { align: "center" });
-
-    doc.line(120, finalY, 185, finalY);
-    doc.text("RECIBE", 152, finalY + 5, { align: "center" });
+    doc.line(120, finalY, 185, finalY); doc.text("RECIBE", 152, finalY + 5, { align: "center" });
     doc.text("KARLA XACUR TAMAYO", 152, finalY + 10, { align: "center" });
-
-    doc.save(`Corte_Cajero_${tipo}_${Date.now()}.pdf`);
+    doc.save(`Corte_Cajero_${tipo}.pdf`);
   };
 
-  const hoyFormateado = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
-
-  if (loadingAcceso) {
-    return (
-      <div className="min-h-screen bg-[#F0F3F6] flex flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-[#1A2744] mb-4" size={40} />
-        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Verificando...</p>
-      </div>
-    );
-  }
+  if (loadingAcceso) return <div className="min-h-screen bg-[#F0F3F6] flex items-center justify-center"><Loader2 className="animate-spin text-[#1A2744]" size={40} /></div>;
 
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
+      {/* Cabecera */}
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
         <div className="flex items-center gap-4">
-          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner shrink-0">
+          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center shrink-0">
             <img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" />
           </div>
           <div>
@@ -186,19 +164,21 @@ export default function PantallaCajero() {
       </nav>
 
       <div className="w-full max-w-4xl mx-auto px-4 mt-6">
+        {/* KPIs */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center">
             <h2 className="text-4xl font-black text-[#6366F1]">{stats.canjeadosHoy}</h2>
-            <p className="text-slate-400 text-xs font-medium mt-1">Canjeados hoy</p>
+            <p className="text-slate-400 text-xs font-medium mt-1 uppercase tracking-tighter">Canjeados hoy</p>
           </div>
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center">
             <h2 className="text-4xl font-black text-emerald-500">{stats.transacciones}</h2>
-            <p className="text-slate-400 text-xs font-medium mt-1">Sincronizados</p>
+            <p className="text-slate-400 text-xs font-medium mt-1 uppercase tracking-tighter">Sincronizados</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
-          <div className="flex border-b border-slate-100 bg-slate-50/50 p-2 gap-2">
+        {/* Tabs con estilo original */}
+        <div className="bg-white rounded-2xl sm:rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex bg-slate-50/50 p-2 gap-2">
             {[
               { id: 'escanear', label: 'Escanear', icon: <Scan size={18}/> },
               { id: 'historial', label: 'Historial', icon: <History size={18}/> },
@@ -206,8 +186,8 @@ export default function PantallaCajero() {
             ].map((t) => (
               <button
                 key={t.id}
-                onClick={() => { setActiveTab(t.id as Tab); if(t.id === 'escanear') inputRef.current?.focus(); }}
-                className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? 'bg-[#1A2744] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
+                onClick={() => { setActiveTab(t.id as Tab); if(t.id === 'escanear') setTimeout(() => inputRef.current?.focus(), 100); }}
+                className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? 'bg-[#6366F1] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
               >
                 {t.icon} {t.label}
               </button>
@@ -215,35 +195,37 @@ export default function PantallaCajero() {
           </div>
 
           {activeTab === 'escanear' && (
-            <div className="p-8">
-              <form onSubmit={procesarEscaneo} className="flex flex-col sm:flex-row gap-4 mb-8">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={inputLectura}
-                  onChange={(e) => setInputLectura(e.target.value)}
-                  className="flex-1 p-4 border-2 border-slate-200 rounded-2xl text-lg font-mono outline-none focus:border-[#6366F1] transition-colors uppercase"
-                  placeholder="Escanea aquí..."
-                  autoFocus
-                />
-                <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all">
-                  {cargando ? 'Validando...' : 'Canjear'}
-                </button>
+            <div className="p-8 animate-fade-in">
+              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-4">Escanear código de barras</h3>
+              <form onSubmit={procesarEscaneo} className="flex flex-col sm:row gap-4">
+                <div className="flex flex-1 gap-4">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={inputLectura}
+                    onChange={(e) => setInputLectura(e.target.value)}
+                    className="flex-1 p-4 border-2 border-[#6366F1]/40 rounded-2xl text-lg font-mono outline-none focus:border-[#6366F1] transition-colors uppercase tracking-widest"
+                    placeholder="Escanea o escribe el código..."
+                    autoFocus
+                  />
+                  <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all">
+                    {cargando ? '...' : 'Validar'}
+                  </button>
+                </div>
               </form>
+              <p className="text-slate-400 text-[10px] mt-2 mb-8">El escáner USB llena este campo automáticamente</p>
 
-              {mensaje.tipo === 'exito' && mensaje.empleado && (
+              {mensaje.tipo === 'exito' && (
                 <div className="bg-emerald-50 border-2 border-emerald-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in">
-                  <div className="bg-emerald-500 text-white p-3 rounded-full mb-4 shadow-lg shadow-emerald-500/30">
-                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  </div>
+                   <div className="bg-emerald-500 text-white p-3 rounded-full mb-4 shadow-lg"><FileText size={32}/></div>
                   <h2 className="text-2xl font-black text-[#1A2744] uppercase mb-1">{mensaje.texto}</h2>
                   <p className="text-slate-700 font-bold text-lg">{mensaje.empleado.nombre_completo}</p>
-                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">{mensaje.empleado.dependencia}</p>
+                  <p className="text-slate-400 text-xs font-bold uppercase mt-1">{mensaje.empleado.dependencia} — {mensaje.hora}</p>
                 </div>
               )}
 
               {mensaje.tipo === 'error' && (
-                <div className="bg-red-50 border-2 border-red-500/20 rounded-3xl p-6 text-red-600 font-black text-center animate-fade-in uppercase">
+                <div className="bg-red-50 border-2 border-red-200 rounded-3xl p-6 text-red-600 font-black text-center animate-fade-in uppercase">
                   ❌ {mensaje.texto}
                 </div>
               )}
@@ -251,8 +233,8 @@ export default function PantallaCajero() {
           )}
 
           {activeTab === 'historial' && (
-            <div className="p-8">
-              <h3 className="text-slate-400 font-black text-[10px] uppercase tracking-widest mb-6">Canjes de hoy — {hoyFormateado}</h3>
+            <div className="p-8 animate-fade-in">
+              <h3 className="text-slate-400 font-black text-[10px] uppercase tracking-widest mb-6 border-b pb-4">Canjes realizados hoy</h3>
               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                 {historial.map((h, i) => (
                   <div key={i} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -268,25 +250,19 @@ export default function PantallaCajero() {
           )}
 
           {activeTab === 'reportes' && (
-            <div className="p-8">
+            <div className="p-8 animate-fade-in">
               <h3 className="text-slate-400 font-black text-[10px] uppercase tracking-widest mb-8">Auditoría y Cierres</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <button onClick={exportarExcel} className="flex flex-col items-center justify-center p-6 bg-emerald-50 border-2 border-emerald-100 rounded-[2rem] text-emerald-600 hover:bg-emerald-100 transition-all gap-2">
-                  <FileSpreadsheet size={32}/>
-                  <span className="font-black text-[10px] uppercase">Exportar Excel</span>
+                  <FileSpreadsheet size={32}/><span className="font-black text-[10px] uppercase">Excel</span>
                 </button>
                 <button onClick={() => generarPDF('diario')} className="flex flex-col items-center justify-center p-6 bg-blue-50 border-2 border-blue-100 rounded-[2rem] text-blue-600 hover:bg-blue-100 transition-all gap-2">
-                  <FileText size={32}/>
-                  <span className="font-black text-[10px] uppercase">PDF Diario</span>
+                  <FileText size={32}/><span className="font-black text-[10px] uppercase">PDF Diario</span>
                 </button>
                 <button onClick={() => generarPDF('semanal')} className="flex flex-col items-center justify-center p-6 bg-amber-50 border-2 border-amber-100 rounded-[2rem] text-amber-600 hover:bg-amber-100 transition-all gap-2">
-                  <FileText size={32}/>
-                  <span className="font-black text-[10px] uppercase">PDF Semanal</span>
+                  <FileText size={32}/><span className="font-black text-[10px] uppercase">PDF Semanal</span>
                 </button>
               </div>
-              <p className="mt-8 text-center text-slate-400 text-[9px] font-bold uppercase tracking-widest leading-relaxed">
-                Los reportes generados incluyen firmas de conformidad para <br/> M.D. Jose Manuel Flores Acosta y Karla Xacur Tamayo.
-              </p>
             </div>
           )}
         </div>
