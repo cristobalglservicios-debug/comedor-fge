@@ -8,6 +8,7 @@ const supabaseAdmin = createClient(
 )
 
 export async function crearUsuarioAdmin(email: string, nombre: string) {
+  // 1. Intentamos crearlo como nuevo
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email: email,
     password: 'FGE2026*', 
@@ -15,8 +16,23 @@ export async function crearUsuarioAdmin(email: string, nombre: string) {
     user_metadata: { full_name: nombre }
   })
 
+  // 2. Si marca error porque "Ya existe", lo actualizamos a la fuerza
   if (error) {
-    if (error.message.includes('already registered')) return { success: true, msg: 'Ya existe' };
+    if (error.message.includes('already registered') || error.message.includes('already exists')) {
+      
+      // Buscamos su ID secreto
+      const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+      const user = listData?.users.find(u => u.email === email);
+      
+      // Le inyectamos la clave correcta y lo activamos a la fuerza
+      if (user) {
+        await supabaseAdmin.auth.admin.updateUserById(user.id, { 
+          password: 'FGE2026*',
+          email_confirm: true 
+        });
+      }
+      return { success: true, msg: 'Cuenta reseteada y actualizada a FGE2026*' };
+    }
     return { success: false, error: error.message };
   }
 
