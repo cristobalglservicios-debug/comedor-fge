@@ -59,6 +59,13 @@ export default function PantallaCajero() {
       setTimeout(() => inputRef.current?.focus(), 500);
     };
     inicializarCajero();
+
+    // AUTO-REFRESCO CADA 5 SEGUNDOS PARA EL LIVE DASHBOARD
+    const interval = setInterval(() => {
+      cargarMenuDia();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [router]);
 
   useEffect(() => {
@@ -123,10 +130,12 @@ export default function PantallaCajero() {
 
   const cargarMenuDia = async () => {
     const hoy = new Date().toISOString().split('T')[0];
-    const { data: menu } = await supabase.from('menu_comedor').select('*').eq('fecha', hoy).order('creado_en', { ascending: true });
+    const ahora = new Date().toISOString(); // Burlar caché
+    
+    const { data: menu } = await supabase.from('menu_comedor').select('*').eq('fecha', hoy).lte('creado_en', ahora).order('creado_en', { ascending: true });
     if (menu) setMenuHoy(menu);
 
-    const { data: reservas } = await supabase.from('reservas_comedor').select('*, menu_comedor(platillo)').gte('creado_en', `${hoy}T00:00:00`).order('creado_en', { ascending: false });
+    const { data: reservas } = await supabase.from('reservas_comedor').select('*, menu_comedor(platillo)').gte('creado_en', `${hoy}T00:00:00`).lte('creado_en', ahora).order('creado_en', { ascending: false });
     if (reservas) setReservasHoy(reservas);
   };
 
@@ -221,6 +230,11 @@ export default function PantallaCajero() {
     setCargando(false);
   };
 
+  const marcarComoCapturado = async (id: string) => {
+    await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', id);
+    cargarMenuDia();
+  };
+
   const exportarExcel = () => {
     if (historial.length === 0) return alert("No hay datos hoy");
     const data = historial.map(h => ({ Empleado: h.nombre_empleado, Dependencia: h.dependencia, Fecha_Hora: new Date(h.fecha_hora).toLocaleString('es-MX') }));
@@ -253,6 +267,9 @@ export default function PantallaCajero() {
 
   if (loadingAcceso) return <div className="min-h-screen bg-[#F0F3F6] flex items-center justify-center"><Loader2 className="animate-spin text-[#1A2744]" size={40} /></div>;
 
+  const reservasPendientes = reservasHoy.filter(r => r.estado === 'APARTADO');
+  const reservasCapturadas = reservasHoy.filter(r => r.estado === 'CAPTURADO');
+
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
@@ -284,7 +301,7 @@ export default function PantallaCajero() {
           <div className="flex bg-slate-50/50 p-2 gap-2 overflow-x-auto">
             {[
               { id: 'escanear', label: 'Escanear', icon: <Scan size={18}/> },
-              { id: 'menu', label: 'Menú', icon: <Utensils size={18}/> },
+              { id: 'menu', label: 'Pedidos Live', icon: <Utensils size={18}/> },
               { id: 'historial', label: 'Historial', icon: <History size={18}/> },
               { id: 'reportes', label: 'Reportes', icon: <ClipboardList size={18}/> }
             ].map((t) => (
@@ -294,6 +311,11 @@ export default function PantallaCajero() {
                 className={`flex-1 min-w-[100px] py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? 'bg-[#6366F1] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
               >
                 {t.icon} {t.label}
+                {t.id === 'menu' && reservasPendientes.length > 0 && (
+                  <span className="bg-red-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-[9px] animate-pulse absolute top-2 right-2 md:static">
+                    {reservasPendientes.length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -377,61 +399,86 @@ export default function PantallaCajero() {
 
           {activeTab === 'menu' && (
             <div className="p-8 animate-fade-in">
-              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-6 border-b pb-4">Gestión de Menú y Apartados</h3>
+              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-6 border-b pb-4">Dashboard Live: Pedidos y Menú</h3>
               
-              <form onSubmit={agregarPlatillo} className="bg-slate-50 p-6 rounded-3xl border border-slate-200 mb-8">
-                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Agregar Platillo del Día</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                  <select value={nuevoPlatillo.tipo} onChange={e => setNuevoPlatillo({...nuevoPlatillo, tipo: e.target.value})} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1]">
-                    <option value="DESAYUNO">Desayuno</option>
-                    <option value="ALMUERZO">Almuerzo</option>
-                    <option value="CENA">Cena</option>
-                  </select>
-                  <input type="text" placeholder="Nombre (Ej. MONDONGO)" value={nuevoPlatillo.nombre} onChange={e => setNuevoPlatillo({...nuevoPlatillo, nombre: e.target.value})} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1]" required />
-                  <input type="text" placeholder="Detalles (Opcional)" value={nuevoPlatillo.descripcion} onChange={e => setNuevoPlatillo({...nuevoPlatillo, descripcion: e.target.value})} className="p-3 rounded-xl border border-slate-200 text-sm outline-none focus:border-[#6366F1] sm:col-span-2" />
-                  <div className="flex items-center gap-4 sm:col-span-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase">Porciones a preparar:</label>
-                    <input type="number" min="1" value={nuevoPlatillo.porciones} onChange={e => setNuevoPlatillo({...nuevoPlatillo, porciones: parseInt(e.target.value) || 0})} className="p-3 w-24 rounded-xl border border-slate-200 text-center font-black outline-none focus:border-[#6366F1]" required />
-                    <button type="submit" disabled={cargando} className="flex-1 bg-[#1A2744] hover:bg-slate-800 text-white p-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all">
-                      {cargando ? <Loader2 className="animate-spin" size={16}/> : <><Plus size={16}/> Publicar</>}
-                    </button>
-                  </div>
-                </div>
-              </form>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* COLUMNA IZQUIERDA: GESTIÓN DE MENÚ */}
                 <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Publicados Hoy</h4>
+                  <form onSubmit={agregarPlatillo} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 shadow-sm">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Publicar Nuevo Platillo</h4>
+                    <div className="flex flex-col gap-3">
+                      <select value={nuevoPlatillo.tipo} onChange={e => setNuevoPlatillo({...nuevoPlatillo, tipo: e.target.value})} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1]">
+                        <option value="DESAYUNO">Desayuno</option>
+                        <option value="ALMUERZO">Almuerzo</option>
+                        <option value="CENA">Cena</option>
+                      </select>
+                      <input type="text" placeholder="Platillo (Ej. MONDONGO)" value={nuevoPlatillo.nombre} onChange={e => setNuevoPlatillo({...nuevoPlatillo, nombre: e.target.value})} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1]" required />
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase flex-1">Porciones:</label>
+                        <input type="number" min="1" value={nuevoPlatillo.porciones} onChange={e => setNuevoPlatillo({...nuevoPlatillo, porciones: parseInt(e.target.value) || 0})} className="p-3 w-20 rounded-xl border border-slate-200 text-center font-black outline-none focus:border-[#6366F1]" required />
+                        <button type="submit" disabled={cargando} className="bg-[#1A2744] hover:bg-slate-800 text-white p-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all shadow-md">
+                          {cargando ? <Loader2 className="animate-spin" size={16}/> : <Plus size={16}/>}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Activos</h4>
                   <div className="space-y-3">
                     {menuHoy.map((m, i) => (
                       <div key={i} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center">
                         <div>
-                          <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-wider">{m.tipo_comida}</span>
-                          <p className="font-black text-[#1A2744] text-sm mt-1 uppercase">{m.platillo}</p>
+                          <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-wider">{m.tipo_comida}</span>
+                          <p className="font-black text-[#1A2744] text-xs mt-1 uppercase">{m.platillo}</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-2xl font-black text-[#6366F1]">{m.porciones_disponibles}</p>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase">Disponibles</p>
+                          <p className="text-xl font-black text-[#6366F1]">{m.porciones_disponibles}</p>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase">Disp.</p>
                         </div>
                       </div>
                     ))}
-                    {menuHoy.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Sin menú publicado.</p>}
+                    {menuHoy.length === 0 && <p className="text-[10px] text-slate-400 text-center py-4 border border-dashed rounded-xl">Sin menú publicado.</p>}
                   </div>
                 </div>
 
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Apartados Activos</h4>
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                    {reservasHoy.map((r, i) => (
-                      <div key={i} className="bg-amber-50 p-4 rounded-2xl border border-amber-100 shadow-sm">
-                        <p className="font-black text-[#1A2744] text-xs uppercase">{r.nombre_empleado}</p>
-                        <div className="flex justify-between items-center mt-1">
-                          <p className="text-[10px] font-bold text-amber-600 uppercase">Aseguró: {r.menu_comedor?.platillo}</p>
-                          <CheckCircle2 size={14} className="text-amber-500" />
+                {/* COLUMNA DERECHA: PEDIDOS LIVE SOFT RESTAURANT */}
+                <div className="flex flex-col h-full">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div> Cola Soft Restaurant (Live)
+                  </h4>
+                  
+                  <div className="space-y-3 flex-1 overflow-y-auto pr-2 min-h-[250px] mb-6">
+                    {reservasPendientes.map((r, i) => (
+                      <div key={i} className="bg-blue-50 p-4 rounded-2xl border-2 border-blue-400 shadow-md flex justify-between items-center animate-in fade-in slide-in-from-left-4">
+                        <div>
+                          <p className="font-black text-[#1A2744] text-xs uppercase">{r.nombre_empleado}</p>
+                          <p className="text-[10px] font-black text-blue-700 uppercase mt-1">🍽 {r.menu_comedor?.platillo}</p>
                         </div>
+                        <button 
+                          onClick={() => marcarComoCapturado(r.id)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-md active:scale-95 transition-all"
+                        >
+                          Ya Capturado
+                        </button>
                       </div>
                     ))}
-                    {reservasHoy.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Nadie ha apartado aún.</p>}
+                    {reservasPendientes.length === 0 && (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl p-6">
+                        <CheckCircle2 size={32} className="mb-2 opacity-50"/>
+                        <p className="text-xs font-bold uppercase tracking-widest">Cola vacía</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Ya ingresados al sistema</h4>
+                  <div className="space-y-2 max-h-[150px] overflow-y-auto pr-2 opacity-60">
+                    {reservasCapturadas.map((r, i) => (
+                      <div key={i} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex justify-between items-center">
+                        <p className="font-bold text-[#1A2744] text-[10px] uppercase truncate flex-1">{r.nombre_empleado}</p>
+                        <p className="text-[9px] font-bold text-slate-500 uppercase mx-2 truncate max-w-[100px]">{r.menu_comedor?.platillo}</p>
+                        <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
