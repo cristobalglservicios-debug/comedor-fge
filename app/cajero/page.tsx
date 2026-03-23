@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, Plus, CheckCircle2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -13,7 +13,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Tab = 'escanear' | 'historial' | 'reportes';
+type Tab = 'escanear' | 'menu' | 'historial' | 'reportes';
 
 export default function PantallaCajero() {
   const router = useRouter();
@@ -32,6 +32,11 @@ export default function PantallaCajero() {
   const [directorio, setDirectorio] = useState<any[]>([]);
   const [sugerencias, setSugerencias] = useState<any[]>([]);
 
+  // ESTADOS DEL MENÚ
+  const [menuHoy, setMenuHoy] = useState<any[]>([]);
+  const [reservasHoy, setReservasHoy] = useState<any[]>([]);
+  const [nuevoPlatillo, setNuevoPlatillo] = useState({ tipo: 'ALMUERZO', nombre: '', descripcion: '', porciones: 20 });
+
   useEffect(() => {
     const inicializarCajero = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -46,6 +51,7 @@ export default function PantallaCajero() {
       setUserEmail(email);
       setLoadingAcceso(false);
       await cargarDatosDia();
+      await cargarMenuDia();
       
       const { data: perfiles } = await supabase.from('perfiles').select('nombre_completo, dependencia, tickets_restantes');
       if (perfiles) setDirectorio(perfiles);
@@ -55,7 +61,6 @@ export default function PantallaCajero() {
     inicializarCajero();
   }, [router]);
 
-  // MOTOR CORREGIDO: Abre cámara trasera directo sin preguntar menús
   useEffect(() => {
     if (!usarCamara) return;
     let html5QrCode: any = null;
@@ -116,6 +121,15 @@ export default function PantallaCajero() {
     }
   };
 
+  const cargarMenuDia = async () => {
+    const hoy = new Date().toISOString().split('T')[0];
+    const { data: menu } = await supabase.from('menu_comedor').select('*').eq('fecha', hoy).order('creado_en', { ascending: true });
+    if (menu) setMenuHoy(menu);
+
+    const { data: reservas } = await supabase.from('reservas_comedor').select('*, menu_comedor(platillo)').gte('creado_en', `${hoy}T00:00:00`).order('creado_en', { ascending: false });
+    if (reservas) setReservasHoy(reservas);
+  };
+
   const manejarInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.toUpperCase();
     setInputLectura(val);
@@ -168,9 +182,13 @@ export default function PantallaCajero() {
           dependencia: empleado.dependencia
         });
 
+        // Verificamos si tenía reserva para mostrarlo en el mensaje
+        const reserva = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo);
+        const textoExito = reserva ? `¡VALE CANJEADO! (APARTÓ: ${reserva.menu_comedor?.platillo})` : '¡VALE CANJEADO!';
+
         setMensaje({ 
           tipo: 'exito', 
-          texto: '¡VALE CANJEADO!', 
+          texto: textoExito, 
           empleado: empleado,
           hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
         });
@@ -184,6 +202,23 @@ export default function PantallaCajero() {
     setCargando(false);
     setInputLectura('');
     if (!usarCamara) inputRef.current?.focus();
+  };
+
+  const agregarPlatillo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCargando(true);
+    const hoy = new Date().toISOString().split('T')[0];
+    await supabase.from('menu_comedor').insert({
+      fecha: hoy,
+      tipo_comida: nuevoPlatillo.tipo,
+      platillo: nuevoPlatillo.nombre.toUpperCase(),
+      descripcion: nuevoPlatillo.descripcion,
+      porciones_totales: nuevoPlatillo.porciones,
+      porciones_disponibles: nuevoPlatillo.porciones
+    });
+    setNuevoPlatillo({ tipo: 'ALMUERZO', nombre: '', descripcion: '', porciones: 20 });
+    await cargarMenuDia();
+    setCargando(false);
   };
 
   const exportarExcel = () => {
@@ -246,16 +281,17 @@ export default function PantallaCajero() {
         </div>
 
         <div className="bg-white rounded-2xl sm:rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
-          <div className="flex bg-slate-50/50 p-2 gap-2">
+          <div className="flex bg-slate-50/50 p-2 gap-2 overflow-x-auto">
             {[
               { id: 'escanear', label: 'Escanear', icon: <Scan size={18}/> },
+              { id: 'menu', label: 'Menú', icon: <Utensils size={18}/> },
               { id: 'historial', label: 'Historial', icon: <History size={18}/> },
               { id: 'reportes', label: 'Reportes', icon: <ClipboardList size={18}/> }
             ].map((t) => (
               <button
                 key={t.id}
                 onClick={() => { setActiveTab(t.id as Tab); if(t.id === 'escanear') setTimeout(() => inputRef.current?.focus(), 100); }}
-                className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? 'bg-[#6366F1] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
+                className={`flex-1 min-w-[100px] py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? 'bg-[#6366F1] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
               >
                 {t.icon} {t.label}
               </button>
@@ -294,7 +330,6 @@ export default function PantallaCajero() {
                     />
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     
-                    {/* BUSCADOR PREDICTIVO */}
                     {sugerencias.length > 0 && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100">
                         {sugerencias.map((s, i) => (
@@ -321,12 +356,12 @@ export default function PantallaCajero() {
                   </button>
                 </div>
               </form>
-              <p className="text-slate-400 text-[10px] mt-3 mb-8 text-center sm:text-left">Si la cámara falla por micas de privacidad, teclea 3 letras del nombre y selecciónalo de la lista.</p>
+              <p className="text-slate-400 text-[10px] mt-3 mb-8 text-center sm:text-left">Si la cámara falla, teclea 3 letras del nombre y selecciónalo de la lista.</p>
 
               {mensaje.tipo === 'exito' && (
                 <div className="bg-emerald-50 border-2 border-emerald-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in">
                    <div className="bg-emerald-500 text-white p-3 rounded-full mb-4 shadow-lg"><FileText size={32}/></div>
-                  <h2 className="text-2xl font-black text-[#1A2744] uppercase mb-1">{mensaje.texto}</h2>
+                  <h2 className="text-xl sm:text-2xl font-black text-[#1A2744] uppercase mb-1">{mensaje.texto}</h2>
                   <p className="text-slate-700 font-bold text-lg">{mensaje.empleado.nombre_completo}</p>
                   <p className="text-slate-400 text-xs font-bold uppercase mt-1">{mensaje.empleado.dependencia} — {mensaje.hora}</p>
                 </div>
@@ -337,6 +372,69 @@ export default function PantallaCajero() {
                   ❌ {mensaje.texto}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'menu' && (
+            <div className="p-8 animate-fade-in">
+              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-6 border-b pb-4">Gestión de Menú y Apartados</h3>
+              
+              <form onSubmit={agregarPlatillo} className="bg-slate-50 p-6 rounded-3xl border border-slate-200 mb-8">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Agregar Platillo del Día</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                  <select value={nuevoPlatillo.tipo} onChange={e => setNuevoPlatillo({...nuevoPlatillo, tipo: e.target.value})} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1]">
+                    <option value="DESAYUNO">Desayuno</option>
+                    <option value="ALMUERZO">Almuerzo</option>
+                    <option value="CENA">Cena</option>
+                  </select>
+                  <input type="text" placeholder="Nombre (Ej. MONDONGO)" value={nuevoPlatillo.nombre} onChange={e => setNuevoPlatillo({...nuevoPlatillo, nombre: e.target.value})} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1]" required />
+                  <input type="text" placeholder="Detalles (Opcional)" value={nuevoPlatillo.descripcion} onChange={e => setNuevoPlatillo({...nuevoPlatillo, descripcion: e.target.value})} className="p-3 rounded-xl border border-slate-200 text-sm outline-none focus:border-[#6366F1] sm:col-span-2" />
+                  <div className="flex items-center gap-4 sm:col-span-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Porciones a preparar:</label>
+                    <input type="number" min="1" value={nuevoPlatillo.porciones} onChange={e => setNuevoPlatillo({...nuevoPlatillo, porciones: parseInt(e.target.value) || 0})} className="p-3 w-24 rounded-xl border border-slate-200 text-center font-black outline-none focus:border-[#6366F1]" required />
+                    <button type="submit" disabled={cargando} className="flex-1 bg-[#1A2744] hover:bg-slate-800 text-white p-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all">
+                      {cargando ? <Loader2 className="animate-spin" size={16}/> : <><Plus size={16}/> Publicar</>}
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Publicados Hoy</h4>
+                  <div className="space-y-3">
+                    {menuHoy.map((m, i) => (
+                      <div key={i} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center">
+                        <div>
+                          <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-wider">{m.tipo_comida}</span>
+                          <p className="font-black text-[#1A2744] text-sm mt-1 uppercase">{m.platillo}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-2xl font-black text-[#6366F1]">{m.porciones_disponibles}</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase">Disponibles</p>
+                        </div>
+                      </div>
+                    ))}
+                    {menuHoy.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Sin menú publicado.</p>}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Apartados Activos</h4>
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                    {reservasHoy.map((r, i) => (
+                      <div key={i} className="bg-amber-50 p-4 rounded-2xl border border-amber-100 shadow-sm">
+                        <p className="font-black text-[#1A2744] text-xs uppercase">{r.nombre_empleado}</p>
+                        <div className="flex justify-between items-center mt-1">
+                          <p className="text-[10px] font-bold text-amber-600 uppercase">Aseguró: {r.menu_comedor?.platillo}</p>
+                          <CheckCircle2 size={14} className="text-amber-500" />
+                        </div>
+                      </div>
+                    ))}
+                    {reservasHoy.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Nadie ha apartado aún.</p>}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
