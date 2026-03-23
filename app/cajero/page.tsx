@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -27,8 +27,10 @@ export default function PantallaCajero() {
   
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState('');
-
   const [usarCamara, setUsarCamara] = useState(false);
+
+  const [directorio, setDirectorio] = useState<any[]>([]);
+  const [sugerencias, setSugerencias] = useState<any[]>([]);
 
   useEffect(() => {
     const inicializarCajero = async () => {
@@ -44,42 +46,54 @@ export default function PantallaCajero() {
       setUserEmail(email);
       setLoadingAcceso(false);
       await cargarDatosDia();
+      
+      const { data: perfiles } = await supabase.from('perfiles').select('nombre_completo, dependencia, tickets_restantes');
+      if (perfiles) setDirectorio(perfiles);
+
       setTimeout(() => inputRef.current?.focus(), 500);
     };
     inicializarCajero();
   }, [router]);
 
-  // MOTOR DEL ESCÁNER DE CÁMARA (Bloqueo Anti-Doble Escaneo)
+  // MOTOR CORREGIDO: Abre cámara trasera directo sin preguntar menús
   useEffect(() => {
     if (!usarCamara) return;
-    let scanner: any = null;
+    let html5QrCode: any = null;
     let escaneando = false;
 
     const initScanner = async () => {
-      const { Html5QrcodeScanner } = await import('html5-qrcode');
-      scanner = new Html5QrcodeScanner("reader", { 
-        fps: 10, 
-        qrbox: { width: 250, height: 250 } 
-      }, false);
-      
-      scanner.render(
-        (decodedText: string) => {
-          if (escaneando) return; // Evita que lea 2 veces seguidas
-          escaneando = true;
+      const { Html5Qrcode } = await import('html5-qrcode');
+      html5QrCode = new Html5Qrcode("reader");
 
-          scanner.clear().catch(console.error);
-          setUsarCamara(false);
-          setInputLectura(decodedText);
-          procesarEscaneo(null, decodedText);
-        },
-        (err: any) => { /* errores silenciosos */ }
-      );
+      try {
+        await html5QrCode.start(
+          { facingMode: "environment" }, 
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText: string) => {
+            if (escaneando) return;
+            escaneando = true;
+            
+            html5QrCode.stop().then(() => {
+              html5QrCode.clear();
+              setUsarCamara(false);
+              setInputLectura(decodedText);
+              procesarEscaneo(null, decodedText);
+            }).catch(console.error);
+          },
+          undefined
+        );
+      } catch (err) {
+        console.error("Error al iniciar cámara:", err);
+        setUsarCamara(false);
+      }
     };
 
     initScanner();
 
     return () => {
-      if (scanner) scanner.clear().catch(console.error);
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);
+      }
     };
   }, [usarCamara]);
 
@@ -102,11 +116,30 @@ export default function PantallaCajero() {
     }
   };
 
+  const manejarInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.toUpperCase();
+    setInputLectura(val);
+    
+    if (val.length >= 3) {
+      const resultados = directorio.filter(p => p.nombre_completo.includes(val)).slice(0, 5);
+      setSugerencias(resultados);
+    } else {
+      setSugerencias([]);
+    }
+  };
+
+  const seleccionarSugerencia = (nombre: string) => {
+    setSugerencias([]);
+    setInputLectura(nombre);
+    procesarEscaneo(null, nombre);
+  };
+
   const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
     const nombreEscaneado = (codigoDirecto || inputLectura).trim().toUpperCase();
     if (!nombreEscaneado) return;
 
+    setSugerencias([]); 
     setCargando(true);
     setMensaje({ tipo: null, texto: '' });
 
@@ -121,7 +154,6 @@ export default function PantallaCajero() {
     } else if (empleado.tickets_restantes <= 0) {
       setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} SIN VALES DISPONIBLES.` });
     } else {
-      
       const { error: errorUpdate } = await supabase
         .from('perfiles')
         .update({ 
@@ -131,7 +163,6 @@ export default function PantallaCajero() {
         .eq('id', empleado.id);
 
       if (!errorUpdate) {
-        // AQUÍ ESTABA EL ERROR: Regresamos a la estructura original de tu base de datos
         await supabase.from('historial_comedor').insert({
           nombre_empleado: empleado.nombre_completo,
           dependencia: empleado.dependencia
@@ -144,8 +175,8 @@ export default function PantallaCajero() {
           hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
         });
         
-        // Refrescar los números de la pantalla
         await cargarDatosDia();
+        setDirectorio(prev => prev.map(p => p.nombre_completo === empleado.nombre_completo ? { ...p, tickets_restantes: p.tickets_restantes - 1 } : p));
       } else {
         setMensaje({ tipo: 'error', texto: 'ERROR AL ACTUALIZAR.' });
       }
@@ -233,41 +264,64 @@ export default function PantallaCajero() {
 
           {activeTab === 'escanear' && (
             <div className="p-8 animate-fade-in">
-              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-4">Escanear código de barras</h3>
-              <form onSubmit={procesarEscaneo} className="flex flex-col sm:row gap-4">
-                <div className="flex flex-1 gap-2 sm:gap-4">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={inputLectura}
-                    onChange={(e) => setInputLectura(e.target.value)}
-                    className="flex-1 w-full p-4 border-2 border-[#6366F1]/40 rounded-2xl text-lg font-mono outline-none focus:border-[#6366F1] transition-colors uppercase tracking-widest min-w-0"
-                    placeholder="Escanea o escribe el código..."
-                    autoFocus
-                  />
-                  <button 
-                    type="button" 
-                    onClick={() => setUsarCamara(!usarCamara)} 
-                    className={`px-4 rounded-2xl transition-all shadow-sm ${usarCamara ? 'bg-red-500 text-white' : 'bg-slate-100 text-[#1A2744] hover:bg-slate-200'}`}
-                    title="Usar Cámara del Celular"
-                  >
-                    <Camera size={24}/>
-                  </button>
-                  <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-6 sm:px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all">
-                    {cargando ? '...' : 'Validar'}
-                  </button>
-                </div>
-              </form>
-              <p className="text-slate-400 text-[10px] mt-2 mb-8">El escáner USB o la cámara llenarán este campo automáticamente</p>
+              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-4">Captura de Vale</h3>
+              
+              <button 
+                type="button" 
+                onClick={() => setUsarCamara(!usarCamara)} 
+                className={`w-full mb-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-sm transition-all flex justify-center items-center gap-3 ${usarCamara ? 'bg-red-500 text-white' : 'bg-slate-100 text-[#1A2744] hover:bg-slate-200 border-2 border-slate-200'}`}
+              >
+                <Camera size={20}/> {usarCamara ? 'Cerrar Cámara' : 'Abrir Cámara del Celular'}
+              </button>
 
               {usarCamara && (
                 <div className="mb-8 p-4 border-2 border-dashed border-[#6366F1]/40 rounded-3xl bg-slate-50 animate-fade-in">
                   <div id="reader" className="w-full max-w-sm mx-auto overflow-hidden rounded-xl"></div>
-                  <button type="button" onClick={() => setUsarCamara(false)} className="w-full mt-4 py-3 text-red-500 font-bold uppercase text-xs tracking-widest hover:bg-red-50 rounded-xl transition-colors">
-                    Cancelar Cámara
-                  </button>
                 </div>
               )}
+
+              <form onSubmit={procesarEscaneo} className="flex flex-col gap-4 relative">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 relative">
+                  <div className="flex-1 relative">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={inputLectura}
+                      onChange={manejarInput}
+                      className="w-full p-4 pl-12 border-2 border-[#6366F1]/40 rounded-2xl text-lg font-bold outline-none focus:border-[#6366F1] transition-colors uppercase tracking-widest"
+                      placeholder="Nombre o Código..."
+                      autoFocus
+                    />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                    
+                    {/* BUSCADOR PREDICTIVO */}
+                    {sugerencias.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100">
+                        {sugerencias.map((s, i) => (
+                          <div 
+                            key={i} 
+                            onClick={() => seleccionarSugerencia(s.nombre_completo)}
+                            className="p-4 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors"
+                          >
+                            <div>
+                              <p className="font-black text-sm text-[#1A2744] uppercase">{s.nombre_completo}</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase">{s.dependencia}</p>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${s.tickets_restantes > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                              {s.tickets_restantes} Vales
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all shrink-0">
+                    {cargando ? <Loader2 className="animate-spin" size={20} /> : 'Validar'}
+                  </button>
+                </div>
+              </form>
+              <p className="text-slate-400 text-[10px] mt-3 mb-8 text-center sm:text-left">Si la cámara falla por micas de privacidad, teclea 3 letras del nombre y selecciónalo de la lista.</p>
 
               {mensaje.tipo === 'exito' && (
                 <div className="bg-emerald-50 border-2 border-emerald-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in">

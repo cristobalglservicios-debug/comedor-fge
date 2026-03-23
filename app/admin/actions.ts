@@ -7,6 +7,21 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY! 
 )
 
+// Búsqueda segura sin límite de 1000 usuarios
+async function buscarUsuarioPorEmail(email: string) {
+  let page = 1;
+  while (true) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: page, perPage: 1000 });
+    if (error || !data || data.users.length === 0) return null;
+    
+    const user = data.users.find(u => u.email === email);
+    if (user) return user;
+    
+    if (data.users.length < 1000) return null; // Fin de los registros
+    page++;
+  }
+}
+
 // 1. NUEVA FUNCIÓN DE AUDITORÍA (ESPÍA)
 export async function registrarLog(adminEmail: string, accion: string, detalle: string) {
   const { error } = await supabaseAdmin
@@ -16,9 +31,8 @@ export async function registrarLog(adminEmail: string, accion: string, detalle: 
   if (error) console.error("Error guardando log de auditoría:", error.message);
 }
 
-// 2. TUS FUNCIONES EXISTENTES (AHORA CON REGISTRO INVISIBLE)
+// 2. FUNCIONES EXISTENTES (AHORA CON REGISTRO INVISIBLE Y PAGINACIÓN SEGURA)
 export async function crearUsuarioAdmin(email: string, nombre: string, adminEmail: string = 'Sistema') {
-  // Intentamos crearlo como nuevo
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email: email,
     password: 'FGE2026*', 
@@ -26,12 +40,9 @@ export async function crearUsuarioAdmin(email: string, nombre: string, adminEmai
     user_metadata: { full_name: nombre }
   })
 
-  // Si marca error porque "Ya existe", lo actualizamos a la fuerza
   if (error) {
     if (error.message.includes('already registered') || error.message.includes('already exists')) {
-      
-      const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-      const user = listData?.users.find(u => u.email === email);
+      const user = await buscarUsuarioPorEmail(email);
       
       if (user) {
         await supabaseAdmin.auth.admin.updateUserById(user.id, { 
@@ -50,22 +61,18 @@ export async function crearUsuarioAdmin(email: string, nombre: string, adminEmai
 }
 
 export async function eliminarUsuarioAdmin(email: string, adminEmail: string = 'Sistema') {
-  const { data, error: listError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-  if (listError) return { success: false, error: listError.message };
+  const user = await buscarUsuarioPorEmail(email);
   
-  const user = data.users.find(u => u.email === email);
   if (user) {
     await supabaseAdmin.auth.admin.deleteUser(user.id);
     await registrarLog(adminEmail, 'ELIMINAR_ACCESO', `Cuenta de acceso eliminada: ${email}`);
+    return { success: true };
   }
-  return { success: true };
+  return { success: false, error: 'Usuario no encontrado' };
 }
 
 export async function actualizarPasswordAdmin(email: string, nuevaPass: string, adminEmail: string = 'Sistema') {
-  const { data, error: listError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-  if (listError) return { success: false, error: listError.message };
-  
-  const user = data.users.find(u => u.email === email);
+  const user = await buscarUsuarioPorEmail(email);
   if (!user) return { success: false, error: 'Usuario no encontrado en el sistema de acceso' };
 
   const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, { password: nuevaPass });
