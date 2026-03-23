@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, Plus, CheckCircle2 } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -35,7 +35,10 @@ export default function PantallaCajero() {
   // ESTADOS DEL MENÚ
   const [menuHoy, setMenuHoy] = useState<any[]>([]);
   const [reservasHoy, setReservasHoy] = useState<any[]>([]);
-  const [nuevoPlatillo, setNuevoPlatillo] = useState({ tipo: 'ALMUERZO', nombre: '', descripcion: '', porciones: 20 });
+  
+  // ESTADOS DEL PLANIFICADOR RÁPIDO
+  const [fechaPlan, setFechaPlan] = useState(new Date().toISOString().split('T')[0]);
+  const [textosPlan, setTextosPlan] = useState({ desayuno: '', almuerzo: '', cena: '' });
 
   useEffect(() => {
     const inicializarCajero = async () => {
@@ -60,7 +63,6 @@ export default function PantallaCajero() {
     };
     inicializarCajero();
 
-    // AUTO-REFRESCO CADA 5 SEGUNDOS PARA EL LIVE DASHBOARD
     const interval = setInterval(() => {
       cargarMenuDia();
     }, 5000);
@@ -130,7 +132,7 @@ export default function PantallaCajero() {
 
   const cargarMenuDia = async () => {
     const hoy = new Date().toISOString().split('T')[0];
-    const ahora = new Date().toISOString(); // Burlar caché
+    const ahora = new Date().toISOString(); 
     
     const { data: menu } = await supabase.from('menu_comedor').select('*').eq('fecha', hoy).lte('creado_en', ahora).order('creado_en', { ascending: true });
     if (menu) setMenuHoy(menu);
@@ -191,7 +193,6 @@ export default function PantallaCajero() {
           dependencia: empleado.dependencia
         });
 
-        // Verificamos si tenía reserva para mostrarlo en el mensaje
         const reserva = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo);
         const textoExito = reserva ? `¡VALE CANJEADO! (APARTÓ: ${reserva.menu_comedor?.platillo})` : '¡VALE CANJEADO!';
 
@@ -213,19 +214,49 @@ export default function PantallaCajero() {
     if (!usarCamara) inputRef.current?.focus();
   };
 
-  const agregarPlatillo = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const procesarPlanificador = async () => {
     setCargando(true);
-    const hoy = new Date().toISOString().split('T')[0];
-    await supabase.from('menu_comedor').insert({
-      fecha: hoy,
-      tipo_comida: nuevoPlatillo.tipo,
-      platillo: nuevoPlatillo.nombre.toUpperCase(),
-      descripcion: nuevoPlatillo.descripcion,
-      porciones_totales: nuevoPlatillo.porciones,
-      porciones_disponibles: nuevoPlatillo.porciones
-    });
-    setNuevoPlatillo({ tipo: 'ALMUERZO', nombre: '', descripcion: '', porciones: 20 });
+    let platillosAInsertar: any[] = [];
+
+    const extraerLineas = (texto: string, tipo: string, porcionesDefecto: number) => {
+      const lineas = texto.split('\n').map(l => l.trim().toUpperCase()).filter(l => l.length > 2);
+      lineas.forEach(linea => {
+        const platilloLimpio = linea.replace(/^[\*\-\.\d\s]+/, '');
+        platillosAInsertar.push({
+          fecha: fechaPlan,
+          tipo_comida: tipo,
+          platillo: platilloLimpio,
+          descripcion: '',
+          porciones_totales: porcionesDefecto,
+          porciones_disponibles: porcionesDefecto
+        });
+      });
+    };
+
+    extraerLineas(textosPlan.desayuno, 'DESAYUNO', 20);
+    extraerLineas(textosPlan.almuerzo, 'ALMUERZO', 30);
+    extraerLineas(textosPlan.cena, 'CENA', 20);
+
+    if (platillosAInsertar.length > 0) {
+      const { error } = await supabase.from('menu_comedor').insert(platillosAInsertar);
+      if (error) {
+        alert("❌ Error al guardar.");
+      } else {
+        alert(`✅ Se publicaron ${platillosAInsertar.length} platillos para la fecha seleccionada.`);
+        setTextosPlan({ desayuno: '', almuerzo: '', cena: '' });
+        await cargarMenuDia();
+      }
+    } else {
+      alert("⚠️ Escribe al menos un platillo.");
+    }
+    setCargando(false);
+  };
+
+  // NUEVO: Función para eliminar un platillo en caso de error
+  const eliminarPlatillo = async (id: string, platillo: string) => {
+    if (!confirm(`⚠️ ¿ELIMINAR "${platillo}"?\n\nSi alguien ya lo había apartado, su reserva se cancelará automáticamente.`)) return;
+    setCargando(true);
+    await supabase.from('menu_comedor').delete().eq('id', id);
     await cargarMenuDia();
     setCargando(false);
   };
@@ -402,39 +433,53 @@ export default function PantallaCajero() {
               <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-6 border-b pb-4">Dashboard Live: Pedidos y Menú</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* COLUMNA IZQUIERDA: GESTIÓN DE MENÚ */}
+                
+                {/* COLUMNA IZQUIERDA: GESTIÓN DE MENÚ POR TEXTO */}
                 <div>
-                  <form onSubmit={agregarPlatillo} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 shadow-sm">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Publicar Nuevo Platillo</h4>
-                    <div className="flex flex-col gap-3">
-                      <select value={nuevoPlatillo.tipo} onChange={e => setNuevoPlatillo({...nuevoPlatillo, tipo: e.target.value})} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1]">
-                        <option value="DESAYUNO">Desayuno</option>
-                        <option value="ALMUERZO">Almuerzo</option>
-                        <option value="CENA">Cena</option>
-                      </select>
-                      <input type="text" placeholder="Platillo (Ej. MONDONGO)" value={nuevoPlatillo.nombre} onChange={e => setNuevoPlatillo({...nuevoPlatillo, nombre: e.target.value})} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1]" required />
-                      <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase flex-1">Porciones:</label>
-                        <input type="number" min="1" value={nuevoPlatillo.porciones} onChange={e => setNuevoPlatillo({...nuevoPlatillo, porciones: parseInt(e.target.value) || 0})} className="p-3 w-20 rounded-xl border border-slate-200 text-center font-black outline-none focus:border-[#6366F1]" required />
-                        <button type="submit" disabled={cargando} className="bg-[#1A2744] hover:bg-slate-800 text-white p-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all shadow-md">
-                          {cargando ? <Loader2 className="animate-spin" size={16}/> : <Plus size={16}/>}
-                        </button>
-                      </div>
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 shadow-sm">
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><CalendarPlus size={14}/> Carga Rápida (Copiar y Pegar)</h4>
                     </div>
-                  </form>
+                    
+                    <div className="flex flex-col gap-3">
+                      <input type="date" value={fechaPlan} onChange={e => setFechaPlan(e.target.value)} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1] w-full" />
+                      
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Desayunos (1 por línea)</label>
+                        <textarea rows={2} placeholder="Ej: Huevo a la Mexicana..." value={textosPlan.desayuno} onChange={e => setTextosPlan({...textosPlan, desayuno: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 text-xs uppercase outline-none focus:border-[#6366F1] resize-none" />
+                      </div>
+                      
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Almuerzos (1 por línea)</label>
+                        <textarea rows={3} placeholder="Ej: Mondongo Andaluza..." value={textosPlan.almuerzo} onChange={e => setTextosPlan({...textosPlan, almuerzo: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 text-xs uppercase outline-none focus:border-[#6366F1] resize-none" />
+                      </div>
 
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Activos</h4>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Cenas (1 por línea)</label>
+                        <textarea rows={2} placeholder="Ej: Sopa Fria..." value={textosPlan.cena} onChange={e => setTextosPlan({...textosPlan, cena: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 text-xs uppercase outline-none focus:border-[#6366F1] resize-none" />
+                      </div>
+
+                      <button onClick={procesarPlanificador} disabled={cargando} className="w-full bg-[#1A2744] hover:bg-slate-800 text-white p-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all shadow-md mt-2">
+                        {cargando ? <Loader2 className="animate-spin" size={16}/> : 'Publicar Día'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Activos Hoy</h4>
                   <div className="space-y-3">
                     {menuHoy.map((m, i) => (
-                      <div key={i} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center">
-                        <div>
+                      <div key={i} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center">
+                        <div className="flex-1 pr-2">
                           <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-wider">{m.tipo_comida}</span>
-                          <p className="font-black text-[#1A2744] text-xs mt-1 uppercase">{m.platillo}</p>
+                          <p className="font-black text-[#1A2744] text-xs mt-1 uppercase leading-tight">{m.platillo}</p>
                         </div>
-                        <div className="text-center">
-                          <p className="text-xl font-black text-[#6366F1]">{m.porciones_disponibles}</p>
-                          <p className="text-[8px] font-bold text-slate-400 uppercase">Disp.</p>
+                        <div className="text-center shrink-0 border-r border-slate-100 pr-3 mr-1">
+                          <p className="text-lg font-black text-[#6366F1] leading-none">{m.porciones_disponibles}</p>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">Disp.</p>
                         </div>
+                        <button onClick={() => eliminarPlatillo(m.id, m.platillo)} className="p-2 text-slate-300 hover:text-red-500 transition-colors ml-1" title="Eliminar Platillo">
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     ))}
                     {menuHoy.length === 0 && <p className="text-[10px] text-slate-400 text-center py-4 border border-dashed rounded-xl">Sin menú publicado.</p>}
