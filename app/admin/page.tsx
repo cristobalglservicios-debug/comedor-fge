@@ -139,7 +139,7 @@ export default function AdminDashboard() {
           const fila = dataRaw[i];
           const nomIdx = fila.findIndex(c => typeof c === 'string' && c.toLowerCase().includes('nombre'));
           const depIdx = fila.findIndex(c => typeof c === 'string' && (c.toLowerCase().includes('adscripción') || c.toLowerCase().includes('dependencia') || c.toLowerCase().includes('área')));
-          const cuoIdx = fila.findIndex(c => typeof c === 'string' && (c.toLowerCase().includes('vales') || c.toLowerCase().includes('cuota') || c.toLowerCase().includes('cantidad')));
+          const cuoIdx = fila.findIndex(c => typeof c === 'string' && (c.toLowerCase().includes('vales') || c.toLowerCase().includes('cuota') || c.toLowerCase().includes('cantidad') || c.toLowerCase().includes('ticket') || c.toLowerCase().includes('ticekt') || c.toLowerCase().includes('restante')));
           if (nomIdx !== -1) { indexNombre = nomIdx; indexDependencia = depIdx; indexCuota = cuoIdx; filaInicio = i + 1; break; }
         }
         if (indexNombre !== -1) {
