@@ -116,11 +116,14 @@ export default function MiValePage() {
   };
 
   const apartarComida = async (menuItem: any) => {
-    if (empleado.tickets_restantes <= 0) return alert("🚫 No tienes vales disponibles para apartar.");
+    // NUEVA LÓGICA: Contar reservas activas y compararlas con vales restantes
+    const reservasActivas = misReservas.filter(r => r.estado === 'APARTADO').length;
     
-    const reservaExistente = misReservas.find(r => r.menu_comedor?.fecha === menuItem.fecha);
-    if (reservaExistente) return alert("⚠️ Ya aseguraste tu comida para este día.");
+    if (empleado.tickets_restantes - reservasActivas <= 0) {
+      return alert("🚫 Tus vales disponibles ya están comprometidos en otras reservas. No puedes apartar más platillos.");
+    }
     
+    // Ya no bloqueamos si existe una reserva previa. Puede pedir más de 1 si tiene saldo.
     if (!confirm(`🍽 ¿Asegurar una porción de ${menuItem.platillo} para el ${formatearFechaDia(menuItem.fecha)}?`)) return;
 
     setCargandoApartado(true);
@@ -198,7 +201,8 @@ export default function MiValePage() {
   const folioGenerado = `FGE-${empleado?.dependencia?.substring(0,3).toUpperCase() || 'EMP'}-00${empleado?.id || '1'}`;
 
   const menusParaMostrar = menusFuturos.filter(m => m.fecha === fechaActiva);
-  const reservaDelDia = misReservas.find(r => r.menu_comedor?.fecha === fechaActiva);
+  // NUEVO: Ahora puede haber más de una reserva al día
+  const reservasDelDia = misReservas.filter(r => r.menu_comedor?.fecha === fechaActiva);
 
   // AGRUPACIÓN DINÁMICA DE PLATILLOS
   const desayunos = menusParaMostrar.filter(m => m.tipo_comida === 'DESAYUNO');
@@ -317,74 +321,80 @@ export default function MiValePage() {
 
               {/* CONTENIDO DEL DÍA (AGRUPADO) */}
               <div key={fechaActiva} className="min-h-[150px] relative z-10">
-                {reservaDelDia ? (
-                  <div className="bg-emerald-500/20 border border-emerald-500/30 p-6 rounded-3xl flex flex-col items-center text-center anim-cascada" style={{animationDelay: '0ms'}}>
-                    <div className="bg-emerald-500 text-white p-3 rounded-full mb-3 shadow-lg">
-                      <Check size={24}/>
-                    </div>
-                    <p className="text-white font-black uppercase text-xs mb-1">¡Buen provecho!</p>
-                    <p className="text-emerald-200 text-sm font-black uppercase tracking-wide bg-emerald-900/60 border border-emerald-500/30 px-4 py-2 rounded-xl mt-2 mb-4 max-w-full truncate">
-                      {reservaDelDia.menu_comedor?.platillo}
-                    </p>
-                    <button 
-                      onClick={() => cancelarReserva(reservaDelDia)}
-                      disabled={cargandoApartado || reservaDelDia.estado === 'CAPTURADO'}
-                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${reservaDelDia.estado === 'CAPTURADO' ? 'bg-slate-500/50 text-slate-300 cursor-not-allowed' : 'bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white border border-red-500/30'}`}
-                    >
-                      {cargandoApartado ? <Loader2 className="anim-girar" size={14}/> : reservaDelDia.estado === 'CAPTURADO' ? 'Pedido en preparación' : <><X size={14}/> Cancelar Reserva</>}
-                    </button>
+                
+                {/* LISTA DE RESERVAS DEL DÍA */}
+                {reservasDelDia.length > 0 && (
+                  <div className="space-y-4 mb-6">
+                    {reservasDelDia.map((reserva) => (
+                      <div key={reserva.id} className="bg-emerald-500/20 border border-emerald-500/30 p-6 rounded-3xl flex flex-col items-center text-center anim-cascada" style={{animationDelay: '0ms'}}>
+                        <div className="bg-emerald-500 text-white p-3 rounded-full mb-3 shadow-lg">
+                          <Check size={24}/>
+                        </div>
+                        <p className="text-white font-black uppercase text-xs mb-1">¡Buen provecho!</p>
+                        <p className="text-emerald-200 text-sm font-black uppercase tracking-wide bg-emerald-900/60 border border-emerald-500/30 px-4 py-2 rounded-xl mt-2 mb-4 max-w-full truncate">
+                          {reserva.menu_comedor?.platillo}
+                        </p>
+                        <button 
+                          onClick={() => cancelarReserva(reserva)}
+                          disabled={cargandoApartado || reserva.estado === 'CAPTURADO'}
+                          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${reserva.estado === 'CAPTURADO' ? 'bg-slate-500/50 text-slate-300 cursor-not-allowed' : 'bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white border border-red-500/30'}`}
+                        >
+                          {cargandoApartado ? <Loader2 className="anim-girar" size={14}/> : reserva.estado === 'CAPTURADO' ? 'Pedido en preparación' : <><X size={14}/> Cancelar Reserva</>}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* MENÚ SIEMPRE VISIBLE */}
+                {menusParaMostrar.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center text-slate-400 py-10 border-2 border-dashed border-white/10 rounded-3xl bg-white/5">
+                    <Calendar size={32} className="mb-3 opacity-40"/>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-center">Menú no publicado para<br/>esta fecha</p>
                   </div>
                 ) : (
-                  <>
-                    {menusParaMostrar.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center text-slate-400 py-10 border-2 border-dashed border-white/10 rounded-3xl bg-white/5">
-                        <Calendar size={32} className="mb-3 opacity-40"/>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-center">Menú no publicado para<br/>esta fecha</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-8">
-                        {/* SECCIÓN DESAYUNOS */}
-                        {desayunos.length > 0 && (
-                          <div>
-                            <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
-                              <Sunrise className="text-[#C9A84C]" size={20} />
-                              <h3 className="text-[#C9A84C] font-black text-xs uppercase tracking-[0.2em]">Desayunos</h3>
-                            </div>
-                            <div className="space-y-3">
-                              {desayunos.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={i} />)}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* SECCIÓN ALMUERZOS */}
-                        {almuerzos.length > 0 && (
-                          <div>
-                            <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
-                              <Sun className="text-emerald-400" size={20} />
-                              <h3 className="text-emerald-400 font-black text-xs uppercase tracking-[0.2em]">Almuerzos</h3>
-                            </div>
-                            <div className="space-y-3">
-                              {almuerzos.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + i} />)}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* SECCIÓN CENAS */}
-                        {cenas.length > 0 && (
-                          <div>
-                            <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
-                              <Moon className="text-blue-400" size={20} />
-                              <h3 className="text-blue-400 font-black text-xs uppercase tracking-[0.2em]">Cenas</h3>
-                            </div>
-                            <div className="space-y-3">
-                              {cenas.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + almuerzos.length + i} />)}
-                            </div>
-                          </div>
-                        )}
+                  <div className="space-y-8">
+                    {/* SECCIÓN DESAYUNOS */}
+                    {desayunos.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
+                          <Sunrise className="text-[#C9A84C]" size={20} />
+                          <h3 className="text-[#C9A84C] font-black text-xs uppercase tracking-[0.2em]">Desayunos</h3>
+                        </div>
+                        <div className="space-y-3">
+                          {desayunos.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={i} />)}
+                        </div>
                       </div>
                     )}
-                  </>
+
+                    {/* SECCIÓN ALMUERZOS */}
+                    {almuerzos.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
+                          <Sun className="text-emerald-400" size={20} />
+                          <h3 className="text-emerald-400 font-black text-xs uppercase tracking-[0.2em]">Almuerzos</h3>
+                        </div>
+                        <div className="space-y-3">
+                          {almuerzos.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + i} />)}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SECCIÓN CENAS */}
+                    {cenas.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
+                          <Moon className="text-blue-400" size={20} />
+                          <h3 className="text-blue-400 font-black text-xs uppercase tracking-[0.2em]">Cenas</h3>
+                        </div>
+                        <div className="space-y-3">
+                          {cenas.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + almuerzos.length + i} />)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
+                
               </div>
             </div>
 
