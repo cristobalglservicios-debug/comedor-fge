@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -136,6 +136,27 @@ export default function MiValePage() {
       await cargarMenusYReservasFuturas(empleado.nombre_completo);
     } else {
       alert("Hubo un error o el platillo se acaba de agotar.");
+    }
+    setCargandoApartado(false);
+  };
+
+  const cancelarReserva = async (reserva: any) => {
+    if (reserva.estado === 'CAPTURADO') return alert("⚠️ Tu pedido ya está en cocina, no se puede cancelar.");
+    if (!confirm(`⚠️ ¿Seguro que deseas cancelar tu reserva de ${reserva.menu_comedor?.platillo}?`)) return;
+
+    setCargandoApartado(true);
+
+    const { error: errDelete } = await supabase.from('reservas_comedor').delete().eq('id', reserva.id);
+    
+    if (!errDelete) {
+      const { data: menu } = await supabase.from('menu_comedor').select('porciones_disponibles').eq('id', reserva.menu_id).single();
+      if (menu) {
+        await supabase.from('menu_comedor').update({ porciones_disponibles: menu.porciones_disponibles + 1 }).eq('id', reserva.menu_id);
+      }
+      alert("✅ Reserva cancelada. La porción ha sido devuelta al menú.");
+      await cargarMenusYReservasFuturas(empleado.nombre_completo);
+    } else {
+      alert("❌ Error al cancelar la reserva.");
     }
     setCargandoApartado(false);
   };
@@ -302,9 +323,16 @@ export default function MiValePage() {
                       <Check size={24}/>
                     </div>
                     <p className="text-white font-black uppercase text-xs mb-1">¡Buen provecho!</p>
-                    <p className="text-emerald-200 text-sm font-black uppercase tracking-wide bg-emerald-900/60 border border-emerald-500/30 px-4 py-2 rounded-xl mt-2 max-w-full truncate">
+                    <p className="text-emerald-200 text-sm font-black uppercase tracking-wide bg-emerald-900/60 border border-emerald-500/30 px-4 py-2 rounded-xl mt-2 mb-4 max-w-full truncate">
                       {reservaDelDia.menu_comedor?.platillo}
                     </p>
+                    <button 
+                      onClick={() => cancelarReserva(reservaDelDia)}
+                      disabled={cargandoApartado || reservaDelDia.estado === 'CAPTURADO'}
+                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${reservaDelDia.estado === 'CAPTURADO' ? 'bg-slate-500/50 text-slate-300 cursor-not-allowed' : 'bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white border border-red-500/30'}`}
+                    >
+                      {cargandoApartado ? <Loader2 className="anim-girar" size={14}/> : reservaDelDia.estado === 'CAPTURADO' ? 'Pedido en preparación' : <><X size={14}/> Cancelar Reserva</>}
+                    </button>
                   </div>
                 ) : (
                   <>
