@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2 } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -179,14 +179,46 @@ export default function MiValePage() {
   const menusParaMostrar = menusFuturos.filter(m => m.fecha === fechaActiva);
   const reservaDelDia = misReservas.find(r => r.menu_comedor?.fecha === fechaActiva);
 
+  // AGRUPACIÓN DINÁMICA DE PLATILLOS
+  const desayunos = menusParaMostrar.filter(m => m.tipo_comida === 'DESAYUNO');
+  const almuerzos = menusParaMostrar.filter(m => m.tipo_comida === 'ALMUERZO');
+  const cenas = menusParaMostrar.filter(m => m.tipo_comida === 'CENA');
+
   if (estadoVista === 'cargando') {
-    return <div className="min-h-screen bg-[#F0F3F6] flex items-center justify-center font-bold text-slate-400 animate-pulse">Verificando acceso...</div>;
+    return <div className="min-h-screen bg-[#F0F3F6] flex items-center justify-center font-bold text-slate-400">Verificando acceso...</div>;
   }
+
+  // Componente interno para reutilizar la tarjeta de platillo
+  const TarjetaPlatillo = ({ m, index }: { m: any, index: number }) => (
+    <div 
+      className="anim-cascada bg-white p-5 rounded-3xl flex justify-between items-center shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 transform hover:scale-[1.02] active:scale-[0.98] transition-all"
+      style={{ animationDelay: `${index * 120}ms` }}
+    >
+      <div className="flex-1 pr-4">
+        <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1">{m.platillo}</h3>
+        {m.descripcion && <p className="text-slate-400 text-[10px] leading-snug font-medium">{m.descripcion}</p>}
+      </div>
+      
+      <div className="flex flex-col items-center gap-3 shrink-0">
+        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-xl w-14 h-14 ${m.porciones_disponibles <= 5 ? 'bg-red-50 text-red-600 anim-latido' : 'bg-indigo-50 text-[#6366F1]'}`}>
+          <p className="text-3xl font-black leading-none tracking-tighter">{m.porciones_disponibles}</p>
+          <p className="text-[8px] font-black uppercase mt-0.5 opacity-60">Disp.</p>
+        </div>
+        <button 
+          onClick={() => apartarComida(m)}
+          disabled={cargandoApartado}
+          className="w-full bg-[#1A2744] hover:bg-[#C9A84C] text-white hover:text-[#1A2744] px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-md transition-colors active:scale-95 flex items-center justify-center"
+        >
+          {cargandoApartado ? <Loader2 className="anim-girar" size={12}/> : 'Apartar'}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
       
-      {/* CABECERA (Se mantiene oscura por profesionalismo) */}
+      {/* CABECERA */}
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
         <div className="flex items-center gap-4">
           <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner shrink-0">
@@ -208,7 +240,7 @@ export default function MiValePage() {
 
         {/* 📋 VISTA DASHBOARD */}
         {estadoVista === 'dashboard' && empleado && (
-          <div className="flex flex-col gap-5 animate-fade-in">
+          <div className="flex flex-col gap-5 anim-entrada-suave">
             
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
@@ -219,7 +251,7 @@ export default function MiValePage() {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Usados</p>
               </div>
               <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-indigo-50/40 animate-pulse"></div>
+                <div className="absolute inset-0 bg-indigo-50/40 anim-latido opacity-50"></div>
                 <div className="relative z-10 flex flex-col items-center">
                   <div className="w-8 h-8 bg-amber-50 text-[#C9A84C] rounded-full flex items-center justify-center mb-2">
                     <Utensils size={18} />
@@ -230,20 +262,21 @@ export default function MiValePage() {
               </div>
             </div>
 
-            {/* SECCIÓN MERCADO ANIMADA (Nuevo Diseño Llamativo) */}
-            <div className="bg-gradient-to-br from-indigo-50/50 to-amber-50/50 rounded-[2rem] shadow-2xl p-6 border border-white relative overflow-hidden">
+            {/* SECCIÓN MENÚ DEL COMEDOR CON AGRUPACIÓN DINÁMICA */}
+            <div className="bg-gradient-to-br from-[#1A2744] to-[#25365d] rounded-[2rem] shadow-2xl p-6 border border-slate-700 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-10 translate-x-10 blur-3xl"></div>
               
               <div className="flex items-center gap-3 mb-6 relative z-10">
-                <ChefHat className="text-[#1A2744]" size={28}/>
+                <ChefHat className="text-[#C9A84C]" size={28}/>
                 <div>
-                  <h2 className="text-[#1A2744] text-lg font-black uppercase tracking-wider">Menú del Mercado</h2>
-                  <p className="text-slate-500 text-[10px] uppercase font-bold tracking-[0.2em]">Sabor Local – Aparta Ya</p>
+                  <h2 className="text-white text-xl font-black uppercase tracking-wider">Menú del Comedor</h2>
+                  <p className="text-slate-400 text-[10px] uppercase font-bold tracking-[0.2em]">Aparta tu platillo</p>
                 </div>
               </div>
 
-              {/* SELECTOR DE DÍAS (Estilo Pestañas Modernas) */}
+              {/* SELECTOR DE DÍAS */}
               {fechasDisponibles.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-4 mb-4 no-scrollbar border-b border-indigo-100 relative z-10">
+                <div className="flex gap-2 overflow-x-auto pb-4 mb-4 no-scrollbar border-b border-white/10 relative z-10">
                   {fechasDisponibles.map(fecha => {
                     const { day, weekday } = formatearFechaPestaña(fecha);
                     const isActive = fechaActiva === fecha;
@@ -251,9 +284,9 @@ export default function MiValePage() {
                       <button 
                         key={fecha} 
                         onClick={() => setFechaActiva(fecha)}
-                        className={`flex flex-col items-center justify-center p-3 rounded-2xl min-w-[65px] h-[75px] transition-all duration-300 ${isActive ? 'bg-[#1A2744] text-white shadow-lg scale-105' : 'bg-white hover:bg-slate-50 text-slate-500 shadow-sm'}`}
+                        className={`flex flex-col items-center justify-center p-3 rounded-2xl min-w-[65px] h-[75px] transition-all duration-300 ${isActive ? 'bg-[#C9A84C] text-[#1A2744] shadow-lg scale-105' : 'bg-white/10 hover:bg-white/20 text-slate-300'}`}
                       >
-                        <span className={`font-black text-2xl ${isActive ? 'text-[#C9A84C]' : 'text-[#1A2744]'}`}>{day}</span>
+                        <span className="font-black text-2xl">{day}</span>
                         <span className="text-[10px] font-bold uppercase mt-1 opacity-80">{weekday}</span>
                       </button>
                     );
@@ -261,56 +294,65 @@ export default function MiValePage() {
                 </div>
               )}
 
-              {/* CONTENIDO DEL DÍA (Con Animación de Entrada) */}
-              <div key={fechaActiva} className="min-h-[150px] space-y-4 pt-2 relative z-10">
+              {/* CONTENIDO DEL DÍA (AGRUPADO) */}
+              <div key={fechaActiva} className="min-h-[150px] relative z-10">
                 {reservaDelDia ? (
-                  <div className="bg-emerald-500/10 border-2 border-dashed border-emerald-500/20 p-6 rounded-3xl flex flex-col items-center text-center animate-pop-in">
+                  <div className="bg-emerald-500/20 border border-emerald-500/30 p-6 rounded-3xl flex flex-col items-center text-center anim-cascada" style={{animationDelay: '0ms'}}>
                     <div className="bg-emerald-500 text-white p-3 rounded-full mb-3 shadow-lg">
                       <Check size={24}/>
                     </div>
-                    <p className="text-[#1A2744] font-black uppercase text-xs mb-1">¡Buen provecho!</p>
-                    <p className="text-emerald-700 text-sm font-black uppercase tracking-wide bg-emerald-100 px-4 py-2 rounded-xl mt-2 max-w-full truncate">
+                    <p className="text-white font-black uppercase text-xs mb-1">¡Buen provecho!</p>
+                    <p className="text-emerald-200 text-sm font-black uppercase tracking-wide bg-emerald-900/60 border border-emerald-500/30 px-4 py-2 rounded-xl mt-2 max-w-full truncate">
                       {reservaDelDia.menu_comedor?.platillo}
                     </p>
                   </div>
                 ) : (
                   <>
-                    {menusParaMostrar.length > 0 && (
-                        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest text-center py-2">{formatearFechaDia(fechaActiva)}</p>
-                    )}
-                    {menusParaMostrar.map((m, i) => (
-                      <div 
-                        key={m.id} 
-                        className="bg-white p-5 rounded-3xl flex justify-between items-center shadow-lg border border-slate-100 transform active:scale-[0.98] transition-all animate-pop-in-cascade"
-                        style={{ animationDelay: `${i * 100}ms` }} 
-                      >
-                        <div className="flex-1 pr-4">
-                          <span className={`text-[8px] font-black ${m.tipo_comida === 'ALMUERZO' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'} px-2.5 py-1 rounded-full mb-2.5 inline-block uppercase tracking-wider`}>
-                            {m.tipo_comida}
-                          </span>
-                          <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1">{m.platillo}</h3>
-                          {m.descripcion && <p className="text-slate-400 text-[10px] leading-snug">{m.descripcion}</p>}
-                        </div>
-                        
-                        <div className="flex flex-col items-center gap-3 shrink-0">
-                          <div className={`text-center flex flex-col items-center justify-center p-2 rounded-xl w-14 h-14 ${m.porciones_disponibles < 5 ? 'bg-red-50 animate-pulse text-red-600' : 'bg-indigo-50 text-[#6366F1]'}`}>
-                            <p className="text-3xl font-black leading-none">{m.porciones_disponibles}</p>
-                            <p className="text-[9px] font-bold uppercase mt-0.5 opacity-70">Disp.</p>
-                          </div>
-                          <button 
-                            onClick={() => apartarComida(m)}
-                            disabled={cargandoApartado}
-                            className="w-full bg-[#1A2744] hover:bg-[#C9A84C] text-white hover:text-[#1A2744] px-3.5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-md transition-colors active:scale-95 flex items-center justify-center"
-                          >
-                            {cargandoApartado ? <Loader2 className="animate-spin" size={12}/> : 'Apartar'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {menusParaMostrar.length === 0 && (
-                      <div className="flex flex-col items-center justify-center text-slate-500 py-10 border-2 border-dashed border-indigo-100 rounded-3xl bg-indigo-50/50">
+                    {menusParaMostrar.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center text-slate-400 py-10 border-2 border-dashed border-white/10 rounded-3xl bg-white/5">
                         <Calendar size={32} className="mb-3 opacity-40"/>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-center">Menú no publicado para<br/>esta fecha</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-8">
+                        {/* SECCIÓN DESAYUNOS */}
+                        {desayunos.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
+                              <Sunrise className="text-[#C9A84C]" size={20} />
+                              <h3 className="text-[#C9A84C] font-black text-xs uppercase tracking-[0.2em]">Desayunos</h3>
+                            </div>
+                            <div className="space-y-3">
+                              {desayunos.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={i} />)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* SECCIÓN ALMUERZOS */}
+                        {almuerzos.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
+                              <Sun className="text-emerald-400" size={20} />
+                              <h3 className="text-emerald-400 font-black text-xs uppercase tracking-[0.2em]">Almuerzos</h3>
+                            </div>
+                            <div className="space-y-3">
+                              {almuerzos.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + i} />)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* SECCIÓN CENAS */}
+                        {cenas.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
+                              <Moon className="text-blue-400" size={20} />
+                              <h3 className="text-blue-400 font-black text-xs uppercase tracking-[0.2em]">Cenas</h3>
+                            </div>
+                            <div className="space-y-3">
+                              {cenas.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + almuerzos.length + i} />)}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </>
@@ -349,7 +391,7 @@ export default function MiValePage() {
 
         {/* VISTAS MANTENIDAS */}
         {estadoVista === 'busqueda' && (
-          <form onSubmit={buscarEmpleadoManual} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 animate-fade-in">
+          <form onSubmit={buscarEmpleadoManual} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 anim-entrada-suave">
             <h2 className="text-2xl font-black text-[#1A2744] mb-2 uppercase tracking-tight">Comedor FGE Yucatán</h2>
             <p className="text-slate-500 mb-6 text-sm">Ingresa tu nombre como aparece en nómina.</p>
             <input 
@@ -367,7 +409,7 @@ export default function MiValePage() {
         {estadoVista === 'animando' && (
           <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 flex flex-col items-center">
             <div className="w-20 h-20 bg-[#1A2744] rounded-full flex items-center justify-center text-3xl mb-8 relative shadow-lg">
-              📊 <div className="absolute inset-0 rounded-full border-4 border-[#1A2744]/20 animate-ping"></div>
+              📊 <div className="absolute inset-0 rounded-full border-4 border-[#1A2744]/20 anim-latido"></div>
             </div>
             <h3 className="text-lg font-bold text-[#1A2744] mb-8 uppercase tracking-widest">Generando...</h3>
             <div className="w-full flex flex-col gap-4 mb-8">
@@ -381,7 +423,7 @@ export default function MiValePage() {
         )}
 
         {estadoVista === 'ticket' && (
-          <div className="flex flex-col items-center gap-4 animate-pop-in">
+          <div className="flex flex-col items-center gap-4 anim-cascada" style={{animationDelay: '0ms'}}>
             <div className="bg-white rounded-[2rem] overflow-hidden shadow-2xl w-full border border-slate-100">
               <div className="bg-[#1A2744] p-6 text-center border-b-2 border-dashed border-slate-200 relative">
                 <p className="text-[#C9A84C] text-[10px] uppercase font-bold tracking-[0.2em] mb-1">Fiscalía General del Estado</p>
@@ -401,11 +443,11 @@ export default function MiValePage() {
                   </div>
                 </div>
                 <div className="w-full bg-[#F8FAFC] p-6 rounded-2xl flex flex-col items-center mb-6 border border-slate-50 relative overflow-hidden">
-                   <div className="absolute inset-0 bg-indigo-50/50 animate-pulse"></div>
+                   <div className="absolute inset-0 bg-indigo-50/50 anim-latido opacity-50"></div>
                   <img src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(empleado.nombre_completo)}&scale=3&rotate=N&includetext`} alt="QR" className="w-full h-20 object-contain mix-blend-multiply relative z-10" />
                   <p className="text-slate-500 text-[10px] font-bold mt-3 tracking-widest uppercase relative z-10">Folio: {folioGenerado}</p>
                 </div>
-                <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-2xl text-center font-black text-[11px] uppercase tracking-widest border border-emerald-100 animate-pulse">✓ Escanea en Caja</div>
+                <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-2xl text-center font-black text-[11px] uppercase tracking-widest border border-emerald-100 anim-latido">✓ Escanea en Caja</div>
               </div>
             </div>
             <button onClick={() => setEstadoVista('dashboard')} className="bg-[#1A2744]/10 text-[#1A2744] px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest mt-4 active:scale-95 transition-all">Regresar</button>
@@ -414,24 +456,32 @@ export default function MiValePage() {
 
       </div>
 
-      {/* CSS DE ANIMACIONES CORREGIDO */}
+      {/* SISTEMA DE ANIMACIÓN 100% SEGURO */}
       <style dangerouslySetInnerHTML={{__html: `
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes popIn { 
-          0% { opacity: 0; transform: scale(0.9); }
-          70% { opacity: 1; transform: scale(1.02); }
-          100% { opacity: 1; transform: scale(1); }
+        @keyframes fadeUpIn {
+          0% { opacity: 0; transform: translateY(20px); }
+          100% { opacity: 1; transform: translateY(0); }
         }
-        @keyframes popInCascade { 
-          0% { opacity: 0; transform: translateY(15px) scale(0.95); }
-          70% { opacity: 1; transform: translateY(-2px) scale(1.01); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
+        @keyframes pulseSoft {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.05); }
         }
-        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-        .animate-pop-in { animation: popIn 0.4s ease-out forwards; }
-        .animate-pop-in-cascade { 
+        @keyframes spinSlow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .anim-entrada-suave {
+          animation: fadeUpIn 0.6s ease-out forwards;
+        }
+        .anim-cascada {
           opacity: 0;
-          animation: popInCascade 0.5s ease-out forwards; 
+          animation: fadeUpIn 0.5s ease-out forwards;
+        }
+        .anim-latido {
+          animation: pulseSoft 2s infinite;
+        }
+        .anim-girar {
+          animation: spinSlow 1s linear infinite;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -445,7 +495,7 @@ function PasoCheck({ visible, texto, completed, active }: { visible: boolean, te
   return (
     <div className={`flex items-center gap-3 text-xs font-bold transition-all duration-300 ${completed ? 'text-slate-700' : active ? 'text-[#6366F1]' : 'text-slate-300'}`}>
       <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${completed ? 'bg-emerald-400 text-white' : active ? 'border-2 border-[#6366F1]' : 'bg-slate-100'}`}>
-        {completed ? '✓' : ''} {active && <div className="w-2 h-2 bg-[#6366F1] rounded-full animate-pulse"></div>}
+        {completed ? '✓' : ''} {active && <div className="w-2 h-2 bg-[#6366F1] rounded-full anim-latido"></div>}
       </div>
       {texto}
     </div>
