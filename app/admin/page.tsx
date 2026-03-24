@@ -122,52 +122,115 @@ export default function AdminDashboard() {
     if (res.success) { alert("✅ Contraseña actualizada"); setNuevaPass(''); } else { alert("❌ Error: " + res.error); }
   };
 
-  const procesarExcel = (e: any) => {
+  // NUEVO PARSER UNIVERSAL (Días o Cuota Directa + Prevención de Desplazamiento por celdas vacías)
+  const procesarExcel = async (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
     setCargando(true);
     const reader = new FileReader();
+
     reader.onload = async (event: any) => {
-      const bstr = event.target.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const mapaEmpleados: Record<string, { dependencia: string, cuota: number }> = {};
-      wb.SheetNames.forEach((sheetName) => {
-        const ws = wb.Sheets[sheetName];
-        const dataRaw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        let indexNombre = -1, indexDependencia = -1, indexCuota = -1, filaInicio = -1;
+      try {
+        const bstr = event.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+
+        // El parámetro defval: '' es crítico. Obliga a que las celdas vacías mantengan su lugar
+        const dataRaw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        let procesados = 0;
+        let indexNombre = -1;
+        let indexDependencia = -1;
+        let indexCuotaDirecta = -1;
+        let indicesDias: number[] = [];
+        let filaInicio = -1;
+
         for (let i = 0; i < dataRaw.length; i++) {
           const fila = dataRaw[i];
-          const nomIdx = fila.findIndex(c => typeof c === 'string' && c.toLowerCase().includes('nombre'));
-          const depIdx = fila.findIndex(c => typeof c === 'string' && (c.toLowerCase().includes('adscripción') || c.toLowerCase().includes('dependencia') || c.toLowerCase().includes('área')));
-          const cuoIdx = fila.findIndex(c => typeof c === 'string' && (c.toLowerCase().includes('vales') || c.toLowerCase().includes('cuota') || c.toLowerCase().includes('cantidad') || c.toLowerCase().includes('ticket') || c.toLowerCase().includes('ticekt') || c.toLowerCase().includes('restante')));
-          if (nomIdx !== -1) { indexNombre = nomIdx; indexDependencia = depIdx; indexCuota = cuoIdx; filaInicio = i + 1; break; }
-        }
-        if (indexNombre !== -1) {
-          let ultimaDependencia = 'GENERAL'; 
-          for (let i = filaInicio; i < dataRaw.length; i++) {
-            const fila = dataRaw[i];
-            if (!fila) continue;
-            const nombre = String(fila[indexNombre] || '').toUpperCase().trim();
-            const depRaw = indexDependencia !== -1 ? fila[indexDependencia] : null;
-            if (depRaw && String(depRaw).trim() !== '') { ultimaDependencia = String(depRaw).toUpperCase().trim(); }
-            const cuota = parseInt(String(indexCuota !== -1 ? fila[indexCuota] : 0)) || 0;
-            if (nombre.length > 5 && !['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO','DOMINGO','TOTAL'].some(p => nombre.includes(p))) {
-              if (mapaEmpleados[nombre]) { mapaEmpleados[nombre].cuota += cuota; }
-              else { mapaEmpleados[nombre] = { dependencia: ultimaDependencia, cuota }; }
-            }
+          if (!fila) continue;
+
+          const nomIdx = fila.findIndex(c => String(c).toUpperCase().includes('NOMBRE'));
+
+          if (nomIdx !== -1) {
+            indexNombre = nomIdx;
+            filaInicio = i + 1;
+
+            const diasSemana = ['LUNES', 'MARTES', 'MIERCOLES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'SÁBADO', 'DOMINGO'];
+
+            fila.forEach((col, idx) => {
+              const colUpper = String(col).toUpperCase();
+              if (colUpper.includes('DEPENDENCIA') || colUpper.includes('AREA') || colUpper.includes('ADSCRIP')) {
+                indexDependencia = idx;
+              } else if (colUpper.match(/VALES|CUOTA|CANTIDAD|TICKET|TICEKT|RESTANTE/)) {
+                indexCuotaDirecta = idx;
+              } else if (diasSemana.some(d => colUpper.includes(d))) {
+                indicesDias.push(idx);
+              }
+            });
+            break;
           }
         }
-      });
-      const listaFinal = Object.entries(mapaEmpleados).map(([nombre, datos]) => ({ nombre_completo: nombre, dependencia: datos.dependencia, tickets_restantes: datos.cuota, tickets_canjeado: 0, email: generarEmail(nombre) }));
-      for (const emp of listaFinal) { 
-        await supabase.from('perfiles').upsert(emp, { onConflict: 'nombre_completo' }); 
-        await crearUsuarioAdmin(emp.email, emp.nombre_completo, userEmail || 'Sistema'); 
+
+        if (indexNombre === -1) {
+          alert("❌ No se detectó la columna 'NOMBRE' en el Excel.");
+          setCargando(false);
+          return;
+        }
+
+        let ultimaDependencia = 'GENERAL';
+
+        for (let i = filaInicio; i < dataRaw.length; i++) {
+          const fila = dataRaw[i];
+          if (!fila || !fila[indexNombre]) continue;
+
+          const nombreLimpio = String(fila[indexNombre]).toUpperCase().trim();
+          if (nombreLimpio.length < 5 || nombreLimpio.includes('TOTAL') || nombreLimpio.includes('NOTA')) continue;
+
+          const depRaw = indexDependencia !== -1 ? fila[indexDependencia] : null;
+          if (depRaw && String(depRaw).trim() !== '') {
+            ultimaDependencia = String(depRaw).toUpperCase().trim();
+          }
+
+          let totalValesCalculados = 0;
+
+          if (indicesDias.length > 0) {
+            indicesDias.forEach(idx => {
+              const valorDia = String(fila[idx] || '').toUpperCase().trim();
+              if (valorDia.includes('DOBLE') || valorDia === '2') {
+                totalValesCalculados += 2;
+              } else if (valorDia.includes('AM') || valorDia.includes('PM') || valorDia.includes('INTERMEDIO') || valorDia === '1') {
+                totalValesCalculados += 1;
+              }
+            });
+          } else if (indexCuotaDirecta !== -1) {
+            totalValesCalculados = parseInt(String(fila[indexCuotaDirecta])) || 0;
+          }
+
+          const emailGen = generarEmail(nombreLimpio);
+
+          const empData = {
+            nombre_completo: nombreLimpio,
+            dependencia: ultimaDependencia,
+            tickets_restantes: totalValesCalculados,
+            tickets_canjeado: 0,
+            email: emailGen
+          };
+
+          await supabase.from('perfiles').upsert(empData, { onConflict: 'nombre_completo' });
+          await crearUsuarioAdmin(empData.email, empData.nombre_completo, userEmail || 'Sistema');
+          procesados++;
+        }
+
+        await registrarLog(userEmail || 'Sistema', 'CARGAR_EXCEL', `Actualizó nómina: ${procesados} empleados procesados`);
+        alert(`✅ Éxito: Se procesaron ${procesados} empleados correctamente.`);
+      } catch (err) {
+        console.error(err);
+        alert("❌ Error interno al procesar el archivo. Revisa su formato.");
+      } finally {
+        cargarDatosGenerales();
+        setCargando(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
       }
-      
-      await registrarLog(userEmail || 'Sistema', 'CARGAR_EXCEL', `Cargó/Actualizó nómina con ${listaFinal.length} empleados`);
-      alert(`✅ Procesados ${listaFinal.length} empleados.`);
-      cargarDatosGenerales(); setCargando(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsBinaryString(file);
   };
