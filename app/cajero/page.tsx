@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -39,6 +39,8 @@ export default function PantallaCajero() {
   // ESTADOS DEL PLANIFICADOR RÁPIDO
   const [fechaPlan, setFechaPlan] = useState(new Date().toISOString().split('T')[0]);
   const [textosPlan, setTextosPlan] = useState({ desayuno: '', almuerzo: '', cena: '' });
+  // CANTIDADES DINÁMICAS POR DEFECTO
+  const [porcionesPlan, setPorcionesPlan] = useState({ desayuno: 20, almuerzo: 30, cena: 20 });
 
   useEffect(() => {
     const inicializarCajero = async () => {
@@ -242,9 +244,9 @@ export default function PantallaCajero() {
       });
     };
 
-    extraerLineas(textosPlan.desayuno, 'DESAYUNO', 20);
-    extraerLineas(textosPlan.almuerzo, 'ALMUERZO', 30);
-    extraerLineas(textosPlan.cena, 'CENA', 20);
+    extraerLineas(textosPlan.desayuno, 'DESAYUNO', porcionesPlan.desayuno);
+    extraerLineas(textosPlan.almuerzo, 'ALMUERZO', porcionesPlan.almuerzo);
+    extraerLineas(textosPlan.cena, 'CENA', porcionesPlan.cena);
 
     if (platillosAInsertar.length > 0) {
       const { error } = await supabase.from('menu_comedor').insert(platillosAInsertar);
@@ -267,6 +269,21 @@ export default function PantallaCajero() {
     await supabase.from('menu_comedor').delete().eq('id', id);
     await cargarMenuDia();
     setCargando(false);
+  };
+
+  // NUEVO: Ajustar porciones en vivo (+ / -)
+  const ajustarPorciones = async (id: string, actualesDisp: number, actualesTotales: number, ajuste: number) => {
+    const nuevasDisp = actualesDisp + ajuste;
+    const nuevasTotales = actualesTotales + ajuste;
+    if (nuevasDisp < 0) return;
+
+    // Actualización optimista para que la interfaz se sienta instantánea
+    setMenuHoy(prev => prev.map(m => m.id === id ? { ...m, porciones_disponibles: nuevasDisp, porciones_totales: nuevasTotales } : m));
+
+    await supabase.from('menu_comedor').update({ 
+      porciones_disponibles: nuevasDisp,
+      porciones_totales: nuevasTotales
+    }).eq('id', id);
   };
 
   const marcarComoCapturado = async (id: string) => {
@@ -454,17 +471,35 @@ export default function PantallaCajero() {
                       <input type="date" value={fechaPlan} onChange={e => setFechaPlan(e.target.value)} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1] w-full" />
                       
                       <div>
-                        <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Desayunos (1 por línea)</label>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Desayunos</label>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-bold text-slate-400">P/D:</span>
+                            <input type="number" min="1" value={porcionesPlan.desayuno} onChange={e => setPorcionesPlan({...porcionesPlan, desayuno: parseInt(e.target.value)||0})} className="w-12 p-1 text-xs text-center border border-slate-200 rounded-md focus:border-[#6366F1] outline-none" title="Porciones por defecto" />
+                          </div>
+                        </div>
                         <textarea rows={2} placeholder="Ej: Huevo a la Mexicana..." value={textosPlan.desayuno} onChange={e => setTextosPlan({...textosPlan, desayuno: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 text-xs uppercase outline-none focus:border-[#6366F1] resize-none" />
                       </div>
                       
                       <div>
-                        <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Almuerzos (1 por línea)</label>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Almuerzos</label>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-bold text-slate-400">P/D:</span>
+                            <input type="number" min="1" value={porcionesPlan.almuerzo} onChange={e => setPorcionesPlan({...porcionesPlan, almuerzo: parseInt(e.target.value)||0})} className="w-12 p-1 text-xs text-center border border-slate-200 rounded-md focus:border-[#6366F1] outline-none" title="Porciones por defecto" />
+                          </div>
+                        </div>
                         <textarea rows={3} placeholder="Ej: Mondongo Andaluza..." value={textosPlan.almuerzo} onChange={e => setTextosPlan({...textosPlan, almuerzo: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 text-xs uppercase outline-none focus:border-[#6366F1] resize-none" />
                       </div>
 
                       <div>
-                        <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Cenas (1 por línea)</label>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Cenas</label>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-bold text-slate-400">P/D:</span>
+                            <input type="number" min="1" value={porcionesPlan.cena} onChange={e => setPorcionesPlan({...porcionesPlan, cena: parseInt(e.target.value)||0})} className="w-12 p-1 text-xs text-center border border-slate-200 rounded-md focus:border-[#6366F1] outline-none" title="Porciones por defecto" />
+                          </div>
+                        </div>
                         <textarea rows={2} placeholder="Ej: Sopa Fria..." value={textosPlan.cena} onChange={e => setTextosPlan({...textosPlan, cena: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 text-xs uppercase outline-none focus:border-[#6366F1] resize-none" />
                       </div>
 
@@ -482,11 +517,17 @@ export default function PantallaCajero() {
                           <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-wider">{m.tipo_comida}</span>
                           <p className="font-black text-[#1A2744] text-xs mt-1 uppercase leading-tight">{m.platillo}</p>
                         </div>
-                        <div className="text-center shrink-0 border-r border-slate-100 pr-3 mr-1">
-                          <p className="text-lg font-black text-[#6366F1] leading-none">{m.porciones_disponibles}</p>
-                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">Disp.</p>
+                        
+                        {/* CONTROLES DE CANTIDAD EN VIVO */}
+                        <div className="flex items-center gap-1 mx-2 shrink-0 border border-slate-100 rounded-xl p-1 bg-slate-50">
+                          <button onClick={() => ajustarPorciones(m.id, m.porciones_disponibles, m.porciones_totales, -1)} className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Minus size={14}/></button>
+                          <div className="w-6 text-center">
+                            <p className="text-sm font-black text-[#6366F1]">{m.porciones_disponibles}</p>
+                          </div>
+                          <button onClick={() => ajustarPorciones(m.id, m.porciones_disponibles, m.porciones_totales, 1)} className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"><Plus size={14}/></button>
                         </div>
-                        <button onClick={() => eliminarPlatillo(m.id, m.platillo)} className="p-2 text-slate-300 hover:text-red-500 transition-colors ml-1" title="Eliminar Platillo">
+
+                        <button onClick={() => eliminarPlatillo(m.id, m.platillo)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-1" title="Eliminar Platillo">
                           <Trash2 size={16} />
                         </button>
                       </div>
