@@ -135,18 +135,24 @@ export default function MiValePage() {
     if (!confirm(`🍽 ¿Asegurar una porción de ${menuItem.platillo} para el ${formatearFechaDia(menuItem.fecha)}?`)) return;
 
     setCargandoApartado(true);
-    const { error: errUpdate } = await supabase.from('menu_comedor').update({ porciones_disponibles: menuItem.porciones_disponibles - 1 }).eq('id', menuItem.id);
     
-    if (!errUpdate) {
-      await supabase.from('reservas_comedor').insert({
-        menu_id: menuItem.id,
-        nombre_empleado: empleado.nombre_completo,
-        dependencia: empleado.dependencia
-      });
+    // PARCHE PUNTO #2: Llamada RPC atómica para evitar porciones negativas y condiciones de carrera
+    const { error: rpcError } = await supabase.rpc('apartar_platillo', {
+      p_menu_id: menuItem.id,
+      p_nombre_empleado: empleado.nombre_completo,
+      p_dependencia: empleado.dependencia
+    });
+    
+    if (!rpcError) {
       alert("✅ ¡Platillo asegurado exitosamente!");
       await cargarMenusYReservasFuturas(empleado.nombre_completo);
     } else {
-      alert("Hubo un error o el platillo se acaba de agotar.");
+      // Manejamos el error lanzado por la función SQL
+      if (rpcError.message.includes('AGOTADO')) {
+        alert("❌ Lo sentimos, el platillo se acaba de agotar.");
+      } else {
+        alert("Hubo un error al procesar tu apartado.");
+      }
     }
     setCargandoApartado(false);
   };
@@ -502,7 +508,6 @@ export default function MiValePage() {
 
       </div>
 
-      {/* SISTEMA DE ANIMACIÓN 100% SEGURO */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeUpIn {
           0% { opacity: 0; transform: translateY(20px); }
