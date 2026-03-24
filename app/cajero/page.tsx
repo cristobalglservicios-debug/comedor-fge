@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2 } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -13,7 +13,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Tab = 'escanear' | 'menu' | 'historial' | 'reportes';
+type Tab = 'escanear' | 'menu' | 'cocina' | 'historial' | 'reportes';
 
 export default function PantallaCajero() {
   const router = useRouter();
@@ -134,11 +134,20 @@ export default function PantallaCajero() {
     const hoy = new Date().toISOString().split('T')[0];
     const ahora = new Date().toISOString(); 
     
+    // Traemos el menú exacto de hoy
     const { data: menu } = await supabase.from('menu_comedor').select('*').eq('fecha', hoy).lte('creado_en', ahora).order('creado_en', { ascending: true });
-    if (menu) setMenuHoy(menu);
-
-    const { data: reservas } = await supabase.from('reservas_comedor').select('*, menu_comedor(platillo)').gte('creado_en', `${hoy}T00:00:00`).lte('creado_en', ahora).order('creado_en', { ascending: false });
-    if (reservas) setReservasHoy(reservas);
+    
+    if (menu) {
+      setMenuHoy(menu);
+      
+      if (menu.length > 0) {
+        const menuIds = menu.map(m => m.id);
+        const { data: reservas } = await supabase.from('reservas_comedor').select('*, menu_comedor(platillo)').in('menu_id', menuIds).order('creado_en', { ascending: false });
+        if (reservas) setReservasHoy(reservas);
+      } else {
+        setReservasHoy([]);
+      }
+    }
   };
 
   const manejarInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -252,7 +261,6 @@ export default function PantallaCajero() {
     setCargando(false);
   };
 
-  // NUEVO: Función para eliminar un platillo en caso de error
   const eliminarPlatillo = async (id: string, platillo: string) => {
     if (!confirm(`⚠️ ¿ELIMINAR "${platillo}"?\n\nSi alguien ya lo había apartado, su reserva se cancelará automáticamente.`)) return;
     setCargando(true);
@@ -333,6 +341,7 @@ export default function PantallaCajero() {
             {[
               { id: 'escanear', label: 'Escanear', icon: <Scan size={18}/> },
               { id: 'menu', label: 'Pedidos Live', icon: <Utensils size={18}/> },
+              { id: 'cocina', label: 'Monitor Cocina', icon: <ChefHat size={18}/> },
               { id: 'historial', label: 'Historial', icon: <History size={18}/> },
               { id: 'reportes', label: 'Reportes', icon: <ClipboardList size={18}/> }
             ].map((t) => (
@@ -465,7 +474,7 @@ export default function PantallaCajero() {
                     </div>
                   </div>
 
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Activos Hoy</h4>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Activos (Día de Hoy)</h4>
                   <div className="space-y-3">
                     {menuHoy.map((m, i) => (
                       <div key={i} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center">
@@ -482,14 +491,14 @@ export default function PantallaCajero() {
                         </button>
                       </div>
                     ))}
-                    {menuHoy.length === 0 && <p className="text-[10px] text-slate-400 text-center py-4 border border-dashed rounded-xl">Sin menú publicado.</p>}
+                    {menuHoy.length === 0 && <p className="text-[10px] text-slate-400 text-center py-4 border border-dashed rounded-xl">Sin menú publicado hoy.</p>}
                   </div>
                 </div>
 
                 {/* COLUMNA DERECHA: PEDIDOS LIVE SOFT RESTAURANT */}
                 <div className="flex flex-col h-full">
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div> Cola Soft Restaurant (Live)
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div> Cola Soft Restaurant (Live Hoy)
                   </h4>
                   
                   <div className="space-y-3 flex-1 overflow-y-auto pr-2 min-h-[250px] mb-6">
@@ -526,6 +535,39 @@ export default function PantallaCajero() {
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'cocina' && (
+            <div className="p-8 animate-fade-in">
+              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-6 border-b pb-4">Monitor de Producción (Cocina)</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {menuHoy.map((m) => {
+                  const apartados = reservasHoy.filter((r) => r.menu_id === m.id);
+                  return (
+                    <div key={m.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col hover:shadow-md transition-shadow">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{m.tipo_comida}</span>
+                      <h4 className="text-[#1A2744] font-black text-lg uppercase leading-tight mb-6">{m.platillo}</h4>
+                      <div className="flex justify-between items-end mt-auto">
+                        <div className="text-center">
+                          <p className="text-4xl font-black text-amber-500">{apartados.length}</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Apartados</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-4xl font-black text-emerald-500">{m.porciones_disponibles}</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Sobrantes</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {menuHoy.length === 0 && (
+                  <div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl">
+                    <ChefHat size={40} className="mb-4 opacity-50" />
+                    <p className="text-xs font-bold uppercase tracking-widest">No hay menú publicado hoy</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
