@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X } from 'lucide-react';
+import bwipjs from 'bwip-js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,6 +24,7 @@ const getHoyMerida = () => {
 
 export default function MiValePage() {
   const router = useRouter();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [nombreBusqueda, setNombreBusqueda] = useState('');
   const [empleado, setEmpleado] = useState<any>(null);
   const [historial, setHistorial] = useState<any[]>([]);
@@ -61,6 +63,28 @@ export default function MiValePage() {
     intentarAutoLogin();
   }, []);
 
+  // LÓGICA PARA GENERAR EL CÓDIGO LOCALMENTE (PUNTO #3)
+  useEffect(() => {
+    if (estadoVista === 'ticket' && empleado && canvasRef.current) {
+      const timer = setTimeout(() => {
+        try {
+          bwipjs.toCanvas(canvasRef.current!, {
+            bcid: 'code128',
+            text: empleado.nombre_completo,
+            scale: 3,
+            height: 15,
+            includetext: true,
+            textxalign: 'center',
+            backgroundcolor: 'ffffff'
+          });
+        } catch (e) {
+          console.error("Error generando código local:", e);
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [estadoVista, empleado]);
+
   const buscarEmpleadoManual = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setError('');
@@ -81,7 +105,6 @@ export default function MiValePage() {
   };
 
   const cargarHistorialReciente = async (nombre: string) => {
-    const ahora = new Date().toISOString(); 
     const { data } = await supabase
       .from('historial_comedor')
       .select('*')
@@ -124,34 +147,31 @@ export default function MiValePage() {
   };
 
   const apartarComida = async (menuItem: any) => {
-    // NUEVA LÓGICA: Contar reservas activas y compararlas con vales restantes
     const reservasActivas = misReservas.filter(r => r.estado === 'APARTADO').length;
     
     if (empleado.tickets_restantes - reservasActivas <= 0) {
       return alert("🚫 Tus vales disponibles ya están comprometidos en otras reservas. No puedes apartar más platillos.");
     }
     
-    // Ya no bloqueamos si existe una reserva previa. Puede pedir más de 1 si tiene saldo.
     if (!confirm(`🍽 ¿Asegurar una porción de ${menuItem.platillo} para el ${formatearFechaDia(menuItem.fecha)}?`)) return;
 
     setCargandoApartado(true);
-    
-    // PARCHE PUNTO #2: Llamada RPC atómica para evitar porciones negativas y condiciones de carrera
+
+    // LLAMADA RPC (PUNTO #2: PROTECCIÓN CONTRA SOBREVENTA)
     const { error: rpcError } = await supabase.rpc('apartar_platillo', {
-      p_menu_id: menuItem.id,
-      p_nombre_empleado: empleado.nombre_completo,
-      p_dependencia: empleado.dependencia
+        p_menu_id: menuItem.id,
+        p_nombre_empleado: empleado.nombre_completo,
+        p_dependencia: empleado.dependencia
     });
     
     if (!rpcError) {
       alert("✅ ¡Platillo asegurado exitosamente!");
       await cargarMenusYReservasFuturas(empleado.nombre_completo);
     } else {
-      // Manejamos el error lanzado por la función SQL
       if (rpcError.message.includes('AGOTADO')) {
-        alert("❌ Lo sentimos, el platillo se acaba de agotar.");
+          alert("❌ Lo sentimos, el platillo se acaba de agotar.");
       } else {
-        alert("Hubo un error al procesar tu apartado.");
+          alert("Hubo un error al procesar tu solicitud.");
       }
     }
     setCargandoApartado(false);
@@ -215,10 +235,8 @@ export default function MiValePage() {
   const folioGenerado = `FGE-${empleado?.dependencia?.substring(0,3).toUpperCase() || 'EMP'}-00${empleado?.id || '1'}`;
 
   const menusParaMostrar = menusFuturos.filter(m => m.fecha === fechaActiva);
-  // NUEVO: Ahora puede haber más de una reserva al día
   const reservasDelDia = misReservas.filter(r => r.menu_comedor?.fecha === fechaActiva);
 
-  // AGRUPACIÓN DINÁMICA DE PLATILLOS
   const desayunos = menusParaMostrar.filter(m => m.tipo_comida === 'DESAYUNO');
   const almuerzos = menusParaMostrar.filter(m => m.tipo_comida === 'ALMUERZO');
   const cenas = menusParaMostrar.filter(m => m.tipo_comida === 'CENA');
@@ -227,7 +245,6 @@ export default function MiValePage() {
     return <div className="min-h-screen bg-[#F0F3F6] flex items-center justify-center font-bold text-slate-400">Verificando acceso...</div>;
   }
 
-  // Componente interno para reutilizar la tarjeta de platillo
   const TarjetaPlatillo = ({ m, index }: { m: any, index: number }) => (
     <div 
       className="anim-cascada bg-white p-5 rounded-3xl flex justify-between items-center shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 transform hover:scale-[1.02] active:scale-[0.98] transition-all"
@@ -450,7 +467,7 @@ export default function MiValePage() {
               type="text" 
               value={nombreBusqueda}
               onChange={(e) => setNombreBusqueda(e.target.value)}
-              className="w-full p-4 border-2 border-slate-100 rounded-2xl mb-4 uppercase font-bold text-slate-800 focus:border-[#C9A84C] focus:ring-1 focus:ring-[#C9A84C] outline-none transition-colors"
+              className="w-full p-4 border-2 border-slate-100 rounded-2xl mb-4 uppercase font-bold text-slate-800 focus:border-[#C9A84C] outline-none transition-colors"
               placeholder="Ej. JOSE PEREZ PEREZ"
             />
             <button type="submit" className="w-full bg-[#C9A84C] hover:bg-amber-500 text-[#1A2744] py-4 rounded-xl font-black uppercase tracking-widest transition-all shadow-md active:scale-95">Ver Mi Vale</button>
@@ -496,7 +513,14 @@ export default function MiValePage() {
                 </div>
                 <div className="w-full bg-[#F8FAFC] p-6 rounded-2xl flex flex-col items-center mb-6 border border-slate-50 relative overflow-hidden">
                    <div className="absolute inset-0 bg-indigo-50/50 anim-latido opacity-50"></div>
-                  <img src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(empleado.nombre_completo)}&scale=3&rotate=N&includetext`} alt="QR" className="w-full h-20 object-contain mix-blend-multiply relative z-10" />
+                   
+                   {/* CANVAS CON image-rendering PARA NITIDEZ MÁXIMA */}
+                  <canvas 
+                    ref={canvasRef} 
+                    style={{ imageRendering: 'pixelated' }} 
+                    className="w-full h-auto max-w-[250px] mix-blend-multiply relative z-10"
+                  ></canvas>
+                  
                   <p className="text-slate-500 text-[10px] font-bold mt-3 tracking-widest uppercase relative z-10">Folio: {folioGenerado}</p>
                 </div>
                 <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-2xl text-center font-black text-[11px] uppercase tracking-widest border border-emerald-100 anim-latido">✓ Escanea en Caja</div>
