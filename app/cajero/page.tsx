@@ -1,8 +1,9 @@
 'use client';
+
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus, Clock } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -61,6 +62,7 @@ export default function PantallaCajero() {
   }, [usarCamara]);
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/'); };
+  
   const cargarDatosDia = async () => {
     const hoy = new Date().toISOString().split('T')[0];
     const { data } = await supabase.from('historial_comedor').select('*').gte('fecha_hora', `${hoy}T00:00:00`).order('fecha_hora', { ascending: false });
@@ -85,6 +87,7 @@ export default function PantallaCajero() {
     const val = e.target.value.toUpperCase(); setInputLectura(val);
     if (val.length >= 3) { const resultados = directorio.filter(p => p.nombre_completo.includes(val)).slice(0, 5); setSugerencias(resultados); } else { setSugerencias([]); }
   };
+  
   const seleccionarSugerencia = (nombre: string) => { setSugerencias([]); setInputLectura(nombre); procesarEscaneo(null, nombre); };
   
   const inputRef = useRef<HTMLInputElement>(null);
@@ -102,7 +105,6 @@ export default function PantallaCajero() {
       if (!errorUpdate) {
         await supabase.from('historial_comedor').insert({ nombre_empleado: empleado.nombre_completo, dependencia: empleado.dependencia });
         
-        // LOGICA DE AUTO-CAPTURA: Si tiene reserva hoy, marcarla como CAPTURADA (entregada)
         const hoy = new Date().toISOString().split('T')[0];
         const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.menu_comedor.fecha === hoy && r.estado === 'APARTADO');
         
@@ -153,6 +155,25 @@ export default function PantallaCajero() {
   const marcarComoCapturado = async (id: string) => { 
     await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', id);
     cargarMenuDia(); 
+  };
+
+  // NUEVA FUNCIÓN: Cancelar reserva desde el cajero y devolver porción
+  const cancelarReservaCajero = async (id: string, menu_id: string, nombre_empleado: string) => {
+    if (!confirm(`⚠️ ¿Seguro que deseas CANCELAR el apartado de ${nombre_empleado}? La porción será devuelta al menú.`)) return;
+    
+    setCargando(true);
+    const { error: errDelete } = await supabase.from('reservas_comedor').delete().eq('id', id);
+    
+    if (!errDelete) {
+      const { data: menu } = await supabase.from('menu_comedor').select('porciones_disponibles').eq('id', menu_id).single();
+      if (menu) {
+        await supabase.from('menu_comedor').update({ porciones_disponibles: menu.porciones_disponibles + 1 }).eq('id', menu_id);
+      }
+      await cargarMenuDia();
+    } else {
+      alert("❌ Error al cancelar la reserva.");
+    }
+    setCargando(false);
   };
 
   const exportarExcel = () => {
@@ -263,8 +284,14 @@ export default function PantallaCajero() {
                   <div className="space-y-3 flex-1 overflow-y-auto pr-2 min-h-[250px] mb-6">
                     {reservasPendientes.map((r, i) => (
                       <div key={i} className="bg-blue-50 p-4 rounded-2xl border-2 border-blue-400 shadow-md flex justify-between items-center animate-in fade-in slide-in-from-left-4">
-                        <div><p className="font-black text-[#1A2744] text-xs uppercase">{r.nombre_empleado}</p><p className="text-[10px] font-black text-blue-700 uppercase mt-1">🍽 {r.menu_comedor?.platillo}</p></div>
-                        <button onClick={() => marcarComoCapturado(r.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-md active:scale-95 transition-all">Entregado</button>
+                        <div className="flex-1 pr-2">
+                          <p className="font-black text-[#1A2744] text-xs uppercase truncate">{r.nombre_empleado}</p>
+                          <p className="text-[10px] font-black text-blue-700 uppercase mt-1">🍽 {r.menu_comedor?.platillo}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => marcarComoCapturado(r.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-md active:scale-95 transition-all">Entregado</button>
+                          <button onClick={() => cancelarReservaCajero(r.id, r.menu_id, r.nombre_empleado)} className="bg-red-50 hover:bg-red-500 text-red-600 hover:text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-sm active:scale-95 transition-all border border-red-200 hover:border-red-500" title="Cancelar y regresar porción al menú">Cancelar</button>
+                        </div>
                       </div>
                     ))}
                     {reservasPendientes.length === 0 && (<div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl p-6"><CheckCircle2 size={32} className="mb-2 opacity-50"/><p className="text-xs font-bold uppercase tracking-widest">Todo entregado</p></div>)}
