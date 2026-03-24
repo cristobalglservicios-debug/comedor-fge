@@ -24,9 +24,14 @@ export default function PantallaCajero() {
   const [usarCamara, setUsarCamara] = useState(false);
   const [directorio, setDirectorio] = useState<any[]>([]);
   const [sugerencias, setSugerencias] = useState<any[]>([]);
-  const [menuHoy, setMenuHoy] = useState<any[]>([]);
-  const [reservasHoy, setReservasHoy] = useState<any[]>([]);
+  
+  // ESTADOS GLOBALES DE MENÚS (HOY Y FUTUROS)
+  const [todosMenus, setTodosMenus] = useState<any[]>([]);
+  const [todasReservas, setTodasReservas] = useState<any[]>([]);
+  
+  // ESTADOS DEL PLANIFICADOR Y MONITOR
   const [fechaPlan, setFechaPlan] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaMonitor, setFechaMonitor] = useState(new Date().toISOString().split('T')[0]);
   const [textosPlan, setTextosPlan] = useState({ desayuno: '', almuerzo: '', cena: '' });
   const [porcionesPlan, setPorcionesPlan] = useState({ desayuno: 20, almuerzo: 30, cena: 20 });
 
@@ -36,13 +41,13 @@ export default function PantallaCajero() {
       if (!session) { router.push('/dashboard'); return; }
       const email = session.user.email?.toLowerCase() || '';
       if (!email.includes('comedor') && !email.includes('cajero') && !email.includes('admin')) { router.push('/'); return; }
-      setUserEmail(email); setLoadingAcceso(false); await cargarDatosDia(); await cargarMenuDia();
+      setUserEmail(email); setLoadingAcceso(false); await cargarDatosDia(); await cargarDatosGlobales();
       const { data: perfiles } = await supabase.from('perfiles').select('nombre_completo, dependencia, tickets_restantes');
       if (perfiles) setDirectorio(perfiles);
       setTimeout(() => inputRef.current?.focus(), 500);
     };
     inicializarCajero();
-    const interval = setInterval(() => { cargarMenuDia(); }, 5000);
+    const interval = setInterval(() => { cargarDatosGlobales(); }, 5000);
     return () => clearInterval(interval);
   }, [router]);
 
@@ -69,17 +74,21 @@ export default function PantallaCajero() {
     if (data) { setHistorial(data); setStats({ canjeadosHoy: data.length, transacciones: data.length }); }
   };
 
-  const cargarMenuDia = async () => {
+  const cargarDatosGlobales = async () => {
     const hoy = new Date().toISOString().split('T')[0];
     const ahora = new Date().toISOString(); 
-    const { data: menu } = await supabase.from('menu_comedor').select('*').eq('fecha', hoy).lte('creado_en', ahora).order('creado_en', { ascending: true });
-    if (menu) {
-      setMenuHoy(menu);
-      if (menu.length > 0) {
-        const menuIds = menu.map(m => m.id);
+    // Traemos HOY y FUTUROS
+    const { data: menus } = await supabase.from('menu_comedor').select('*').gte('fecha', hoy).lte('creado_en', ahora).order('fecha', { ascending: true });
+    
+    if (menus) {
+      setTodosMenus(menus);
+      if (menus.length > 0) {
+        const menuIds = menus.map(m => m.id);
         const { data: reservas } = await supabase.from('reservas_comedor').select('*, menu_comedor(platillo, fecha)').in('menu_id', menuIds).order('creado_en', { ascending: false });
-        if (reservas) setReservasHoy(reservas);
-      } else { setReservasHoy([]); }
+        if (reservas) setTodasReservas(reservas);
+      } else { 
+        setTodasReservas([]); 
+      }
     }
   };
 
@@ -91,6 +100,15 @@ export default function PantallaCajero() {
   const seleccionarSugerencia = (nombre: string) => { setSugerencias([]); setInputLectura(nombre); procesarEscaneo(null, nombre); };
   
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // DERIVADOS PARA EL DÍA DE HOY (Escáner y Live)
+  const hoyReal = new Date().toISOString().split('T')[0];
+  const menuHoy = todosMenus.filter(m => m.fecha === hoyReal);
+  const reservasHoy = todasReservas.filter(r => r.menu_comedor?.fecha === hoyReal);
+
+  // DERIVADOS PARA EL MONITOR DE COCINA
+  const menuMonitor = todosMenus.filter(m => m.fecha === fechaMonitor);
+  const reservasMonitor = todasReservas.filter(r => r.menu_comedor?.fecha === fechaMonitor);
 
   const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
@@ -105,8 +123,8 @@ export default function PantallaCajero() {
       if (!errorUpdate) {
         await supabase.from('historial_comedor').insert({ nombre_empleado: empleado.nombre_completo, dependencia: empleado.dependencia });
         
-        const hoy = new Date().toISOString().split('T')[0];
-        const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.menu_comedor.fecha === hoy && r.estado === 'APARTADO');
+        // El escáner solo valida las reservas de HOY
+        const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.estado === 'APARTADO');
         
         if (reservaExistente) {
             await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', reservaExistente.id);
@@ -115,7 +133,7 @@ export default function PantallaCajero() {
         const textoExito = reservaExistente ? `¡VALE CANJEADO! (PLATILLO: ${reservaExistente.menu_comedor?.platillo})` : '¡VALE CANJEADO!';
         setMensaje({ tipo: 'exito', texto: textoExito, empleado: empleado, hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) });
         await cargarDatosDia();
-        await cargarMenuDia();
+        await cargarDatosGlobales();
         setDirectorio(prev => prev.map(p => p.nombre_completo === empleado.nombre_completo ? { ...p, tickets_restantes: p.tickets_restantes - 1 } : p));
       } else { setMensaje({ tipo: 'error', texto: 'ERROR AL ACTUALIZAR.' }); }
     }
@@ -134,7 +152,7 @@ export default function PantallaCajero() {
     if (platillosAInsertar.length > 0) {
       const { error } = await supabase.from('menu_comedor').insert(platillosAInsertar);
       if (error) { alert("❌ Error al guardar."); } else { alert(`✅ Se publicaron ${platillosAInsertar.length} platillos.`);
-        setTextosPlan({ desayuno: '', almuerzo: '', cena: '' }); await cargarMenuDia();
+        setTextosPlan({ desayuno: '', almuerzo: '', cena: '' }); await cargarDatosGlobales();
       }
     } else { alert("⚠️ Escribe al menos un platillo."); }
     setCargando(false);
@@ -142,37 +160,30 @@ export default function PantallaCajero() {
 
   const eliminarPlatillo = async (id: string, platillo: string) => {
     if (!confirm(`⚠️ ¿ELIMINAR "${platillo}"?`)) return; setCargando(true);
-    await supabase.from('menu_comedor').delete().eq('id', id); await cargarMenuDia(); setCargando(false);
+    await supabase.from('menu_comedor').delete().eq('id', id); await cargarDatosGlobales(); setCargando(false);
   };
 
   const ajustarPorciones = async (id: string, actualesDisp: number, actualesTotales: number, ajuste: number) => {
     const nuevasDisp = actualesDisp + ajuste;
     const nuevasTotales = actualesTotales + ajuste; if (nuevasDisp < 0) return;
-    setMenuHoy(prev => prev.map(m => m.id === id ? { ...m, porciones_disponibles: nuevasDisp, porciones_totales: nuevasTotales } : m));
+    setTodosMenus(prev => prev.map(m => m.id === id ? { ...m, porciones_disponibles: nuevasDisp, porciones_totales: nuevasTotales } : m));
     await supabase.from('menu_comedor').update({ porciones_disponibles: nuevasDisp, porciones_totales: nuevasTotales }).eq('id', id);
   };
 
   const marcarComoCapturado = async (id: string) => { 
     await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', id);
-    cargarMenuDia(); 
+    cargarDatosGlobales(); 
   };
 
-  // NUEVA FUNCIÓN: Cancelar reserva desde el cajero y devolver porción
   const cancelarReservaCajero = async (id: string, menu_id: string, nombre_empleado: string) => {
     if (!confirm(`⚠️ ¿Seguro que deseas CANCELAR el apartado de ${nombre_empleado}? La porción será devuelta al menú.`)) return;
-    
     setCargando(true);
     const { error: errDelete } = await supabase.from('reservas_comedor').delete().eq('id', id);
-    
     if (!errDelete) {
       const { data: menu } = await supabase.from('menu_comedor').select('porciones_disponibles').eq('id', menu_id).single();
-      if (menu) {
-        await supabase.from('menu_comedor').update({ porciones_disponibles: menu.porciones_disponibles + 1 }).eq('id', menu_id);
-      }
-      await cargarMenuDia();
-    } else {
-      alert("❌ Error al cancelar la reserva.");
-    }
+      if (menu) { await supabase.from('menu_comedor').update({ porciones_disponibles: menu.porciones_disponibles + 1 }).eq('id', menu_id); }
+      await cargarDatosGlobales();
+    } else { alert("❌ Error al cancelar la reserva."); }
     setCargando(false);
   };
 
@@ -253,7 +264,7 @@ export default function PantallaCajero() {
 
           {activeTab === 'menu' && (
             <div className="p-8 animate-fade-in">
-              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-6 border-b pb-4">Dashboard Live: Pedidos y Menú</h3>
+              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-6 border-b pb-4">Dashboard Live: Pedidos y Menú (HOY)</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
                   <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 shadow-sm">
@@ -318,11 +329,26 @@ export default function PantallaCajero() {
 
           {activeTab === 'cocina' && (
             <div className="p-8 animate-fade-in">
-              <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-6 border-b pb-4">Monitor de Producción (Cocina)</h3>
+              <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h3 className="text-[#1A2744] font-bold text-sm sm:text-base">Monitor de Producción (Cocina)</h3>
+                
+                {/* SELECTOR DE FECHA PARA EL MONITOR */}
+                <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+                  <CalendarPlus size={16} className="text-[#6366F1]" />
+                  <input 
+                    type="date" 
+                    value={fechaMonitor} 
+                    onChange={(e) => setFechaMonitor(e.target.value)} 
+                    className="text-xs font-bold text-[#1A2744] uppercase outline-none bg-transparent"
+                    min={hoyReal}
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {menuHoy.map((m) => {
-                  const apartados = reservasHoy.filter((r) => r.menu_id === m.id && r.estado === 'APARTADO');
-                  const entregados = reservasHoy.filter((r) => r.menu_id === m.id && r.estado === 'CAPTURADO');
+                {menuMonitor.map((m) => {
+                  const apartados = reservasMonitor.filter((r) => r.menu_id === m.id && r.estado === 'APARTADO');
+                  const entregados = reservasMonitor.filter((r) => r.menu_id === m.id && r.estado === 'CAPTURADO');
                   return (
                     <div key={m.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col hover:shadow-md transition-shadow">
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{m.tipo_comida}</span>
@@ -344,7 +370,7 @@ export default function PantallaCajero() {
                     </div>
                   );
                 })}
-                {menuHoy.length === 0 && (<div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl"><ChefHat size={40} className="mb-4 opacity-50" /><p className="text-xs font-bold uppercase tracking-widest">No hay menú publicado hoy</p></div>)}
+                {menuMonitor.length === 0 && (<div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl"><ChefHat size={40} className="mb-4 opacity-50" /><p className="text-xs font-bold uppercase tracking-widest">No hay menú planificado para esta fecha</p></div>)}
               </div>
             </div>
           )}
