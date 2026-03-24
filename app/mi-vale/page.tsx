@@ -279,11 +279,10 @@ export default function MiValePage() {
                         <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest text-center py-2">{formatearFechaDia(fechaActiva)}</p>
                     )}
                     {menusParaMostrar.map((m, i) => (
-                      // Animación de cascada: delay diferente para cada tarjeta
                       <div 
                         key={m.id} 
                         className="bg-white p-5 rounded-3xl flex justify-between items-center shadow-lg border border-slate-100 transform active:scale-[0.98] transition-all animate-pop-in-cascade"
-                        style={{ animationDelay: `${i * 100}ms` }} // Delay dinámico
+                        style={{ animationDelay: `${i * 100}ms` }} 
                       >
                         <div className="flex-1 pr-4">
                           <span className={`text-[8px] font-black ${m.tipo_comida === 'ALMUERZO' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'} px-2.5 py-1 rounded-full mb-2.5 inline-block uppercase tracking-wider`}>
@@ -294,7 +293,6 @@ export default function MiValePage() {
                         </div>
                         
                         <div className="flex flex-col items-center gap-3 shrink-0">
-                          {/* Pulsa en rojo si quedan menos de 5 */}
                           <div className={`text-center flex flex-col items-center justify-center p-2 rounded-xl w-14 h-14 ${m.porciones_disponibles < 5 ? 'bg-red-50 animate-pulse text-red-600' : 'bg-indigo-50 text-[#6366F1]'}`}>
                             <p className="text-3xl font-black leading-none">{m.porciones_disponibles}</p>
                             <p className="text-[9px] font-bold uppercase mt-0.5 opacity-70">Disp.</p>
@@ -416,24 +414,23 @@ export default function MiValePage() {
 
       </div>
 
-      {/* CSS DE ANIMACIONES */}
+      {/* CSS DE ANIMACIONES CORREGIDO */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes popIn { 
           0% { opacity: 0; transform: scale(0.9); }
           70% { opacity: 1; transform: scale(1.02); }
-          100% { transform: scale(1); }
+          100% { opacity: 1; transform: scale(1); }
         }
         @keyframes popInCascade { 
           0% { opacity: 0; transform: translateY(15px) scale(0.95); }
           70% { opacity: 1; transform: translateY(-2px) scale(1.01); }
-          100% { transform: translateY(0) scale(1); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
         }
         .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
         .animate-pop-in { animation: popIn 0.4s ease-out forwards; }
-        /* Clase para la animación en cascada. El delay se pone inline en JS */
         .animate-pop-in-cascade { 
-          opacity: 0; /* Empieza oculto */
+          opacity: 0;
           animation: popInCascade 0.5s ease-out forwards; 
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
