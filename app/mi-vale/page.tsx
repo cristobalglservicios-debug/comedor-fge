@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X } from 'lucide-react';
-import bwipjs from 'bwip-js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -63,11 +62,13 @@ export default function MiValePage() {
     intentarAutoLogin();
   }, []);
 
-  // LÓGICA PARA GENERAR EL CÓDIGO LOCALMENTE (PUNTO #3)
+  // LÓGICA DE CARGA DINÁMICA DE BWIP-JS PARA EVITAR ERRORES DE BUILD
   useEffect(() => {
     if (estadoVista === 'ticket' && empleado && canvasRef.current) {
-      const timer = setTimeout(() => {
+      const generarQR = async () => {
         try {
+          // Importación dinámica solo en cliente
+          const bwipjs = (await import('bwip-js')).default;
           bwipjs.toCanvas(canvasRef.current!, {
             bcid: 'code128',
             text: empleado.nombre_completo,
@@ -78,9 +79,11 @@ export default function MiValePage() {
             backgroundcolor: 'ffffff'
           });
         } catch (e) {
-          console.error("Error generando código local:", e);
+          console.error("Error generando código:", e);
         }
-      }, 150);
+      };
+      
+      const timer = setTimeout(generarQR, 200);
       return () => clearTimeout(timer);
     }
   }, [estadoVista, empleado]);
@@ -157,7 +160,6 @@ export default function MiValePage() {
 
     setCargandoApartado(true);
 
-    // LLAMADA RPC (PUNTO #2: PROTECCIÓN CONTRA SOBREVENTA)
     const { error: rpcError } = await supabase.rpc('apartar_platillo', {
         p_menu_id: menuItem.id,
         p_nombre_empleado: empleado.nombre_completo,
@@ -274,7 +276,6 @@ export default function MiValePage() {
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
       
-      {/* CABECERA */}
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
         <div className="flex items-center gap-4">
           <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner shrink-0">
@@ -294,10 +295,8 @@ export default function MiValePage() {
 
       <div className="max-w-md mx-auto px-4 mt-6">
 
-        {/* 📋 VISTA DASHBOARD */}
         {estadoVista === 'dashboard' && empleado && (
           <div className="flex flex-col gap-5 anim-entrada-suave">
-            
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
                 <div className="w-8 h-8 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-2">
@@ -318,10 +317,8 @@ export default function MiValePage() {
               </div>
             </div>
 
-            {/* SECCIÓN MENÚ DEL COMEDOR CON AGRUPACIÓN DINÁMICA */}
             <div className="bg-gradient-to-br from-[#1A2744] to-[#25365d] rounded-[2rem] shadow-2xl p-6 border border-slate-700 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-10 translate-x-10 blur-3xl"></div>
-              
               <div className="flex items-center gap-3 mb-6 relative z-10">
                 <ChefHat className="text-[#C9A84C]" size={28}/>
                 <div>
@@ -330,7 +327,6 @@ export default function MiValePage() {
                 </div>
               </div>
 
-              {/* SELECTOR DE DÍAS */}
               {fechasDisponibles.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto pb-4 mb-4 no-scrollbar border-b border-white/10 relative z-10">
                   {fechasDisponibles.map(fecha => {
@@ -350,10 +346,7 @@ export default function MiValePage() {
                 </div>
               )}
 
-              {/* CONTENIDO DEL DÍA (AGRUPADO) */}
               <div key={fechaActiva} className="min-h-[150px] relative z-10">
-                
-                {/* LISTA DE RESERVAS DEL DÍA */}
                 {reservasDelDia.length > 0 && (
                   <div className="space-y-4 mb-6">
                     {reservasDelDia.map((reserva) => (
@@ -377,7 +370,6 @@ export default function MiValePage() {
                   </div>
                 )}
 
-                {/* MENÚ SIEMPRE VISIBLE */}
                 {menusParaMostrar.length === 0 ? (
                   <div className="flex flex-col items-center justify-center text-slate-400 py-10 border-2 border-dashed border-white/10 rounded-3xl bg-white/5">
                     <Calendar size={32} className="mb-3 opacity-40"/>
@@ -385,7 +377,6 @@ export default function MiValePage() {
                   </div>
                 ) : (
                   <div className="space-y-8">
-                    {/* SECCIÓN DESAYUNOS */}
                     {desayunos.length > 0 && (
                       <div>
                         <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
@@ -397,8 +388,6 @@ export default function MiValePage() {
                         </div>
                       </div>
                     )}
-
-                    {/* SECCIÓN ALMUERZOS */}
                     {almuerzos.length > 0 && (
                       <div>
                         <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
@@ -410,8 +399,6 @@ export default function MiValePage() {
                         </div>
                       </div>
                     )}
-
-                    {/* SECCIÓN CENAS */}
                     {cenas.length > 0 && (
                       <div>
                         <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
@@ -425,7 +412,6 @@ export default function MiValePage() {
                     )}
                   </div>
                 )}
-                
               </div>
             </div>
 
@@ -436,7 +422,6 @@ export default function MiValePage() {
               <QrCode size={20} className="text-[#C9A84C]" /> Generar QR de Acceso
             </button>
 
-            {/* HISTORIAL */}
             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 mb-6">
               <div className="flex items-center gap-2 mb-4">
                 <History size={16} className="text-slate-400" />
@@ -458,7 +443,6 @@ export default function MiValePage() {
           </div>
         )}
 
-        {/* VISTAS MANTENIDAS */}
         {estadoVista === 'busqueda' && (
           <form onSubmit={buscarEmpleadoManual} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 anim-entrada-suave">
             <h2 className="text-2xl font-black text-[#1A2744] mb-2 uppercase tracking-tight">Comedor FGE Yucatán</h2>
@@ -513,8 +497,7 @@ export default function MiValePage() {
                 </div>
                 <div className="w-full bg-[#F8FAFC] p-6 rounded-2xl flex flex-col items-center mb-6 border border-slate-50 relative overflow-hidden">
                    <div className="absolute inset-0 bg-indigo-50/50 anim-latido opacity-50"></div>
-                   
-                   {/* CANVAS CON image-rendering PARA NITIDEZ MÁXIMA */}
+                  
                   <canvas 
                     ref={canvasRef} 
                     style={{ imageRendering: 'pixelated' }} 
