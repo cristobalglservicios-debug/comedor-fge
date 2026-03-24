@@ -8,8 +8,21 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 type Tab = 'escanear' | 'menu' | 'cocina' | 'historial' | 'reportes';
+
+// FUNCIÓN PARA OBTENER LA FECHA REAL EN MÉRIDA
+const getHoyMerida = () => {
+  const fecha = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"}));
+  const y = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, '0');
+  const d = String(fecha.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 export default function PantallaCajero() {
   const router = useRouter();
@@ -30,8 +43,8 @@ export default function PantallaCajero() {
   const [todasReservas, setTodasReservas] = useState<any[]>([]);
   
   // ESTADOS DEL PLANIFICADOR Y MONITOR
-  const [fechaPlan, setFechaPlan] = useState(new Date().toISOString().split('T')[0]);
-  const [fechaMonitor, setFechaMonitor] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaPlan, setFechaPlan] = useState(getHoyMerida());
+  const [fechaMonitor, setFechaMonitor] = useState(getHoyMerida());
   const [textosPlan, setTextosPlan] = useState({ desayuno: '', almuerzo: '', cena: '' });
   const [porcionesPlan, setPorcionesPlan] = useState({ desayuno: 20, almuerzo: 30, cena: 20 });
 
@@ -69,13 +82,13 @@ export default function PantallaCajero() {
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/'); };
   
   const cargarDatosDia = async () => {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = getHoyMerida();
     const { data } = await supabase.from('historial_comedor').select('*').gte('fecha_hora', `${hoy}T00:00:00`).order('fecha_hora', { ascending: false });
     if (data) { setHistorial(data); setStats({ canjeadosHoy: data.length, transacciones: data.length }); }
   };
 
   const cargarDatosGlobales = async () => {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = getHoyMerida();
     const ahora = new Date().toISOString(); 
     // Traemos HOY y FUTUROS
     const { data: menus } = await supabase.from('menu_comedor').select('*').gte('fecha', hoy).lte('creado_en', ahora).order('fecha', { ascending: true });
@@ -102,7 +115,7 @@ export default function PantallaCajero() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // DERIVADOS PARA EL DÍA DE HOY (Escáner y Live)
-  const hoyReal = new Date().toISOString().split('T')[0];
+  const hoyReal = getHoyMerida();
   const menuHoy = todosMenus.filter(m => m.fecha === hoyReal);
   const reservasHoy = todasReservas.filter(r => r.menu_comedor?.fecha === hoyReal);
 
@@ -123,7 +136,6 @@ export default function PantallaCajero() {
       if (!errorUpdate) {
         await supabase.from('historial_comedor').insert({ nombre_empleado: empleado.nombre_completo, dependencia: empleado.dependencia });
         
-        // El escáner solo valida las reservas de HOY
         const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.estado === 'APARTADO');
         
         if (reservaExistente) {
@@ -213,7 +225,7 @@ export default function PantallaCajero() {
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
-        <div className="flex items-center gap-4"><div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center shrink-0"><img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" /></div><div><h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight">Punto de Canje</h1><p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest">{userEmail}</p></div></div>
+        <div className="flex items-center gap-4"><div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center shrink-0"><img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" /></div><div><h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight">Punto de Canje</h1><p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest uppercase">Fiscalía General</p></div></div>
         <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 transition-all border border-white/5"><LogOut size={18} /></button>
       </nav>
 
@@ -235,7 +247,7 @@ export default function PantallaCajero() {
           {activeTab === 'escanear' && (
             <div className="p-8 animate-fade-in">
               <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-4">Captura de Vale</h3>
-              <button type="button" onClick={() => setUsarCamara(!usarCamara)} className={`w-full mb-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-sm transition-all flex justify-center items-center gap-3 ${usarCamara ? 'bg-red-500 text-white' : 'bg-slate-100 text-[#1A2744] hover:bg-slate-200 border-2 border-slate-200'}`}><Camera size={20}/> {usarCamara ? 'Cerrar Cámara' : 'Abrir Cámara del Celular'}</button>
+              <button type="button" onClick={() => setUsarCamara(!usarCamara)} className={`w-full mb-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-sm transition-all flex justify-center items-center gap-3 ${usarCamara ? 'bg-red-50 text-white' : 'bg-slate-100 text-[#1A2744] hover:bg-slate-200 border-2 border-slate-200'}`}><Camera size={20}/> {usarCamara ? 'Cerrar Cámara' : 'Abrir Cámara del Celular'}</button>
               {usarCamara && (<div className="mb-8 p-4 border-2 border-dashed border-[#6366F1]/40 rounded-3xl bg-slate-50 animate-fade-in"><div id="reader" className="w-full max-w-sm mx-auto overflow-hidden rounded-xl"></div></div>)}
               <form onSubmit={procesarEscaneo} className="flex flex-col gap-4 relative">
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 relative">
@@ -330,9 +342,7 @@ export default function PantallaCajero() {
           {activeTab === 'cocina' && (
             <div className="p-8 animate-fade-in">
               <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h3 className="text-[#1A2744] font-bold text-sm sm:text-base">Monitor de Producción (Cocina)</h3>
-                
-                {/* SELECTOR DE FECHA PARA EL MONITOR */}
+                <h3 className="text-[#1A2744] font-bold text-sm sm:text-base">Monitor Cocina</h3>
                 <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
                   <CalendarPlus size={16} className="text-[#6366F1]" />
                   <input 
@@ -344,7 +354,6 @@ export default function PantallaCajero() {
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {menuMonitor.map((m) => {
                   const apartados = reservasMonitor.filter((r) => r.menu_id === m.id && r.estado === 'APARTADO');
@@ -370,7 +379,7 @@ export default function PantallaCajero() {
                     </div>
                   );
                 })}
-                {menuMonitor.length === 0 && (<div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl"><ChefHat size={40} className="mb-4 opacity-50" /><p className="text-xs font-bold uppercase tracking-widest">No hay menú planificado para esta fecha</p></div>)}
+                {menuMonitor.length === 0 && (<div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl"><ChefHat size={40} className="mb-4 opacity-50" /><p className="text-xs font-bold uppercase tracking-widest">Sin menú para esta fecha</p></div>)}
               </div>
             </div>
           )}

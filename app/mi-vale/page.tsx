@@ -12,6 +12,15 @@ const supabase = createClient(
 
 type EstadoVista = 'cargando' | 'busqueda' | 'dashboard' | 'animando' | 'ticket';
 
+// FUNCIÓN PARA OBTENER LA FECHA REAL EN MÉRIDA (EVITA SALTO DE DÍA A LAS 6PM)
+const getHoyMerida = () => {
+  const fecha = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"}));
+  const y = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, '0');
+  const d = String(fecha.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 export default function MiValePage() {
   const router = useRouter();
   const [nombreBusqueda, setNombreBusqueda] = useState('');
@@ -77,14 +86,13 @@ export default function MiValePage() {
       .from('historial_comedor')
       .select('*')
       .eq('nombre_empleado', nombre)
-      .lte('fecha_hora', ahora) 
       .order('fecha_hora', { ascending: false })
       .limit(5);
     if (data) setHistorial(data);
   };
 
   const cargarMenusYReservasFuturas = async (nombreEmpleado: string) => {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = getHoyMerida();
     const ahora = new Date().toISOString();
 
     const { data: menus } = await supabase
@@ -197,7 +205,7 @@ export default function MiValePage() {
     return date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
   };
 
-  const hoyCorto = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const hoyCorto = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"})).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const folioGenerado = `FGE-${empleado?.dependencia?.substring(0,3).toUpperCase() || 'EMP'}-00${empleado?.id || '1'}`;
 
   const menusParaMostrar = menusFuturos.filter(m => m.fecha === fechaActiva);
