@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -47,7 +47,7 @@ export default function MiValePage() {
   const [errorPassword, setErrorPassword] = useState('');
   const [cargandoPassword, setCargandoPassword] = useState(false);
 
-  // NUEVO ESTADO PARA MULTI-CANJE (RECOLECTORES)
+  // NUEVO ESTADO PARA MULTI-CANJE (RECOLECTORES) - SE MANTIENE INTEGRADO
   const [cantidadACanjear, setCantidadACanjear] = useState(1);
 
   useEffect(() => {
@@ -217,7 +217,7 @@ export default function MiValePage() {
   };
 
   const iniciarGeneracion = () => {
-    // Validación actualizada para raciones múltiples
+    // VALIDACIÓN INTEGRADA PARA RACIONES MÚLTIPLES
     if (empleado.tickets_restantes < cantidadACanjear) {
       alert(`🚫 No tienes suficientes vales (${empleado.tickets_restantes} disponibles).`);
       return;
@@ -262,12 +262,12 @@ export default function MiValePage() {
   const almuerzos = menusParaMostrar.filter(m => m.tipo_comida === 'ALMUERZO');
   const cenas = menusParaMostrar.filter(m => m.tipo_comida === 'CENA');
 
-  // Lógica de Banner de cierre
+  // LÓGICA DE BANNER DE CIERRE SEMANAL
   const diaSemana = getDiaSemanaMerida();
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // PROTOCOLO DE QR BLINDADO
+  // PROTOCOLO DE QR BLINDADO (NOMBRE|CANTIDAD)
   const valorQR = `${empleado?.nombre_completo}|${cantidadACanjear}`;
 
   if (estadoVista === 'cargando') {
@@ -397,7 +397,7 @@ export default function MiValePage() {
               </div>
             </div>
 
-            {/* NUEVO: SELECTOR DE CANTIDAD PARA RECOLECTORES */}
+            {/* SECCIÓN SELECTOR DE CANTIDAD PARA RECOLECTORES - INTEGRADA SIN RECORTE */}
             <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100">
                <div className="flex items-center gap-3 mb-6">
                  <div className="bg-[#1A2744] p-2 rounded-xl text-[#C9A84C]"><QrCode size={20}/></div>
@@ -616,8 +616,8 @@ export default function MiValePage() {
                     />
                   </div>
                   
-                  <div className="relative z-10 bg-[#1A2744] text-[#C9A84C] px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-widest mt-4 shadow-lg animate-bounce">
-                    Válido por {cantidadACanjear} raciones
+                  <div className="relative z-10 bg-[#1A2744] text-[#C9A84C] px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-widest mt-4 shadow-lg animate-bounce flex items-center gap-2">
+                    <Layers size={14}/> {cantidadACanjear} RACIONES
                   </div>
 
                   <p className="text-slate-500 text-[10px] font-bold mt-4 tracking-widest uppercase relative z-10">Folio: {folioGenerado}</p>
