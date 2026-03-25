@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -19,6 +19,11 @@ const getHoyMerida = () => {
   const m = String(fecha.getMonth() + 1).padStart(2, '0');
   const d = String(fecha.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+const getDiaSemanaMerida = () => {
+  const fecha = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"}));
+  return fecha.getDay(); 
 };
 
 export default function MiValePage() {
@@ -37,11 +42,13 @@ export default function MiValePage() {
   const [fechaActiva, setFechaActiva] = useState<string>('');
   const [cargandoApartado, setCargandoApartado] = useState(false);
 
-  // NUEVOS ESTADOS PARA CAMBIO DE CONTRASEÑA
   const [nuevaPassword, setNuevaPassword] = useState('');
   const [confirmarPassword, setConfirmarPassword] = useState('');
   const [errorPassword, setErrorPassword] = useState('');
   const [cargandoPassword, setCargandoPassword] = useState(false);
+
+  // NUEVO ESTADO PARA MULTI-CANJE (RECOLECTORES)
+  const [cantidadACanjear, setCantidadACanjear] = useState(1);
 
   useEffect(() => {
     const intentarAutoLogin = async () => {
@@ -52,7 +59,6 @@ export default function MiValePage() {
         return;
       }
 
-      // VALIDACIÓN CRÍTICA: SI LA SESIÓN FUE INICIADA CON LA CLAVE GENÉRICA, BLOQUEAR
       const debeCambiar = localStorage.getItem('debe_cambiar_password_fge') === 'true';
       
       const emailPrefijo = session.user.email.split('@')[0].replace(/\./g, ' ');
@@ -100,7 +106,6 @@ export default function MiValePage() {
 
     setCargandoPassword(true);
     
-    // ACTUALIZA LA CONTRASEÑA EN SUPABASE AUTH DIRECTAMENTE
     const { error } = await supabase.auth.updateUser({
       password: nuevaPassword
     });
@@ -111,7 +116,6 @@ export default function MiValePage() {
       return;
     }
 
-    // SI TIENE ÉXITO, QUITAMOS EL BLOQUEO Y ENTRAMOS AL DASHBOARD
     localStorage.removeItem('debe_cambiar_password_fge');
     cargarHistorialReciente(empleado.nombre_completo);
     await cargarMenusYReservasFuturas(empleado.nombre_completo);
@@ -213,8 +217,9 @@ export default function MiValePage() {
   };
 
   const iniciarGeneracion = () => {
-    if (empleado.tickets_restantes <= 0) {
-      alert("🚫 Lo sentimos, ya no tienes vales disponibles para hoy.");
+    // Validación actualizada para raciones múltiples
+    if (empleado.tickets_restantes < cantidadACanjear) {
+      alert(`🚫 No tienes suficientes vales (${empleado.tickets_restantes} disponibles).`);
       return;
     }
     setEstadoVista('animando');
@@ -256,6 +261,14 @@ export default function MiValePage() {
   const desayunos = menusParaMostrar.filter(m => m.tipo_comida === 'DESAYUNO');
   const almuerzos = menusParaMostrar.filter(m => m.tipo_comida === 'ALMUERZO');
   const cenas = menusParaMostrar.filter(m => m.tipo_comida === 'CENA');
+
+  // Lógica de Banner de cierre
+  const diaSemana = getDiaSemanaMerida();
+  const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
+  const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
+
+  // PROTOCOLO DE QR BLINDADO
+  const valorQR = `${empleado?.nombre_completo}|${cantidadACanjear}`;
 
   if (estadoVista === 'cargando') {
     return <div className="min-h-screen bg-[#F0F3F6] flex items-center justify-center font-bold text-slate-400">Verificando acceso...</div>;
@@ -309,7 +322,6 @@ export default function MiValePage() {
 
       <div className="max-w-md mx-auto px-4 mt-6">
 
-        {/* NUEVA VISTA DE CAMBIO DE CONTRASEÑA */}
         {estadoVista === 'cambiar_password' && empleado && (
           <form onSubmit={actualizarPasswordUsuario} className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 anim-entrada-suave text-center">
             <div className="w-16 h-16 bg-amber-50 text-[#C9A84C] rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
@@ -351,6 +363,20 @@ export default function MiValePage() {
         {estadoVista === 'dashboard' && empleado && (
           <div className="flex flex-col gap-5 anim-entrada-suave">
             
+            {mostrarBannerCierre && (
+              <div className="bg-red-50 border border-red-200 p-4 rounded-3xl shadow-sm flex items-start gap-3 anim-latido">
+                <div className="bg-red-100 text-red-600 p-2 rounded-full shrink-0 mt-0.5">
+                  <AlertTriangle size={18} />
+                </div>
+                <div>
+                  <h4 className="text-red-800 font-black text-xs uppercase tracking-wider mb-1">¡Cierre de Semana!</h4>
+                  <p className="text-red-600 text-[10px] font-bold leading-relaxed">
+                    Aún te quedan <span className="text-red-800 text-xs font-black bg-red-100 px-1 rounded">{empleado.tickets_restantes} vales</span>. Recuerda apartar tu comida. Los vales no son acumulables y tu saldo se reiniciará el domingo.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
                 <div className="w-8 h-8 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-2">
@@ -369,6 +395,43 @@ export default function MiValePage() {
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Disponibles</p>
                 </div>
               </div>
+            </div>
+
+            {/* NUEVO: SELECTOR DE CANTIDAD PARA RECOLECTORES */}
+            <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100">
+               <div className="flex items-center gap-3 mb-6">
+                 <div className="bg-[#1A2744] p-2 rounded-xl text-[#C9A84C]"><QrCode size={20}/></div>
+                 <div>
+                   <h3 className="text-[#1A2744] font-black text-xs uppercase tracking-tight">Canje de Raciones</h3>
+                   <p className="text-slate-400 text-[9px] font-bold uppercase">Selecciona cuántas raciones retirarás</p>
+                 </div>
+               </div>
+
+               <div className="flex items-center justify-between bg-slate-50 p-4 rounded-3xl border border-slate-100 mb-6">
+                  <button 
+                    onClick={() => setCantidadACanjear(Math.max(1, cantidadACanjear - 1))}
+                    className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-[#1A2744] shadow-sm active:scale-90 transition-transform"
+                  >
+                    <Minus size={20} />
+                  </button>
+                  <div className="text-center">
+                    <span className="text-4xl font-black text-[#1A2744]">{cantidadACanjear}</span>
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Unidades</p>
+                  </div>
+                  <button 
+                    onClick={() => setCantidadACanjear(Math.min(empleado.tickets_restantes, cantidadACanjear + 1))}
+                    className="w-12 h-12 bg-[#C9A84C] rounded-2xl flex items-center justify-center text-[#1A2744] shadow-sm active:scale-90 transition-transform"
+                  >
+                    <Plus size={20} />
+                  </button>
+               </div>
+
+               <button 
+                onClick={iniciarGeneracion}
+                className="w-full bg-[#1A2744] text-white py-5 rounded-[1.5rem] font-black uppercase text-[11px] tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 transform hover:-translate-y-0.5"
+              >
+                Generar Vale Digital <Check size={16} className="text-[#C9A84C]" />
+              </button>
             </div>
 
             <div className="bg-gradient-to-br from-[#1A2744] to-[#25365d] rounded-[2rem] shadow-2xl p-6 border border-slate-700 relative overflow-hidden">
@@ -470,16 +533,8 @@ export default function MiValePage() {
                     )}
                   </div>
                 )}
-                
               </div>
             </div>
-
-            <button 
-              onClick={iniciarGeneracion}
-              className="w-full bg-[#1A2744] text-white hover:bg-black py-5 rounded-3xl font-black uppercase text-sm transition-all shadow-xl flex justify-center items-center gap-3 active:scale-95 transform hover:-translate-y-0.5"
-            >
-              <QrCode size={20} className="text-[#C9A84C]" /> Generar QR de Acceso
-            </button>
 
             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 mb-6">
               <div className="flex items-center gap-2 mb-4">
@@ -517,9 +572,9 @@ export default function MiValePage() {
             <h3 className="text-lg font-bold text-[#1A2744] mb-8 uppercase tracking-widest">Generando...</h3>
             <div className="w-full flex flex-col gap-4 mb-8">
               <PasoCheck visible={pasoAnimacion >= 1} texto="Verificando identidad..." completed={pasoAnimacion > 1} />
-              <PasoCheck visible={pasoAnimacion >= 2} texto="Comprobando cuota..." completed={pasoAnimacion > 2} />
-              <PasoCheck visible={pasoAnimacion >= 3} texto="Validando fecha..." completed={pasoAnimacion > 3} />
-              <PasoCheck visible={pasoAnimacion >= 4} texto="Generando QR..." completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
+              <PasoCheck visible={pasoAnimacion >= 2} texto={`Validando ${cantidadACanjear} raciones...`} completed={pasoAnimacion > 2} />
+              <PasoCheck visible={pasoAnimacion >= 3} texto="Firmando Vale Digital..." completed={pasoAnimacion > 3} />
+              <PasoCheck visible={pasoAnimacion >= 4} texto="Generando QR Seguro..." completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
               <PasoCheck visible={pasoAnimacion >= 5} texto="¡Vale generado!" completed={pasoAnimacion >= 5} />
             </div>
           </div>
@@ -550,23 +605,27 @@ export default function MiValePage() {
                   
                   <div className="relative z-10 w-full flex justify-center bg-white p-2 rounded-xl">
                     <Barcode 
-                      value={empleado.nombre_completo} 
+                      value={valorQR} 
                       format="CODE128"
                       width={2}
                       height={60}
-                      displayValue={true}
+                      displayValue={false}
                       textAlign="center"
                       background="#ffffff"
                       lineColor="#000000"
                     />
                   </div>
                   
-                  <p className="text-slate-500 text-[10px] font-bold mt-3 tracking-widest uppercase relative z-10">Folio: {folioGenerado}</p>
+                  <div className="relative z-10 bg-[#1A2744] text-[#C9A84C] px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-widest mt-4 shadow-lg animate-bounce">
+                    Válido por {cantidadACanjear} raciones
+                  </div>
+
+                  <p className="text-slate-500 text-[10px] font-bold mt-4 tracking-widest uppercase relative z-10">Folio: {folioGenerado}</p>
                 </div>
                 <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-2xl text-center font-black text-[11px] uppercase tracking-widest border border-emerald-100 anim-latido">✓ Escanea en Caja</div>
               </div>
             </div>
-            <button onClick={() => setEstadoVista('dashboard')} className="bg-[#1A2744]/10 text-[#1A2744] px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest mt-4 active:scale-95 transition-all">Regresar</button>
+            <button onClick={() => { setEstadoVista('dashboard'); setCantidadACanjear(1); }} className="bg-[#1A2744]/10 text-[#1A2744] px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest mt-4 active:scale-95 transition-all">Finalizar y Regresar</button>
           </div>
         )}
 
