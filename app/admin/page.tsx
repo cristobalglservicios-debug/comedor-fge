@@ -14,6 +14,32 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// LÓGICA DE FECHAS PARA PROGRAMACIÓN
+const getLunesOpciones = () => {
+  const hoy = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"}));
+  const dia = hoy.getDay();
+  const dif = hoy.getDate() - dia + (dia === 0 ? -6 : 1); 
+  const lunesActual = new Date(hoy.setDate(dif));
+  
+  const formatea = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dStr = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dStr}`;
+  };
+
+  const l1 = new Date(lunesActual); l1.setDate(l1.getDate() + 7);
+  const l2 = new Date(lunesActual); l2.setDate(l2.getDate() + 14);
+  const l3 = new Date(lunesActual); l3.setDate(l3.getDate() + 21);
+
+  return [
+    { label: 'Semana Actual (Aplica de Inmediato)', value: 'actual' },
+    { label: `Próxima Semana (Lunes ${formatea(l1)})`, value: formatea(l1) },
+    { label: `En 2 Semanas (Lunes ${formatea(l2)})`, value: formatea(l2) },
+    { label: `En 3 Semanas (Lunes ${formatea(l3)})`, value: formatea(l3) }
+  ];
+};
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('cuotas');
@@ -30,9 +56,13 @@ export default function AdminDashboard() {
   
   const [empleadoEdit, setEmpleadoEdit] = useState<any>(null);
   const [nuevaPass, setNuevaPass] = useState('');
-  
   const [modalNuevo, setModalNuevo] = useState(false);
   const [nuevoEmp, setNuevoEmp] = useState({ nombre: '', dependencia: '', cuota: 1 });
+
+  // NUEVOS ESTADOS PARA PROGRAMACIÓN DE EXCEL
+  const [modalProgramar, setModalProgramar] = useState(false);
+  const [datosPendientesExcel, setDatosPendientesExcel] = useState<any[]>([]);
+  const [semanaDestino, setSemanaDestino] = useState('actual');
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -59,7 +89,6 @@ export default function AdminDashboard() {
   }, [router]);
 
   const cargarDatosGenerales = async () => {
-    // Carga Empleados
     const { data: dataEmpleados } = await supabase.from('perfiles').select('*').order('nombre_completo', { ascending: true });
     if (dataEmpleados) {
       setEmpleados(dataEmpleados);
@@ -71,16 +100,13 @@ export default function AdminDashboard() {
       });
       setStats({ total: totalAsignados, canjeados: totalCanjeados, disponibles: totalAsignados - totalCanjeados, dependencias: dependenciasUnicas });
     }
-    // Carga Historial Comedor
     const { data: dataHistorial } = await supabase.from('historial_comedor').select('*').order('fecha_hora', { ascending: false });
     if (dataHistorial) setHistorial(dataHistorial);
 
-    // Carga Logs Auditoría
     const { data: dataLogs } = await supabase.from('auditoria_logs').select('*').order('creado_en', { ascending: false }).limit(200);
     if (dataLogs) setAuditoriaLogs(dataLogs);
   };
 
-  // EXTRACTOR DE CORREO (Primer Nombre . Primer Apellido)
   const generarEmail = (nombreCompleto: string) => {
     const limpio = nombreCompleto.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const partes = limpio.split(/\s+/);
@@ -117,10 +143,7 @@ export default function AdminDashboard() {
     };
     
     await supabase.from('perfiles').upsert(empData, { onConflict: 'nombre_completo' });
-    
-    // CREA EL USUARIO CON LA CONTRASEÑA UNIVERSAL
     await crearUsuarioAdmin(emailGen, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
-    
     await registrarLog(userEmail || 'Sistema', 'ALTA_MANUAL', `Agregó a ${empData.nombre_completo} (${nuevoEmp.cuota} vales)`);
     
     alert(`✅ Empleado agregado con acceso: ${emailGen}`);
@@ -152,6 +175,7 @@ export default function AdminDashboard() {
     if (res.success) { alert("✅ Contraseña actualizada"); setNuevaPass(''); } else { alert("❌ Error: " + res.error); }
   };
 
+  // 1. LEE EL EXCEL PERO LO DEJA EN PAUSA
   const procesarExcel = async (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -166,7 +190,6 @@ export default function AdminDashboard() {
 
         const dataRaw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-        let procesados = 0;
         let indexNombre = -1;
         let indexDependencia = -1;
         let indexCuotaDirecta = -1;
@@ -206,6 +229,7 @@ export default function AdminDashboard() {
         }
 
         let ultimaDependencia = 'GENERAL';
+        const empleadosExtraidos = [];
 
         for (let i = filaInicio; i < dataRaw.length; i++) {
           const fila = dataRaw[i];
@@ -234,36 +258,88 @@ export default function AdminDashboard() {
             totalValesCalculados = parseInt(String(fila[indexCuotaDirecta])) || 0;
           }
 
-          const emailGen = generarEmail(nombreLimpio);
-
-          const empData = {
+          empleadosExtraidos.push({
             nombre_completo: nombreLimpio,
             dependencia: ultimaDependencia,
             tickets_restantes: totalValesCalculados,
-            tickets_canjeado: 0,
-            email: emailGen
-          };
-
-          await supabase.from('perfiles').upsert(empData, { onConflict: 'nombre_completo' });
-          
-          // USA CONTRASEÑA UNIVERSAL POR DEFECTO
-          await crearUsuarioAdmin(empData.email, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
-          
-          procesados++;
+            emailGen: generarEmail(nombreLimpio)
+          });
         }
 
-        await registrarLog(userEmail || 'Sistema', 'CARGAR_EXCEL', `Actualizó nómina: ${procesados} empleados procesados`);
-        alert(`✅ Éxito: Se procesaron ${procesados} empleados correctamente.`);
+        setDatosPendientesExcel(empleadosExtraidos);
+        setModalProgramar(true);
+        setCargando(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+
       } catch (err) {
         console.error(err);
         alert("❌ Error interno al procesar el archivo. Revisa su formato.");
-      } finally {
-        cargarDatosGenerales();
         setCargando(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
       }
     };
     reader.readAsBinaryString(file);
+  };
+
+  // 2. EJECUTA LA CARGA SEGÚN LA SEMANA ELEGIDA
+  const confirmarCargaExcel = async () => {
+    setCargando(true);
+    let procesados = 0;
+    
+    try {
+      if (semanaDestino === 'actual') {
+        for (const empData of datosPendientesExcel) {
+          await supabase.from('perfiles').upsert({
+            nombre_completo: empData.nombre_completo,
+            dependencia: empData.dependencia,
+            tickets_restantes: empData.tickets_restantes,
+            tickets_canjeado: 0,
+            email: empData.emailGen
+          }, { onConflict: 'nombre_completo' });
+          
+          await crearUsuarioAdmin(empData.emailGen, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
+          procesados++;
+        }
+      } else {
+        const { data: perfilesActuales } = await supabase.from('perfiles').select('id, nombre_completo');
+        const mapaPerfiles = new Map(perfilesActuales?.map(p => [p.nombre_completo, p.id]) || []);
+
+        for (const empData of datosPendientesExcel) {
+          let empId = mapaPerfiles.get(empData.nombre_completo);
+
+          if (!empId) {
+            const { data: nuevoPerfil } = await supabase.from('perfiles').insert({
+              nombre_completo: empData.nombre_completo,
+              dependencia: empData.dependencia,
+              tickets_restantes: 0, 
+              tickets_canjeado: 0,
+              email: empData.emailGen
+            }).select('id').single();
+            
+            if (nuevoPerfil) {
+              empId = nuevoPerfil.id;
+              await crearUsuarioAdmin(empData.emailGen, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
+            }
+          }
+
+          if (empId) {
+            await supabase.from('cuotas_programadas').delete().match({ empleado_id: empId, fecha_lunes: semanaDestino });
+            await supabase.from('cuotas_programadas').insert({ empleado_id: empId, fecha_lunes: semanaDestino, cuota: empData.tickets_restantes });
+            procesados++;
+          }
+        }
+      }
+
+      await registrarLog(userEmail || 'Sistema', 'CARGAR_EXCEL', `Programó nómina: ${procesados} empleados (${semanaDestino === 'actual' ? 'Semana Actual' : semanaDestino})`);
+      alert(`✅ Éxito: Se programaron ${procesados} empleados para ${semanaDestino === 'actual' ? 'la semana actual' : 'el lunes ' + semanaDestino}.`);
+    } catch (err) {
+       console.error(err);
+       alert("❌ Error interno al programar cuotas.");
+    } finally {
+      setModalProgramar(false);
+      setDatosPendientesExcel([]);
+      cargarDatosGenerales();
+      setCargando(false);
+    }
   };
 
   const descargarAccesos = () => {
@@ -512,6 +588,37 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* MODAL PROGRAMAR SEMANA */}
+      {modalProgramar && (
+        <div className="fixed inset-0 bg-[#1A2744]/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
+            <h2 className="text-xl font-black text-[#1A2744] uppercase mb-2">Programar Cuotas</h2>
+            <p className="text-xs text-slate-400 font-bold mb-6">Se detectaron {datosPendientesExcel.length} empleados en el Excel. ¿Cuándo se aplicarán estos vales?</p>
+            
+            <div className="space-y-4 mb-6">
+              <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Semana de Aplicación</label>
+              <select 
+                value={semanaDestino} 
+                onChange={e => setSemanaDestino(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold outline-none focus:border-[#C9A84C]"
+              >
+                {getLunesOpciones().map((op, i) => (
+                  <option key={i} value={op.value}>{op.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => { setModalProgramar(false); setDatosPendientesExcel([]); }} className="flex-1 py-3 text-xs font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Cancelar</button>
+              <button onClick={confirmarCargaExcel} disabled={cargando} className="flex-1 bg-[#1A2744] text-white py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors">
+                {cargando ? <Loader2 className="animate-spin" size={16} /> : 'Guardar Cuotas'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL GESTIONAR */}
       {empleadoEdit && (
         <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
@@ -535,6 +642,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* MODAL ALTA MANUAL */}
       {modalNuevo && (
         <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
