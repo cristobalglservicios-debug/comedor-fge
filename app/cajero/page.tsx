@@ -106,7 +106,11 @@ export default function PantallaCajero() {
     if (val.length >= 3) { const resultados = directorio.filter(p => p.nombre_completo.includes(val)).slice(0, 5); setSugerencias(resultados); } else { setSugerencias([]); }
   };
   
-  const seleccionarSugerencia = (nombre: string) => { setSugerencias([]); setInputLectura(nombre); procesarEscaneo(null, nombre); };
+  const seleccionarSugerencia = (nombre: string) => { 
+    setSugerencias([]); 
+    setInputLectura('');
+    setMensaje({ tipo: 'error', texto: 'DEBE ESCANEAR EL CÓDIGO QR. EL CANJE MANUAL POR NOMBRE ESTÁ DESACTIVADO.' });
+  };
   
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -115,46 +119,49 @@ export default function PantallaCajero() {
   const menuMonitor = todosMenus.filter(m => m.fecha === fechaMonitor);
   const reservasMonitor = todasReservas.filter(r => r.menu_comedor?.fecha === fechaMonitor);
 
-  // === LÓGICA DE PROCESAMIENTO ACTUALIZADA (CON BLINDAJE ANTI-REPETICIÓN) ===
   const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
     const rawInput = (codigoDirecto || inputLectura).trim().toUpperCase(); if (!rawInput) return;
 
-    let nombreEscaneado = rawInput;
-    let cantidadACanjear = 1;
-    let valeUID = '';
+    // BLINDAJE CRÍTICO: SOLO ACEPTAR CÓDIGOS CON PROTOCOLO (NOMBRE|CANTIDAD|TIMESTAMP|UID)
+    if (!rawInput.includes('|')) {
+      setMensaje({ tipo: 'error', texto: 'ENTRADA MANUAL RECHAZADA. SOLO SE PERMITEN ESCANEOS DE QR VÁLIDOS.' });
+      setInputLectura('');
+      return;
+    }
 
-    // Detectar raciones múltiples e ID único (FORMATO: NOMBRE|CANTIDAD|TIMESTAMP|UID)
-    if (rawInput.includes('|')) {
-      const partes = rawInput.split('|');
-      nombreEscaneado = partes[0];
-      cantidadACanjear = parseInt(partes[1]) || 1;
-      valeUID = partes[3] || ''; // Recuperamos el UID generado por la app del empleado
+    const partes = rawInput.split('|');
+    const nombreEscaneado = partes[0];
+    const cantidadACanjear = parseInt(partes[1]) || 1;
+    const valeUID = partes[3] || '';
+
+    if (!valeUID) {
+      setMensaje({ tipo: 'error', texto: 'FORMATO DE QR INVÁLIDO O SIN TOKEN DE SEGURIDAD.' });
+      setInputLectura('');
+      return;
     }
 
     setSugerencias([]); setCargando(true); setMensaje({ tipo: null, texto: '' });
 
-    // 1. VALIDACIÓN CRÍTICA: ¿EL VALE YA FUE ESCANEADO?
-    if (valeUID) {
-      const { data: yaQuemado } = await supabase.from('vales_quemados').select('id').eq('id', valeUID).maybeSingle();
-      if (yaQuemado) {
-        setMensaje({ tipo: 'quemado', texto: '¡ERROR! ESTE CÓDIGO QR YA FUE UTILIZADO ANTERIORMENTE.' });
-        setCargando(false); setInputLectura(''); return;
-      }
+    // 1. VALIDACIÓN ANTI-REPETICIÓN: ¿EL VALE YA FUE ESCANEADO?
+    const { data: yaQuemado } = await supabase.from('vales_quemados').select('id').eq('id', valeUID).maybeSingle();
+    if (yaQuemado) {
+      setMensaje({ tipo: 'quemado', texto: 'ESTE CÓDIGO QR YA FUE UTILIZADO. NO SE PUEDE CANJEAR DOS VECES.' });
+      setCargando(false); setInputLectura(''); return;
     }
 
     // 2. BUSCAR EMPLEADO Y SALDO
     const { data: empleado } = await supabase.from('perfiles').select('*').eq('nombre_completo', nombreEscaneado).maybeSingle();
 
     if (!empleado) { 
-      setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ: ${nombreEscaneado}` }); 
+      setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ EL PERFIL: ${nombreEscaneado}` }); 
     } 
     else if (empleado.tickets_restantes < cantidadACanjear) { 
-      setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} SALDO INSUFICIENTE PARA ${cantidadACanjear} RACIONES.` }); 
+      setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} NO TIENE SALDO PARA ${cantidadACanjear} RACIONES.` }); 
     } 
     else {
-      // Registrar el UID como cobrado de inmediato para bloquear intentos simultáneos
-      if (valeUID) await supabase.from('vales_quemados').insert({ id: valeUID });
+      // Registrar el UID para invalidar el código permanentemente
+      await supabase.from('vales_quemados').insert({ id: valeUID });
 
       const { error: errorUpdate } = await supabase.from('perfiles').update({ 
         tickets_restantes: empleado.tickets_restantes - cantidadACanjear, 
@@ -174,7 +181,7 @@ export default function PantallaCajero() {
         }
 
         const textoExito = cantidadACanjear > 1 
-          ? `¡CANJE MÚLTIPLE OK! (${cantidadACanjear} RACIONES)` 
+          ? `CANJE MÚLTIPLE OK (${cantidadACanjear} RACIONES)` 
           : '¡VALE CANJEADO CON ÉXITO!';
 
         setMensaje({ 
@@ -189,7 +196,7 @@ export default function PantallaCajero() {
         await cargarDatosGlobales();
         setDirectorio(prev => prev.map(p => p.nombre_completo === empleado.nombre_completo ? { ...p, tickets_restantes: p.tickets_restantes - cantidadACanjear } : p));
       } else { 
-        setMensaje({ tipo: 'error', texto: 'ERROR AL ACTUALIZAR EN BASE DE DATOS.' }); 
+        setMensaje({ tipo: 'error', texto: 'ERROR TÉCNICO AL ACTUALIZAR SALDO.' }); 
       }
     }
     setCargando(false);
@@ -295,14 +302,14 @@ export default function PantallaCajero() {
               <form onSubmit={procesarEscaneo} className="flex flex-col gap-4 relative">
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 relative">
                   <div className="flex-1 relative">
-                    <input ref={inputRef} type="text" value={inputLectura} onChange={manejarInput} className="w-full p-4 pl-12 border-2 border-[#6366F1]/40 rounded-2xl text-lg font-bold outline-none focus:border-[#6366F1] transition-colors uppercase tracking-widest" placeholder="Nombre o Código..." autoFocus />
+                    <input ref={inputRef} type="text" value={inputLectura} onChange={manejarInput} className="w-full p-4 pl-12 border-2 border-[#6366F1]/40 rounded-2xl text-lg font-bold outline-none focus:border-[#6366F1] transition-colors uppercase tracking-widest" placeholder="Escanee QR..." autoFocus />
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     {sugerencias.length > 0 && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100">
                         {sugerencias.map((s, i) => (
                           <div key={i} onClick={() => seleccionarSugerencia(s.nombre_completo)} className="p-4 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors">
                             <div><p className="font-black text-sm text-[#1A2744] uppercase">{s.nombre_completo}</p><p className="text-[10px] font-bold text-slate-400 uppercase">{s.dependencia}</p></div>
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${s.tickets_restantes > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>{s.tickets_restantes} Vales</span>
+                            <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Saldo Info</span>
                           </div>
                         ))}
                       </div>
@@ -311,10 +318,9 @@ export default function PantallaCajero() {
                   <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all shrink-0">{cargando ? <Loader2 className="animate-spin" size={20} /> : 'Validar'}</button>
                 </div>
               </form>
-              <p className="text-slate-400 text-[10px] mt-3 mb-8 text-center sm:text-left">Si la cámara falla, teclea el nombre y selecciónalo de la lista.</p>
               
               {mensaje.tipo === 'exito' && (
-                <div className="bg-emerald-50 border-2 border-emerald-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in relative overflow-hidden">
+                <div className="bg-emerald-50 border-2 border-emerald-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in relative overflow-hidden mt-6">
                   {mensaje.cantidad && mensaje.cantidad > 1 && (
                     <div className="absolute top-4 right-4 bg-emerald-500 text-white px-4 py-2 rounded-2xl font-black text-xs shadow-lg flex items-center gap-2 animate-bounce">
                       <Layers size={14}/> {mensaje.cantidad} RACIONES
@@ -328,14 +334,14 @@ export default function PantallaCajero() {
               )}
 
               {mensaje.tipo === 'quemado' && (
-                <div className="bg-red-50 border-2 border-red-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in">
+                <div className="bg-red-50 border-2 border-red-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in mt-6">
                   <AlertOctagon size={48} className="text-red-500 mb-4" />
-                  <h2 className="text-xl sm:text-2xl font-black text-red-800 uppercase mb-2">VALE DUPLICADO</h2>
+                  <h2 className="text-xl sm:text-2xl font-black text-red-800 uppercase mb-2">FRAUDE DETECTADO</h2>
                   <p className="text-red-600 font-bold text-xs uppercase px-8 leading-relaxed text-center">{mensaje.texto}</p>
                 </div>
               )}
 
-              {mensaje.tipo === 'error' && (<div className="bg-red-50 border-2 border-red-200 rounded-3xl p-6 text-red-600 font-black text-center animate-fade-in uppercase">❌ {mensaje.texto}</div>)}
+              {mensaje.tipo === 'error' && (<div className="bg-red-50 border-2 border-red-200 rounded-3xl p-6 text-red-600 font-black text-center animate-fade-in uppercase mt-6">❌ {mensaje.texto}</div>)}
             </div>
           )}
 
@@ -363,7 +369,6 @@ export default function PantallaCajero() {
                         <button onClick={() => eliminarPlatillo(m.id, m.platillo)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-1" title="Eliminar Platillo"><Trash2 size={16} /></button>
                       </div>
                     ))}
-                    {todosMenus.filter(m => m.fecha === hoyReal).length === 0 && <p className="text-[10px] text-slate-400 text-center py-4 border border-dashed rounded-xl">Sin menú publicado hoy.</p>}
                   </div>
                 </div>
 
@@ -438,7 +443,6 @@ export default function PantallaCajero() {
                     </div>
                   );
                 })}
-                {menuMonitor.length === 0 && (<div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl"><ChefHat size={40} className="mb-4 opacity-50" /><p className="text-xs font-bold uppercase tracking-widest">Sin menú para esta fecha</p></div>)}
               </div>
             </div>
           )}
