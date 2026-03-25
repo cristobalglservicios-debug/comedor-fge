@@ -32,10 +32,10 @@ export async function registrarLog(adminEmail: string, accion: string, detalle: 
 }
 
 // 2. FUNCIONES EXISTENTES (AHORA CON REGISTRO INVISIBLE Y PAGINACIÓN SEGURA)
-export async function crearUsuarioAdmin(email: string, nombre: string, adminEmail: string = 'Sistema') {
+export async function crearUsuarioAdmin(email: string, nombre: string, adminEmail: string = 'Sistema', passwordInicial: string = 'FGE2026*') {
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email: email,
-    password: 'FGE2026*', 
+    password: passwordInicial, 
     email_confirm: true,
     user_metadata: { full_name: nombre }
   })
@@ -46,12 +46,12 @@ export async function crearUsuarioAdmin(email: string, nombre: string, adminEmai
       
       if (user) {
         await supabaseAdmin.auth.admin.updateUserById(user.id, { 
-          password: 'FGE2026*',
+          password: passwordInicial,
           email_confirm: true 
         });
-        await registrarLog(adminEmail, 'RESETEO_ACCESO', `Fuerza clave FGE2026* y activación para: ${email}`);
+        await registrarLog(adminEmail, 'RESETEO_ACCESO', `Fuerza clave ${passwordInicial} y activación para: ${email}`);
       }
-      return { success: true, msg: 'Cuenta reseteada y actualizada a FGE2026*' };
+      return { success: true, msg: `Cuenta reseteada y actualizada a ${passwordInicial}` };
     }
     return { success: false, error: error.message };
   }
