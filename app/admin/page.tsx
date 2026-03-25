@@ -80,17 +80,47 @@ export default function AdminDashboard() {
     if (dataLogs) setAuditoriaLogs(dataLogs);
   };
 
-  const generarEmail = (nombre: string) => {
-    return nombre.toLowerCase().trim().replace(/\s+/g, '.').normalize("NFD").replace(/[\u0300-\u036f]/g, "") + "@fge.gob.mx";
+  // EXTRACTOR DE CORREO (Primer Nombre . Primer Apellido)
+  const generarEmail = (nombreCompleto: string) => {
+    const limpio = nombreCompleto.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const partes = limpio.split(/\s+/);
+    
+    let nombre = "";
+    let apellido = "";
+
+    if (partes.length >= 3) {
+      nombre = partes[0];
+      apellido = partes[partes.length - 2]; 
+    } else if (partes.length === 2) {
+      nombre = partes[0];
+      apellido = partes[1];
+    } else {
+      nombre = partes[0];
+      apellido = "";
+    }
+
+    const baseEmail = apellido ? `${nombre}.${apellido}` : nombre;
+    return `${baseEmail}@fge.gob.mx`;
   };
 
   const guardarNuevoEmpleado = async () => {
     if (nuevoEmp.nombre.length < 5) return alert("Ingresa el nombre completo");
     setCargando(true);
     const emailGen = generarEmail(nuevoEmp.nombre);
-    const empData = { nombre_completo: nuevoEmp.nombre.toUpperCase().trim(), dependencia: nuevoEmp.dependencia.toUpperCase().trim() || 'GENERAL', tickets_restantes: nuevoEmp.cuota, tickets_canjeado: 0, email: emailGen };
+    
+    const empData = { 
+        nombre_completo: nuevoEmp.nombre.toUpperCase().trim(), 
+        dependencia: nuevoEmp.dependencia.toUpperCase().trim() || 'GENERAL', 
+        tickets_restantes: nuevoEmp.cuota, 
+        tickets_canjeado: 0, 
+        email: emailGen 
+    };
+    
     await supabase.from('perfiles').upsert(empData, { onConflict: 'nombre_completo' });
-    await crearUsuarioAdmin(emailGen, empData.nombre_completo, userEmail || 'Sistema');
+    
+    // CREA EL USUARIO CON LA CONTRASEÑA UNIVERSAL
+    await crearUsuarioAdmin(emailGen, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
+    
     await registrarLog(userEmail || 'Sistema', 'ALTA_MANUAL', `Agregó a ${empData.nombre_completo} (${nuevoEmp.cuota} vales)`);
     
     alert(`✅ Empleado agregado con acceso: ${emailGen}`);
@@ -122,7 +152,6 @@ export default function AdminDashboard() {
     if (res.success) { alert("✅ Contraseña actualizada"); setNuevaPass(''); } else { alert("❌ Error: " + res.error); }
   };
 
-  // NUEVO PARSER UNIVERSAL (Días o Cuota Directa + Prevención de Desplazamiento por celdas vacías)
   const procesarExcel = async (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -135,7 +164,6 @@ export default function AdminDashboard() {
         const wb = XLSX.read(bstr, { type: 'binary' });
         const ws = wb.Sheets[wb.SheetNames[0]];
 
-        // El parámetro defval: '' es crítico. Obliga a que las celdas vacías mantengan su lugar
         const dataRaw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
         let procesados = 0;
@@ -217,7 +245,10 @@ export default function AdminDashboard() {
           };
 
           await supabase.from('perfiles').upsert(empData, { onConflict: 'nombre_completo' });
-          await crearUsuarioAdmin(empData.email, empData.nombre_completo, userEmail || 'Sistema');
+          
+          // USA CONTRASEÑA UNIVERSAL POR DEFECTO
+          await crearUsuarioAdmin(empData.email, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
+          
           procesados++;
         }
 
@@ -481,7 +512,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* MODALES MANTENIDOS EXACTAMENTE IGUAL */}
       {empleadoEdit && (
         <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">

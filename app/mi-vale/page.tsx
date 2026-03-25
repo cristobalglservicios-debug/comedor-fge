@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -11,9 +11,8 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type EstadoVista = 'cargando' | 'busqueda' | 'dashboard' | 'animando' | 'ticket';
+type EstadoVista = 'cargando' | 'busqueda' | 'dashboard' | 'animando' | 'ticket' | 'cambiar_password';
 
-// FUNCIÓN PARA OBTENER LA FECHA REAL EN MÉRIDA (EVITA SALTO DE DÍA A LAS 6PM)
 const getHoyMerida = () => {
   const fecha = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"}));
   const y = fecha.getFullYear();
@@ -32,78 +31,92 @@ export default function MiValePage() {
   const [estadoVista, setEstadoVista] = useState<EstadoVista>('cargando');
   const [pasoAnimacion, setPasoAnimacion] = useState(0);
 
-  // ESTADOS MENÚ SEMANAL
   const [menusFuturos, setMenusFuturos] = useState<any[]>([]);
   const [misReservas, setMisReservas] = useState<any[]>([]);
   const [fechasDisponibles, setFechasDisponibles] = useState<string[]>([]);
   const [fechaActiva, setFechaActiva] = useState<string>('');
   const [cargandoApartado, setCargandoApartado] = useState(false);
 
+  // NUEVOS ESTADOS PARA CAMBIO DE CONTRASEÑA
+  const [nuevaPassword, setNuevaPassword] = useState('');
+  const [confirmarPassword, setConfirmarPassword] = useState('');
+  const [errorPassword, setErrorPassword] = useState('');
+  const [cargandoPassword, setCargandoPassword] = useState(false);
+
   useEffect(() => {
     const intentarAutoLogin = async () => {
-      // 1. BUSCAR EN MEMORIA LOCAL (Bypass del correo para evitar fallas)
-      const nombreGuardado = localStorage.getItem('fge_empleado_nombre');
-      
-      if (nombreGuardado) {
-        const { data } = await supabase
-          .from('perfiles')
-          .select('*')
-          .eq('nombre_completo', nombreGuardado)
-          .maybeSingle();
-
-        if (data) {
-          setEmpleado(data);
-          cargarHistorialReciente(data.nombre_completo);
-          await cargarMenusYReservasFuturas(data.nombre_completo);
-          setEstadoVista('dashboard');
-          return;
-        }
-      }
-
-      // 2. SI NO HAY MEMORIA, INTENTAR ADIVINAR POR CORREO
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.email) {
-        const emailPrefijo = session.user.email.split('@')[0].replace(/\./g, ' ');
-        const { data } = await supabase
-          .from('perfiles')
-          .select('*')
-          .ilike('nombre_completo', `%${emailPrefijo}%`)
-          .maybeSingle();
+      
+      if (!session?.user?.email) {
+        setEstadoVista('busqueda');
+        return;
+      }
 
-        if (data) {
-          localStorage.setItem('fge_empleado_nombre', data.nombre_completo); // Guardar para no volver a adivinar
-          setEmpleado(data);
+      // VALIDACIÓN CRÍTICA: SI LA SESIÓN FUE INICIADA CON LA CLAVE GENÉRICA, BLOQUEAR
+      const debeCambiar = localStorage.getItem('debe_cambiar_password_fge') === 'true';
+      
+      const emailPrefijo = session.user.email.split('@')[0].replace(/\./g, ' ');
+      const { data } = await supabase
+        .from('perfiles')
+        .select('*')
+        .ilike('nombre_completo', `%${emailPrefijo}%`)
+        .maybeSingle();
+
+      if (data) {
+        localStorage.setItem('fge_empleado_nombre', data.nombre_completo); 
+        setEmpleado(data);
+        
+        if (debeCambiar) {
+          setEstadoVista('cambiar_password');
+        } else {
           cargarHistorialReciente(data.nombre_completo);
           await cargarMenusYReservasFuturas(data.nombre_completo);
           setEstadoVista('dashboard');
-          return;
         }
+      } else {
+        setEstadoVista('busqueda');
       }
-      
-      // 3. SI TODO FALLA, MOSTRAR PANTALLA PARA QUE ESCRIBA SU NOMBRE
-      setEstadoVista('busqueda');
     };
     intentarAutoLogin();
   }, []);
 
   const buscarEmpleadoManual = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    setError('');
-    const { data, error: sbError } = await supabase
-      .from('perfiles')
-      .select('*')
-      .ilike('nombre_completo', `%${nombreBusqueda.trim().toUpperCase()}%`)
-      .maybeSingle();
+    setEstadoVista('dashboard');
+  };
 
-    if (sbError || !data) {
-      setError('No se encontró el empleado. Verifica tu nombre en nómina.');
-    } else {
-      localStorage.setItem('fge_empleado_nombre', data.nombre_completo); // Guardar permanentemente en celular
-      setEmpleado(data);
-      cargarHistorialReciente(data.nombre_completo);
-      await cargarMenusYReservasFuturas(data.nombre_completo);
-      setEstadoVista('dashboard');
+  const actualizarPasswordUsuario = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorPassword('');
+
+    if (nuevaPassword.length < 6) {
+      setErrorPassword("La contraseña debe tener al menos 6 caracteres.");
+      return;
     }
+    if (nuevaPassword !== confirmarPassword) {
+      setErrorPassword("Las contraseñas no coinciden.");
+      return;
+    }
+
+    setCargandoPassword(true);
+    
+    // ACTUALIZA LA CONTRASEÑA EN SUPABASE AUTH DIRECTAMENTE
+    const { error } = await supabase.auth.updateUser({
+      password: nuevaPassword
+    });
+
+    if (error) {
+      setErrorPassword(error.message);
+      setCargandoPassword(false);
+      return;
+    }
+
+    // SI TIENE ÉXITO, QUITAMOS EL BLOQUEO Y ENTRAMOS AL DASHBOARD
+    localStorage.removeItem('debe_cambiar_password_fge');
+    cargarHistorialReciente(empleado.nombre_completo);
+    await cargarMenusYReservasFuturas(empleado.nombre_completo);
+    setEstadoVista('dashboard');
+    setCargandoPassword(false);
   };
 
   const cargarHistorialReciente = async (nombre: string) => {
@@ -216,7 +229,8 @@ export default function MiValePage() {
   };
 
   const handleLogout = async () => {
-    localStorage.removeItem('fge_empleado_nombre'); // Limpiar memoria al cerrar sesión
+    localStorage.removeItem('fge_empleado_nombre'); 
+    localStorage.removeItem('debe_cambiar_password_fge');
     await supabase.auth.signOut();
     router.push('/');
   };
@@ -294,6 +308,45 @@ export default function MiValePage() {
       </nav>
 
       <div className="max-w-md mx-auto px-4 mt-6">
+
+        {/* NUEVA VISTA DE CAMBIO DE CONTRASEÑA */}
+        {estadoVista === 'cambiar_password' && empleado && (
+          <form onSubmit={actualizarPasswordUsuario} className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 anim-entrada-suave text-center">
+            <div className="w-16 h-16 bg-amber-50 text-[#C9A84C] rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <Lock size={32} />
+            </div>
+            <h2 className="text-2xl font-black text-[#1A2744] mb-2 uppercase tracking-tight">Seguridad FGE</h2>
+            <p className="text-slate-500 mb-6 text-xs font-medium">Por tu seguridad, debes crear una contraseña personal para acceder a tus vales de comida.</p>
+            
+            <div className="space-y-4 mb-6">
+              <input 
+                type="password" 
+                value={nuevaPassword}
+                onChange={(e) => setNuevaPassword(e.target.value)}
+                className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center font-bold text-slate-800 focus:border-[#C9A84C] outline-none transition-colors"
+                placeholder="Nueva Contraseña"
+                required
+              />
+              <input 
+                type="password" 
+                value={confirmarPassword}
+                onChange={(e) => setConfirmarPassword(e.target.value)}
+                className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center font-bold text-slate-800 focus:border-[#C9A84C] outline-none transition-colors"
+                placeholder="Confirmar Contraseña"
+                required
+              />
+            </div>
+            
+            <button 
+              type="submit" 
+              disabled={cargandoPassword}
+              className="w-full bg-[#1A2744] hover:bg-[#C9A84C] text-white py-4 rounded-xl font-black uppercase tracking-widest transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+            >
+              {cargandoPassword ? <Loader2 className="animate-spin" size={18}/> : 'Guardar y Continuar'}
+            </button>
+            {errorPassword && <p className="text-red-500 mt-4 text-center text-sm font-medium">{errorPassword}</p>}
+          </form>
+        )}
 
         {estadoVista === 'dashboard' && empleado && (
           <div className="flex flex-col gap-5 anim-entrada-suave">
@@ -452,16 +505,7 @@ export default function MiValePage() {
         {estadoVista === 'busqueda' && (
           <form onSubmit={buscarEmpleadoManual} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 anim-entrada-suave">
             <h2 className="text-2xl font-black text-[#1A2744] mb-2 uppercase tracking-tight">Comedor FGE Yucatán</h2>
-            <p className="text-slate-500 mb-6 text-sm">Ingresa tu nombre como aparece en nómina.</p>
-            <input 
-              type="text" 
-              value={nombreBusqueda}
-              onChange={(e) => setNombreBusqueda(e.target.value)}
-              className="w-full p-4 border-2 border-slate-100 rounded-2xl mb-4 uppercase font-bold text-slate-800 focus:border-[#C9A84C] outline-none transition-colors"
-              placeholder="Ej. JOSE PEREZ PEREZ"
-            />
-            <button type="submit" className="w-full bg-[#C9A84C] hover:bg-amber-500 text-[#1A2744] py-4 rounded-xl font-black uppercase tracking-widest transition-all shadow-md active:scale-95">Ver Mi Vale</button>
-            {error && <p className="text-red-500 mt-4 text-center text-sm font-medium uppercase text-xs">{error}</p>}
+            <p className="text-slate-500 mb-6 text-sm">Inicia sesión desde la pantalla principal para continuar.</p>
           </form>
         )}
 

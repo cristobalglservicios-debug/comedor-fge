@@ -33,6 +33,15 @@ export default function LoginScreen() {
       return;
     }
 
+    // === INTERCEPCIÓN DE SEGURIDAD ===
+    // Si entró con la clave universal, levantamos la bandera para forzar el cambio.
+    if (password === 'FGE2026*') {
+      localStorage.setItem('debe_cambiar_password_fge', 'true');
+    } else {
+      // Si ya tiene contraseña propia, limpiamos por si acaso
+      localStorage.removeItem('debe_cambiar_password_fge');
+    }
+
     if (data.user) {
       const userEmail = data.user.email?.toLowerCase() || '';
       
