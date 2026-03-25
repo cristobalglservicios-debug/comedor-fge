@@ -14,7 +14,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// LÓGICA DE FECHAS PARA PROGRAMACIÓN
 const getLunesOpciones = () => {
   const hoy = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"}));
   const dia = hoy.getDay();
@@ -46,6 +45,7 @@ export default function AdminDashboard() {
   const [historial, setHistorial] = useState<any[]>([]);
   const [empleados, setEmpleados] = useState<any[]>([]);
   const [auditoriaLogs, setAuditoriaLogs] = useState<any[]>([]);
+  const [cuotasProgramadas, setCuotasProgramadas] = useState<any[]>([]); // ESTADO NUEVO
   const [filtroNombre, setFiltroNombre] = useState('');
   const [stats, setStats] = useState({ total: 0, canjeados: 0, disponibles: 0, dependencias: 0 });
   const [cargando, setCargando] = useState(false);
@@ -59,7 +59,6 @@ export default function AdminDashboard() {
   const [modalNuevo, setModalNuevo] = useState(false);
   const [nuevoEmp, setNuevoEmp] = useState({ nombre: '', dependencia: '', cuota: 1 });
 
-  // NUEVOS ESTADOS PARA PROGRAMACIÓN DE EXCEL
   const [modalProgramar, setModalProgramar] = useState(false);
   const [datosPendientesExcel, setDatosPendientesExcel] = useState<any[]>([]);
   const [semanaDestino, setSemanaDestino] = useState('actual');
@@ -105,6 +104,10 @@ export default function AdminDashboard() {
 
     const { data: dataLogs } = await supabase.from('auditoria_logs').select('*').order('creado_en', { ascending: false }).limit(200);
     if (dataLogs) setAuditoriaLogs(dataLogs);
+
+    // NUEVO: CARGAR CUOTAS EN ESPERA
+    const { data: dataProg } = await supabase.from('cuotas_programadas').select('*');
+    if (dataProg) setCuotasProgramadas(dataProg);
   };
 
   const generarEmail = (nombreCompleto: string) => {
@@ -175,7 +178,6 @@ export default function AdminDashboard() {
     if (res.success) { alert("✅ Contraseña actualizada"); setNuevaPass(''); } else { alert("❌ Error: " + res.error); }
   };
 
-  // 1. LEE EL EXCEL PERO LO DEJA EN PAUSA
   const procesarExcel = async (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -280,7 +282,6 @@ export default function AdminDashboard() {
     reader.readAsBinaryString(file);
   };
 
-  // 2. EJECUTA LA CARGA SEGÚN LA SEMANA ELEGIDA
   const confirmarCargaExcel = async () => {
     setCargando(true);
     let procesados = 0;
@@ -495,23 +496,44 @@ export default function AdminDashboard() {
               <div className="overflow-x-auto border rounded-2xl max-h-[500px]">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 sticky top-0 text-[10px] uppercase font-bold border-b z-10">
-                    <tr><th className="p-4">Empleado</th><th className="p-4">Correo Institucional</th><th className="p-4 text-center">Cuota</th><th className="p-4 text-right">Acciones</th></tr>
+                    <tr>
+                      <th className="p-4">Empleado</th>
+                      <th className="p-4">Correo Institucional</th>
+                      <th className="p-4 text-center">Cuota Actual</th>
+                      <th className="p-4 text-center">Programado (Futuro)</th>
+                      <th className="p-4 text-right">Acciones</th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {empleadosFiltrados.map((emp, i) => (
-                      <tr key={i} className="hover:bg-slate-50">
-                        <td className="p-4 font-bold text-xs uppercase">{emp.nombre_completo}</td>
-                        <td className="p-4 text-[10px] text-blue-600 font-bold">{emp.email}</td>
-                        <td className="p-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes - 1)} className="w-6 h-6 rounded bg-slate-100 font-bold">-</button>
-                            <span className="font-black text-sm">{emp.tickets_restantes}</span>
-                            <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes + 1)} className="w-6 h-6 rounded bg-slate-100 font-bold">+</button>
-                          </div>
-                        </td>
-                        <td className="p-4 text-right"><button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 p-2 hover:text-[#C9A84C] transition-colors"><UserCog size={18}/></button></td>
-                      </tr>
-                    ))}
+                    {empleadosFiltrados.map((emp, i) => {
+                      const cuotaFutura = cuotasProgramadas.find(c => c.empleado_id === emp.id);
+                      return (
+                        <tr key={i} className="hover:bg-slate-50">
+                          <td className="p-4 font-bold text-xs uppercase">{emp.nombre_completo}</td>
+                          <td className="p-4 text-[10px] text-blue-600 font-bold">{emp.email}</td>
+                          <td className="p-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes - 1)} className="w-6 h-6 rounded bg-slate-100 font-bold">-</button>
+                              <span className="font-black text-sm">{emp.tickets_restantes}</span>
+                              <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes + 1)} className="w-6 h-6 rounded bg-slate-100 font-bold">+</button>
+                            </div>
+                          </td>
+                          <td className="p-4 text-center">
+                            {cuotaFutura ? (
+                              <div className="flex flex-col items-center">
+                                <span className="bg-blue-50 text-blue-600 border border-blue-100 px-2 py-1 rounded-md text-[10px] font-black uppercase shadow-sm">
+                                  {cuotaFutura.cuota} vales
+                                </span>
+                                <span className="text-slate-400 text-[8px] font-bold mt-1 uppercase">Lunes {cuotaFutura.fecha_lunes}</span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-300 text-[10px] font-bold">-</span>
+                            )}
+                          </td>
+                          <td className="p-4 text-right"><button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 p-2 hover:text-[#C9A84C] transition-colors"><UserCog size={18}/></button></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
