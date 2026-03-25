@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus, Layers, AlertOctagon } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus, Layers, AlertOctagon, KeyRound } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -44,6 +44,14 @@ export default function PantallaCajero() {
   const [fechaMonitor, setFechaMonitor] = useState(getHoyMerida());
   const [textosPlan, setTextosPlan] = useState({ desayuno: '', almuerzo: '', cena: '' });
   const [porcionesPlan, setPorcionesPlan] = useState({ desayuno: 20, almuerzo: 30, cena: 20 });
+
+  // ESTADOS PARA CANJE MANUAL DE EMERGENCIA
+  const [modalManual, setModalManual] = useState(false);
+  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<any>(null);
+  const [folioManual, setFolioManual] = useState('');
+  const [cantidadManual, setCantidadManual] = useState(1);
+
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const inicializarCajero = async () => {
@@ -106,13 +114,14 @@ export default function PantallaCajero() {
     if (val.length >= 3) { const resultados = directorio.filter(p => p.nombre_completo.includes(val)).slice(0, 5); setSugerencias(resultados); } else { setSugerencias([]); }
   };
   
-  const seleccionarSugerencia = (nombre: string) => { 
+  const seleccionarSugerencia = (emp: any) => { 
     setSugerencias([]); 
     setInputLectura('');
-    setMensaje({ tipo: 'error', texto: 'DEBE ESCANEAR EL CÓDIGO QR. EL CANJE MANUAL POR NOMBRE ESTÁ DESACTIVADO.' });
+    setEmpleadoSeleccionado(emp);
+    setCantidadManual(1);
+    setFolioManual('');
+    setModalManual(true); 
   };
-  
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const hoyReal = getHoyMerida();
   const reservasHoy = todasReservas.filter(r => r.menu_comedor?.fecha === hoyReal);
@@ -123,11 +132,9 @@ export default function PantallaCajero() {
     if (e) e.preventDefault();
     const rawInput = (codigoDirecto || inputLectura).trim().toUpperCase(); if (!rawInput) return;
 
-    // BLINDAJE CRÍTICO: SOLO ACEPTAR CÓDIGOS CON PROTOCOLO (NOMBRE|CANTIDAD|TIMESTAMP|UID)
     if (!rawInput.includes('|')) {
-      setMensaje({ tipo: 'error', texto: 'ENTRADA MANUAL RECHAZADA. SOLO SE PERMITEN ESCANEOS DE QR VÁLIDOS.' });
-      setInputLectura('');
-      return;
+      setMensaje({ tipo: 'error', texto: 'ERROR: ENTRADA MANUAL BLOQUEADA. SELECCIONE EL NOMBRE E INGRESE EL FOLIO DE SEGURIDAD.' });
+      setInputLectura(''); return;
     }
 
     const partes = rawInput.split('|');
@@ -135,72 +142,45 @@ export default function PantallaCajero() {
     const cantidadACanjear = parseInt(partes[1]) || 1;
     const valeUID = partes[3] || '';
 
-    if (!valeUID) {
-      setMensaje({ tipo: 'error', texto: 'FORMATO DE QR INVÁLIDO O SIN TOKEN DE SEGURIDAD.' });
-      setInputLectura('');
-      return;
+    ejecutarCanjeFinal(nombreEscaneado, cantidadACanjear, valeUID);
+  };
+
+  const ejecutarCanjeFinal = async (nombre: string, cantidad: number, uid: string) => {
+    setMensaje({ tipo: null, texto: '' }); setCargando(true);
+
+    if (!uid) {
+        setMensaje({ tipo: 'error', texto: 'FORMATO DE QR O FOLIO INVÁLIDO.' });
+        setCargando(false); return;
     }
 
-    setSugerencias([]); setCargando(true); setMensaje({ tipo: null, texto: '' });
-
-    // 1. VALIDACIÓN ANTI-REPETICIÓN: ¿EL VALE YA FUE ESCANEADO?
-    const { data: yaQuemado } = await supabase.from('vales_quemados').select('id').eq('id', valeUID).maybeSingle();
-    if (yaQuemado) {
-      setMensaje({ tipo: 'quemado', texto: 'ESTE CÓDIGO QR YA FUE UTILIZADO. NO SE PUEDE CANJEAR DOS VECES.' });
-      setCargando(false); setInputLectura(''); return;
+    const { data: yaCobrado } = await supabase.from('vales_quemados').select('id').eq('id', uid).maybeSingle();
+    if (yaCobrado) {
+      setMensaje({ tipo: 'quemado', texto: '¡FRAUDE DETECTADO! ESTE VALE YA FUE COBRADO ANTERIORMENTE.' });
+      setCargando(false); setFolioManual(''); setModalManual(false); return;
     }
 
-    // 2. BUSCAR EMPLEADO Y SALDO
-    const { data: empleado } = await supabase.from('perfiles').select('*').eq('nombre_completo', nombreEscaneado).maybeSingle();
+    const { data: empleado } = await supabase.from('perfiles').select('*').eq('nombre_completo', nombre).maybeSingle();
 
     if (!empleado) { 
-      setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ EL PERFIL: ${nombreEscaneado}` }); 
+      setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ EL PERFIL: ${nombre}` }); 
     } 
-    else if (empleado.tickets_restantes < cantidadACanjear) { 
-      setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} NO TIENE SALDO PARA ${cantidadACanjear} RACIONES.` }); 
+    else if (empleado.tickets_restantes < cantidad) { 
+      setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} NO TIENE SALDO PARA ${cantidad} RACIONES.` }); 
     } 
     else {
-      // Registrar el UID para invalidar el código permanentemente
-      await supabase.from('vales_quemados').insert({ id: valeUID });
+      await supabase.from('vales_quemados').insert({ id: uid });
+      await supabase.from('perfiles').update({ tickets_restantes: empleado.tickets_restantes - cantidad, tickets_canjeado: (empleado.tickets_canjeado || 0) + cantidad }).eq('id', empleado.id);
+      const registrosHistorial = Array(cantidad).fill({ nombre_empleado: empleado.nombre_completo, dependencia: empleado.dependencia });
+      await supabase.from('historial_comedor').insert(registrosHistorial);
+      
+      const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.estado === 'APARTADO');
+      if (reservaExistente) await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', reservaExistente.id);
 
-      const { error: errorUpdate } = await supabase.from('perfiles').update({ 
-        tickets_restantes: empleado.tickets_restantes - cantidadACanjear, 
-        tickets_canjeado: (empleado.tickets_canjeado || 0) + cantidadACanjear 
-      }).eq('id', empleado.id);
-
-      if (!errorUpdate) {
-        const registrosHistorial = Array(cantidadACanjear).fill({ 
-          nombre_empleado: empleado.nombre_completo, 
-          dependencia: empleado.dependencia 
-        });
-        await supabase.from('historial_comedor').insert(registrosHistorial);
-        
-        const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.estado === 'APARTADO');
-        if (reservaExistente) {
-            await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', reservaExistente.id);
-        }
-
-        const textoExito = cantidadACanjear > 1 
-          ? `CANJE MÚLTIPLE OK (${cantidadACanjear} RACIONES)` 
-          : '¡VALE CANJEADO CON ÉXITO!';
-
-        setMensaje({ 
-          tipo: 'exito', 
-          texto: textoExito, 
-          empleado: empleado, 
-          cantidad: cantidadACanjear,
-          hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) 
-        });
-
-        await cargarDatosDia();
-        await cargarDatosGlobales();
-        setDirectorio(prev => prev.map(p => p.nombre_completo === empleado.nombre_completo ? { ...p, tickets_restantes: p.tickets_restantes - cantidadACanjear } : p));
-      } else { 
-        setMensaje({ tipo: 'error', texto: 'ERROR TÉCNICO AL ACTUALIZAR SALDO.' }); 
-      }
+      setMensaje({ tipo: 'exito', texto: cantidad > 1 ? `CANJE MÚLTIPLE OK (${cantidad})` : '¡VALE CANJEADO!', empleado, cantidad, hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) });
+      await cargarDatosDia(); await cargarDatosGlobales();
+      setModalManual(false);
     }
-    setCargando(false);
-    setInputLectura(''); if (!usarCamara) inputRef.current?.focus();
+    setCargando(false); setInputLectura(''); if (inputRef.current) inputRef.current.focus();
   };
 
   const procesarPlanificador = async () => {
@@ -274,7 +254,7 @@ export default function PantallaCajero() {
 
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
-      <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
+      <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 sticky top-0 z-50">
         <div className="flex items-center gap-4"><div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center shrink-0"><img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" /></div><div><h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight">Punto de Canje</h1><p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest uppercase">Fiscalía General</p></div></div>
         <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 transition-all border border-white/5"><LogOut size={18} /></button>
       </nav>
@@ -302,41 +282,37 @@ export default function PantallaCajero() {
               <form onSubmit={procesarEscaneo} className="flex flex-col gap-4 relative">
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 relative">
                   <div className="flex-1 relative">
-                    <input ref={inputRef} type="text" value={inputLectura} onChange={manejarInput} className="w-full p-4 pl-12 border-2 border-[#6366F1]/40 rounded-2xl text-lg font-bold outline-none focus:border-[#6366F1] transition-colors uppercase tracking-widest" placeholder="Escanee QR..." autoFocus />
+                    <input ref={inputRef} type="text" value={inputLectura} onChange={manejarInput} className="w-full p-4 pl-12 border-2 border-[#6366F1]/40 rounded-2xl text-lg font-bold outline-none focus:border-[#6366F1] transition-colors uppercase tracking-widest" placeholder="Nombre o Código..." autoFocus />
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     {sugerencias.length > 0 && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100">
                         {sugerencias.map((s, i) => (
-                          <div key={i} onClick={() => seleccionarSugerencia(s.nombre_completo)} className="p-4 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors">
+                          <div key={i} onClick={() => seleccionarSugerencia(s)} className="p-4 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors">
                             <div><p className="font-black text-sm text-[#1A2744] uppercase">{s.nombre_completo}</p><p className="text-[10px] font-bold text-slate-400 uppercase">{s.dependencia}</p></div>
-                            <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Saldo Info</span>
+                            <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Validar Folio</span>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                  <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all shrink-0">{cargando ? <Loader2 className="animate-spin" size={20} /> : 'Validar'}</button>
+                  <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-8 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all shrink-0">{cargando ? <Loader2 className="animate-spin" size={20} /> : 'Validar'}</button>
                 </div>
               </form>
               
               {mensaje.tipo === 'exito' && (
                 <div className="bg-emerald-50 border-2 border-emerald-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in relative overflow-hidden mt-6">
-                  {mensaje.cantidad && mensaje.cantidad > 1 && (
-                    <div className="absolute top-4 right-4 bg-emerald-500 text-white px-4 py-2 rounded-2xl font-black text-xs shadow-lg flex items-center gap-2 animate-bounce">
-                      <Layers size={14}/> {mensaje.cantidad} RACIONES
-                    </div>
-                  )}
+                  {mensaje.cantidad && mensaje.cantidad > 1 && (<div className="absolute top-4 right-4 bg-emerald-500 text-white px-4 py-2 rounded-2xl font-black text-xs shadow-lg animate-bounce flex items-center gap-2"><Layers size={14}/> {mensaje.cantidad} RACIONES</div>)}
                   <div className="bg-emerald-500 text-white p-3 rounded-full mb-4 shadow-lg"><CheckCircle2 size={32}/></div>
                   <h2 className="text-xl sm:text-2xl font-black text-[#1A2744] uppercase mb-1">{mensaje.texto}</h2>
                   <p className="text-slate-700 font-bold text-lg">{mensaje.empleado.nombre_completo}</p>
-                  <p className="text-slate-400 text-xs font-bold uppercase mt-1">{mensaje.empleado.dependencia} — {mensaje.hora}</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase mt-1">{mensaje.empleado.dependencia} — {mensaje.hora}</p>
                 </div>
               )}
 
               {mensaje.tipo === 'quemado' && (
                 <div className="bg-red-50 border-2 border-red-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in mt-6">
                   <AlertOctagon size={48} className="text-red-500 mb-4" />
-                  <h2 className="text-xl sm:text-2xl font-black text-red-800 uppercase mb-2">FRAUDE DETECTADO</h2>
+                  <h2 className="text-xl sm:text-2xl font-black text-red-800 uppercase mb-2">VALE REPETIDO</h2>
                   <p className="text-red-600 font-bold text-xs uppercase px-8 leading-relaxed text-center">{mensaje.texto}</p>
                 </div>
               )}
@@ -360,7 +336,7 @@ export default function PantallaCajero() {
                       <button onClick={procesarPlanificador} disabled={cargando} className="w-full bg-[#1A2744] hover:bg-slate-800 text-white p-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all shadow-md mt-2">{cargando ? <Loader2 className="animate-spin" size={16}/> : 'Publicar Día'}</button>
                     </div>
                   </div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Activos (Día de Hoy)</h4>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Activos (Hoy)</h4>
                   <div className="space-y-3">
                     {todosMenus.filter(m => m.fecha === hoyReal).map((m, i) => (
                       <div key={i} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center">
@@ -383,13 +359,13 @@ export default function PantallaCajero() {
                         </div>
                         <div className="flex items-center gap-2">
                           <button onClick={() => marcarComoCapturado(r.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-md active:scale-95 transition-all">Entregado</button>
-                          <button onClick={() => cancelarReservaCajero(r.id, r.menu_id, r.nombre_empleado)} className="bg-red-50 hover:bg-red-500 text-red-600 hover:text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-sm active:scale-95 transition-all border border-red-200 hover:border-red-500" title="Cancelar y regresar porción al menú">Cancelar</button>
+                          <button onClick={() => cancelarReservaCajero(r.id, r.menu_id, r.nombre_empleado)} className="bg-red-50 hover:bg-red-500 text-red-600 hover:text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-sm active:scale-95 transition-all border border-red-200 hover:border-red-500">Cancelar</button>
                         </div>
                       </div>
                     ))}
                     {reservasPendientes.length === 0 && (<div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl p-6"><CheckCircle2 size={32} className="mb-2 opacity-50"/><p className="text-xs font-bold uppercase tracking-widest">Todo entregado</p></div>)}
                   </div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos ya entregados</h4>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Ya entregados</h4>
                   <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 opacity-60">
                     {reservasCapturadas.map((r, i) => (
                       <div key={i} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex justify-between items-center">
@@ -460,14 +436,54 @@ export default function PantallaCajero() {
             <div className="p-8 animate-fade-in">
               <h3 className="text-slate-400 font-black text-[10px] uppercase tracking-widest mb-8">Auditoría y Cierres</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <button onClick={exportarExcel} className="flex flex-col items-center justify-center p-6 bg-emerald-50 border-2 border-emerald-100 rounded-[2rem] text-emerald-600 hover:bg-emerald-100 transition-all gap-2"><FileSpreadsheet size={32}/><span className="font-black text-[10px] uppercase">Excel</span></button>
-                <button onClick={() => generarPDF('diario')} className="flex flex-col items-center justify-center p-6 bg-blue-50 border-2 border-blue-100 rounded-[2rem] text-blue-600 hover:bg-blue-100 transition-all gap-2"><FileText size={32}/><span className="font-black text-[10px] uppercase">PDF Diario</span></button>
-                <button onClick={() => generarPDF('semanal')} className="flex flex-col items-center justify-center p-6 bg-amber-50 border-2 border-amber-100 rounded-[2rem] text-amber-600 hover:bg-amber-100 transition-all gap-2"><FileText size={32}/><span className="font-black text-[10px] uppercase">PDF Semanal</span></button>
+                <button onClick={exportarExcel} className="flex flex-col items-center justify-center p-8 bg-emerald-50 border-2 border-emerald-100 rounded-3xl text-emerald-600 gap-2 hover:bg-emerald-100 transition-all"><FileSpreadsheet size={32}/><span className="font-black text-[10px] uppercase">Excel</span></button>
+                <button onClick={() => generarPDF('diario')} className="flex flex-col items-center justify-center p-8 bg-blue-50 border-2 border-blue-100 rounded-3xl text-blue-600 gap-2 hover:bg-blue-100 transition-all"><FileText size={32}/><span className="font-black text-[10px] uppercase">PDF Diario</span></button>
+                <button onClick={() => generarPDF('semanal')} className="flex flex-col items-center justify-center p-8 bg-amber-50 border-2 border-amber-100 rounded-3xl text-amber-600 gap-2 hover:bg-amber-100 transition-all"><FileText size={32}/><span className="font-black text-[10px] uppercase">PDF Semanal</span></button>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* MODAL DE SEGURIDAD PARA CANJE MANUAL */}
+      {modalManual && empleadoSeleccionado && (
+        <div className="fixed inset-0 bg-[#1A2744]/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="bg-[#1A2744] p-8 text-center border-b-2 border-dashed border-slate-100">
+                <div className="w-16 h-16 bg-amber-50 text-[#C9A84C] rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner"><KeyRound size={32}/></div>
+                <h2 className="text-xl font-black text-white uppercase mb-1">Validación Manual</h2>
+                <p className="text-[#C9A84C] text-[10px] font-bold uppercase tracking-widest italic">El scanner falló o Mica de privacidad detectada</p>
+            </div>
+            <div className="p-8">
+                <div className="bg-slate-50 p-4 rounded-2xl mb-6 text-center border border-slate-100">
+                    <p className="text-slate-400 text-[10px] font-black uppercase mb-1">Empleado Seleccionado</p>
+                    <p className="text-[#1A2744] font-black text-lg uppercase leading-tight">{empleadoSeleccionado.nombre_completo}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">Raciones</label>
+                        <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
+                           <button onClick={()=>setCantidadManual(Math.max(1, cantidadManual-1))} className="p-3 hover:bg-slate-200 transition-colors"><Minus size={14}/></button>
+                           <span className="flex-1 text-center font-black text-slate-700">{cantidadManual}</span>
+                           <button onClick={()=>setCantidadManual(Math.min(empleadoSeleccionado.tickets_restantes, cantidadManual+1))} className="p-3 hover:bg-slate-200 transition-colors"><Plus size={14}/></button>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">Folio Seguridad</label>
+                        <input type="text" maxLength={9} value={folioManual} onChange={(e)=>setFolioManual(e.target.value.toUpperCase())} className="w-full p-2.5 bg-white border-2 border-[#C9A84C]/40 rounded-xl text-center font-black text-[#1A2744] outline-none focus:border-[#C9A84C] uppercase tracking-[0.2em]" placeholder="ID VALE" />
+                    </div>
+                </div>
+
+                <div className="flex gap-3">
+                    <button onClick={()=>setModalManual(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
+                    <button onClick={()=>ejecutarCanjeFinal(empleadoSeleccionado.nombre_completo, cantidadManual, folioManual)} disabled={cargando || folioManual.length < 4} className="flex-[2] bg-[#1A2744] text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-30">Procesar Canje</button>
+                </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style dangerouslySetInnerHTML={{__html: `@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }`}} />
     </div>
   );

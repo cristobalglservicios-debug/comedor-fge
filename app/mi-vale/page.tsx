@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -403,7 +403,6 @@ export default function MiValePage() {
               </div>
             </div>
 
-            {/* SECCIÓN SELECTOR DE CANTIDAD PARA RECOLECTORES - INTEGRADA */}
             <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100">
                <div className="flex items-center gap-3 mb-6">
                  <div className="bg-[#1A2744] p-2 rounded-xl text-[#C9A84C]"><QrCode size={20}/></div>
@@ -591,7 +590,7 @@ export default function MiValePage() {
             <div className="bg-white rounded-[2rem] overflow-hidden shadow-2xl w-full border border-slate-100">
               <div className="bg-[#1A2744] p-6 text-center border-b-2 border-dashed border-slate-200 relative">
                 <p className="text-[#C9A84C] text-[10px] uppercase font-bold tracking-[0.2em] mb-1">Fiscalía General del Estado</p>
-                <h2 className="text-white text-xl font-black uppercase tracking-wider">Vale Digital</h2>
+                <h2 className="text-white text-xl font-black uppercase tracking-wider italic">Vale Digital</h2>
                 <div className="absolute -bottom-3 -left-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
                 <div className="absolute -bottom-3 -right-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
               </div>
@@ -625,11 +624,17 @@ export default function MiValePage() {
                   <div className="relative z-10 bg-[#1A2744] text-[#C9A84C] px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-widest mt-4 shadow-lg animate-bounce flex items-center gap-2">
                     <Layers size={14}/> {cantidadACanjear} RACIONES
                   </div>
-                  <div className="mt-4 flex items-center gap-1.5 text-slate-400">
+                  <div className="mt-4 flex items-center gap-1.5 text-slate-400 relative z-10">
                     <Clock size={12}/> <p className="text-[9px] font-black uppercase">VÁLIDO POR UN SOLO ESCANEO</p>
                   </div>
 
-                  <p className="text-slate-500 text-[10px] font-bold mt-4 tracking-widest uppercase relative z-10">Folio: {folioGenerado}</p>
+                  <div className="relative z-10 mt-6 pt-4 border-t border-slate-200 w-full text-center">
+                    <p className="text-slate-400 text-[8px] font-black uppercase tracking-widest mb-1">Folio de Seguridad (Manual)</p>
+                    <div className="flex justify-center items-center gap-2 text-[#1A2744] font-black text-xl tracking-[0.3em]">
+                        <Hash size={16} className="text-[#C9A84C]"/> {tokenSeguridad}
+                    </div>
+                  </div>
+
                 </div>
                 <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-2xl text-center font-black text-[11px] uppercase tracking-widest border border-emerald-100 anim-latido">✓ Muestre en Ventanilla</div>
               </div>
