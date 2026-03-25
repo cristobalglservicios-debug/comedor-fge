@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X } from 'lucide-react';
+import Barcode from 'react-barcode';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,7 +24,6 @@ const getHoyMerida = () => {
 
 export default function MiValePage() {
   const router = useRouter();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [nombreBusqueda, setNombreBusqueda] = useState('');
   const [empleado, setEmpleado] = useState<any>(null);
   const [historial, setHistorial] = useState<any[]>([]);
@@ -61,32 +61,6 @@ export default function MiValePage() {
     };
     intentarAutoLogin();
   }, []);
-
-  // LÓGICA DE CARGA DINÁMICA DE BWIP-JS PARA EVITAR ERRORES DE BUILD
-  useEffect(() => {
-    if (estadoVista === 'ticket' && empleado && canvasRef.current) {
-      const generarQR = async () => {
-        try {
-          // Importación dinámica solo en cliente
-          const bwipjs = (await import('bwip-js')).default;
-          bwipjs.toCanvas(canvasRef.current!, {
-            bcid: 'code128',
-            text: empleado.nombre_completo,
-            scale: 3,
-            height: 15,
-            includetext: true,
-            textxalign: 'center',
-            backgroundcolor: 'ffffff'
-          });
-        } catch (e) {
-          console.error("Error generando código:", e);
-        }
-      };
-      
-      const timer = setTimeout(generarQR, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [estadoVista, empleado]);
 
   const buscarEmpleadoManual = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -297,6 +271,7 @@ export default function MiValePage() {
 
         {estadoVista === 'dashboard' && empleado && (
           <div className="flex flex-col gap-5 anim-entrada-suave">
+            
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
                 <div className="w-8 h-8 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-2">
@@ -319,6 +294,7 @@ export default function MiValePage() {
 
             <div className="bg-gradient-to-br from-[#1A2744] to-[#25365d] rounded-[2rem] shadow-2xl p-6 border border-slate-700 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-10 translate-x-10 blur-3xl"></div>
+              
               <div className="flex items-center gap-3 mb-6 relative z-10">
                 <ChefHat className="text-[#C9A84C]" size={28}/>
                 <div>
@@ -347,6 +323,7 @@ export default function MiValePage() {
               )}
 
               <div key={fechaActiva} className="min-h-[150px] relative z-10">
+                
                 {reservasDelDia.length > 0 && (
                   <div className="space-y-4 mb-6">
                     {reservasDelDia.map((reserva) => (
@@ -388,6 +365,7 @@ export default function MiValePage() {
                         </div>
                       </div>
                     )}
+
                     {almuerzos.length > 0 && (
                       <div>
                         <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
@@ -399,6 +377,7 @@ export default function MiValePage() {
                         </div>
                       </div>
                     )}
+
                     {cenas.length > 0 && (
                       <div>
                         <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
@@ -412,6 +391,7 @@ export default function MiValePage() {
                     )}
                   </div>
                 )}
+                
               </div>
             </div>
 
@@ -497,12 +477,20 @@ export default function MiValePage() {
                 </div>
                 <div className="w-full bg-[#F8FAFC] p-6 rounded-2xl flex flex-col items-center mb-6 border border-slate-50 relative overflow-hidden">
                    <div className="absolute inset-0 bg-indigo-50/50 anim-latido opacity-50"></div>
-                  
-                  <canvas 
-                    ref={canvasRef} 
-                    style={{ imageRendering: 'pixelated' }} 
-                    className="w-full h-auto max-w-[250px] mix-blend-multiply relative z-10"
-                  ></canvas>
+                   
+                   {/* NUEVO COMPONENTE REACT-BARCODE */}
+                  <div className="relative z-10 w-full flex justify-center bg-white p-2 rounded-xl">
+                    <Barcode 
+                      value={empleado.nombre_completo} 
+                      format="CODE128"
+                      width={2}
+                      height={60}
+                      displayValue={true}
+                      textAlign="center"
+                      background="#ffffff"
+                      lineColor="#000000"
+                    />
+                  </div>
                   
                   <p className="text-slate-500 text-[10px] font-bold mt-3 tracking-widest uppercase relative z-10">Folio: {folioGenerado}</p>
                 </div>
