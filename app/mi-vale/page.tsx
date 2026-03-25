@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X } from 'lucide-react';
@@ -24,6 +24,7 @@ const getHoyMerida = () => {
 
 export default function MiValePage() {
   const router = useRouter();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [nombreBusqueda, setNombreBusqueda] = useState('');
   const [empleado, setEmpleado] = useState<any>(null);
   const [historial, setHistorial] = useState<any[]>([]);
@@ -40,13 +41,14 @@ export default function MiValePage() {
 
   useEffect(() => {
     const intentarAutoLogin = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.email) {
-        const emailPrefijo = session.user.email.split('@')[0].replace(/\./g, ' ');
+      // 1. BUSCAR EN MEMORIA LOCAL (Bypass del correo para evitar fallas)
+      const nombreGuardado = localStorage.getItem('fge_empleado_nombre');
+      
+      if (nombreGuardado) {
         const { data } = await supabase
           .from('perfiles')
           .select('*')
-          .ilike('nombre_completo', `%${emailPrefijo}%`)
+          .eq('nombre_completo', nombreGuardado)
           .maybeSingle();
 
         if (data) {
@@ -57,6 +59,28 @@ export default function MiValePage() {
           return;
         }
       }
+
+      // 2. SI NO HAY MEMORIA, INTENTAR ADIVINAR POR CORREO
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.email) {
+        const emailPrefijo = session.user.email.split('@')[0].replace(/\./g, ' ');
+        const { data } = await supabase
+          .from('perfiles')
+          .select('*')
+          .ilike('nombre_completo', `%${emailPrefijo}%`)
+          .maybeSingle();
+
+        if (data) {
+          localStorage.setItem('fge_empleado_nombre', data.nombre_completo); // Guardar para no volver a adivinar
+          setEmpleado(data);
+          cargarHistorialReciente(data.nombre_completo);
+          await cargarMenusYReservasFuturas(data.nombre_completo);
+          setEstadoVista('dashboard');
+          return;
+        }
+      }
+      
+      // 3. SI TODO FALLA, MOSTRAR PANTALLA PARA QUE ESCRIBA SU NOMBRE
       setEstadoVista('busqueda');
     };
     intentarAutoLogin();
@@ -74,6 +98,7 @@ export default function MiValePage() {
     if (sbError || !data) {
       setError('No se encontró el empleado. Verifica tu nombre en nómina.');
     } else {
+      localStorage.setItem('fge_empleado_nombre', data.nombre_completo); // Guardar permanentemente en celular
       setEmpleado(data);
       cargarHistorialReciente(data.nombre_completo);
       await cargarMenusYReservasFuturas(data.nombre_completo);
@@ -191,6 +216,7 @@ export default function MiValePage() {
   };
 
   const handleLogout = async () => {
+    localStorage.removeItem('fge_empleado_nombre'); // Limpiar memoria al cerrar sesión
     await supabase.auth.signOut();
     router.push('/');
   };
@@ -477,8 +503,7 @@ export default function MiValePage() {
                 </div>
                 <div className="w-full bg-[#F8FAFC] p-6 rounded-2xl flex flex-col items-center mb-6 border border-slate-50 relative overflow-hidden">
                    <div className="absolute inset-0 bg-indigo-50/50 anim-latido opacity-50"></div>
-                   
-                   {/* NUEVO COMPONENTE REACT-BARCODE */}
+                  
                   <div className="relative z-10 w-full flex justify-center bg-white p-2 rounded-xl">
                     <Barcode 
                       value={empleado.nombre_completo} 
