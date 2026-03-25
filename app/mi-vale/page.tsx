@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -47,8 +47,10 @@ export default function MiValePage() {
   const [errorPassword, setErrorPassword] = useState('');
   const [cargandoPassword, setCargandoPassword] = useState(false);
 
-  // NUEVO ESTADO PARA MULTI-CANJE (RECOLECTORES) - SE MANTIENE INTEGRADO
+  // NUEVOS ESTADOS PARA SEGURIDAD ANTI-REPETICIÓN
   const [cantidadACanjear, setCantidadACanjear] = useState(1);
+  const [tokenSeguridad, setTokenSeguridad] = useState('');
+  const [tokenTimestamp, setTokenTimestamp] = useState(Date.now());
 
   useEffect(() => {
     const intentarAutoLogin = async () => {
@@ -217,11 +219,16 @@ export default function MiValePage() {
   };
 
   const iniciarGeneracion = () => {
-    // VALIDACIÓN INTEGRADA PARA RACIONES MÚLTIPLES
     if (empleado.tickets_restantes < cantidadACanjear) {
       alert(`🚫 No tienes suficientes vales (${empleado.tickets_restantes} disponibles).`);
       return;
     }
+
+    // GENERAR ID ÚNICO PARA QUE EL VALE SEA DE UN SOLO USO
+    const uid = Math.random().toString(36).substring(2, 9).toUpperCase();
+    setTokenSeguridad(uid);
+    setTokenTimestamp(Date.now());
+
     setEstadoVista('animando');
     setPasoAnimacion(1);
     setTimeout(() => setPasoAnimacion(2), 800);
@@ -262,13 +269,12 @@ export default function MiValePage() {
   const almuerzos = menusParaMostrar.filter(m => m.tipo_comida === 'ALMUERZO');
   const cenas = menusParaMostrar.filter(m => m.tipo_comida === 'CENA');
 
-  // LÓGICA DE BANNER DE CIERRE SEMANAL
   const diaSemana = getDiaSemanaMerida();
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // PROTOCOLO DE QR BLINDADO (NOMBRE|CANTIDAD)
-  const valorQR = `${empleado?.nombre_completo}|${cantidadACanjear}`;
+  // PROTOCOLO ÚNICO BLINDADO: NOMBRE|CANTIDAD|TIMESTAMP|UID
+  const valorQR = `${empleado?.nombre_completo}|${cantidadACanjear}|${tokenTimestamp}|${tokenSeguridad}`;
 
   if (estadoVista === 'cargando') {
     return <div className="min-h-screen bg-[#F0F3F6] flex items-center justify-center font-bold text-slate-400">Verificando acceso...</div>;
@@ -364,7 +370,7 @@ export default function MiValePage() {
           <div className="flex flex-col gap-5 anim-entrada-suave">
             
             {mostrarBannerCierre && (
-              <div className="bg-red-50 border border-red-200 p-4 rounded-3xl shadow-sm flex items-start gap-3 anim-latido">
+              <div className="bg-red-50 border border-red-200 p-4 rounded-3xl shadow-sm flex items-start gap-3 anim-latido shadow-sm">
                 <div className="bg-red-100 text-red-600 p-2 rounded-full shrink-0 mt-0.5">
                   <AlertTriangle size={18} />
                 </div>
@@ -397,7 +403,7 @@ export default function MiValePage() {
               </div>
             </div>
 
-            {/* SECCIÓN SELECTOR DE CANTIDAD PARA RECOLECTORES - INTEGRADA SIN RECORTE */}
+            {/* SECCIÓN SELECTOR DE CANTIDAD PARA RECOLECTORES - INTEGRADA */}
             <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100">
                <div className="flex items-center gap-3 mb-6">
                  <div className="bg-[#1A2744] p-2 rounded-xl text-[#C9A84C]"><QrCode size={20}/></div>
@@ -435,7 +441,7 @@ export default function MiValePage() {
             </div>
 
             <div className="bg-gradient-to-br from-[#1A2744] to-[#25365d] rounded-[2rem] shadow-2xl p-6 border border-slate-700 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-10 translate-x-10 blur-3xl"></div>
+              <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-3xl opacity-20"></div>
               
               <div className="flex items-center gap-3 mb-6 relative z-10">
                 <ChefHat className="text-[#C9A84C]" size={28}/>
@@ -558,10 +564,10 @@ export default function MiValePage() {
         )}
 
         {estadoVista === 'busqueda' && (
-          <form onSubmit={buscarEmpleadoManual} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 anim-entrada-suave">
+          <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 anim-entrada-suave">
             <h2 className="text-2xl font-black text-[#1A2744] mb-2 uppercase tracking-tight">Comedor FGE Yucatán</h2>
             <p className="text-slate-500 mb-6 text-sm">Inicia sesión desde la pantalla principal para continuar.</p>
-          </form>
+          </div>
         )}
 
         {estadoVista === 'animando' && (
@@ -572,8 +578,8 @@ export default function MiValePage() {
             <h3 className="text-lg font-bold text-[#1A2744] mb-8 uppercase tracking-widest">Generando...</h3>
             <div className="w-full flex flex-col gap-4 mb-8">
               <PasoCheck visible={pasoAnimacion >= 1} texto="Verificando identidad..." completed={pasoAnimacion > 1} />
-              <PasoCheck visible={pasoAnimacion >= 2} texto={`Validando ${cantidadACanjear} raciones...`} completed={pasoAnimacion > 2} />
-              <PasoCheck visible={pasoAnimacion >= 3} texto="Firmando Vale Digital..." completed={pasoAnimacion > 3} />
+              <PasoCheck visible={pasoAnimacion >= 2} texto={`Solicitando ${cantidadACanjear} raciones...`} completed={pasoAnimacion > 2} />
+              <PasoCheck visible={pasoAnimacion >= 3} texto="Validando ID único de canje..." completed={pasoAnimacion > 3} />
               <PasoCheck visible={pasoAnimacion >= 4} texto="Generando QR Seguro..." completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
               <PasoCheck visible={pasoAnimacion >= 5} texto="¡Vale generado!" completed={pasoAnimacion >= 5} />
             </div>
@@ -590,12 +596,12 @@ export default function MiValePage() {
                 <div className="absolute -bottom-3 -right-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
               </div>
               <div className="p-8 flex flex-col items-center">
-                <div className="flex justify-between w-full mb-8 gap-4">
-                  <div className="text-center flex-1">
+                <div className="flex justify-between w-full mb-8 gap-4 text-center">
+                  <div className="flex-1">
                     <p className="text-slate-400 text-[9px] uppercase font-bold tracking-wider mb-1">Empleado</p>
-                    <p className="text-[#1A2744] text-[11px] font-black leading-tight uppercase">{empleado.nombre_completo}</p>
+                    <p className="text-[#1A2744] text-[11px] font-black leading-tight uppercase truncate">{empleado.nombre_completo}</p>
                   </div>
-                  <div className="text-center flex-1 border-l pl-4 border-slate-100">
+                  <div className="flex-1 border-l pl-4 border-slate-100">
                     <p className="text-slate-400 text-[9px] uppercase font-bold tracking-wider mb-1">Fecha</p>
                     <p className="text-[#1A2744] text-xs font-black">{hoyCorto}</p>
                   </div>
@@ -619,10 +625,13 @@ export default function MiValePage() {
                   <div className="relative z-10 bg-[#1A2744] text-[#C9A84C] px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-widest mt-4 shadow-lg animate-bounce flex items-center gap-2">
                     <Layers size={14}/> {cantidadACanjear} RACIONES
                   </div>
+                  <div className="mt-4 flex items-center gap-1.5 text-slate-400">
+                    <Clock size={12}/> <p className="text-[9px] font-black uppercase">VÁLIDO POR UN SOLO ESCANEO</p>
+                  </div>
 
                   <p className="text-slate-500 text-[10px] font-bold mt-4 tracking-widest uppercase relative z-10">Folio: {folioGenerado}</p>
                 </div>
-                <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-2xl text-center font-black text-[11px] uppercase tracking-widest border border-emerald-100 anim-latido">✓ Escanea en Caja</div>
+                <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-2xl text-center font-black text-[11px] uppercase tracking-widest border border-emerald-100 anim-latido">✓ Muestre en Ventanilla</div>
               </div>
             </div>
             <button onClick={() => { setEstadoVista('dashboard'); setCantidadACanjear(1); }} className="bg-[#1A2744]/10 text-[#1A2744] px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest mt-4 active:scale-95 transition-all">Finalizar y Regresar</button>

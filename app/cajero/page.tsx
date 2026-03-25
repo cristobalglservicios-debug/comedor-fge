@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus, Layers } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus, Layers, AlertOctagon } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -27,7 +27,7 @@ export default function PantallaCajero() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('escanear');
   const [inputLectura, setInputLectura] = useState('');
-  const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error' | null, texto: string, empleado?: any, hora?: string, cantidad?: number }>({ tipo: null, texto: '' });
+  const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error' | 'quemado' | null, texto: string, empleado?: any, hora?: string, cantidad?: number }>({ tipo: null, texto: '' });
   const [stats, setStats] = useState({ canjeadosHoy: 0, transacciones: 0 });
   const [historial, setHistorial] = useState<any[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -115,54 +115,67 @@ export default function PantallaCajero() {
   const menuMonitor = todosMenus.filter(m => m.fecha === fechaMonitor);
   const reservasMonitor = todasReservas.filter(r => r.menu_comedor?.fecha === fechaMonitor);
 
-  // === LÓGICA DE PROCESAMIENTO ACTUALIZADA (SOPORTE MULTI-CANJE) ===
+  // === LÓGICA DE PROCESAMIENTO ACTUALIZADA (CON BLINDAJE ANTI-REPETICIÓN) ===
   const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
     const rawInput = (codigoDirecto || inputLectura).trim().toUpperCase(); if (!rawInput) return;
 
-    // Detectar raciones múltiples (FORMATO: NOMBRE|CANTIDAD)
     let nombreEscaneado = rawInput;
     let cantidadACanjear = 1;
+    let valeUID = '';
 
+    // Detectar raciones múltiples e ID único (FORMATO: NOMBRE|CANTIDAD|TIMESTAMP|UID)
     if (rawInput.includes('|')) {
       const partes = rawInput.split('|');
       nombreEscaneado = partes[0];
       cantidadACanjear = parseInt(partes[1]) || 1;
+      valeUID = partes[3] || ''; // Recuperamos el UID generado por la app del empleado
     }
 
     setSugerencias([]); setCargando(true); setMensaje({ tipo: null, texto: '' });
+
+    // 1. VALIDACIÓN CRÍTICA: ¿EL VALE YA FUE ESCANEADO?
+    if (valeUID) {
+      const { data: yaQuemado } = await supabase.from('vales_quemados').select('id').eq('id', valeUID).maybeSingle();
+      if (yaQuemado) {
+        setMensaje({ tipo: 'quemado', texto: '¡ERROR! ESTE CÓDIGO QR YA FUE UTILIZADO ANTERIORMENTE.' });
+        setCargando(false); setInputLectura(''); return;
+      }
+    }
+
+    // 2. BUSCAR EMPLEADO Y SALDO
     const { data: empleado } = await supabase.from('perfiles').select('*').eq('nombre_completo', nombreEscaneado).maybeSingle();
 
     if (!empleado) { 
       setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ: ${nombreEscaneado}` }); 
     } 
     else if (empleado.tickets_restantes < cantidadACanjear) { 
-      setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} SOLO TIENE ${empleado.tickets_restantes} VALES.` }); 
+      setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} SALDO INSUFICIENTE PARA ${cantidadACanjear} RACIONES.` }); 
     } 
     else {
-      // Descontar la cantidad solicitada
+      // Registrar el UID como cobrado de inmediato para bloquear intentos simultáneos
+      if (valeUID) await supabase.from('vales_quemados').insert({ id: valeUID });
+
       const { error: errorUpdate } = await supabase.from('perfiles').update({ 
         tickets_restantes: empleado.tickets_restantes - cantidadACanjear, 
         tickets_canjeado: (empleado.tickets_canjeado || 0) + cantidadACanjear 
       }).eq('id', empleado.id);
 
       if (!errorUpdate) {
-        // Insertar en historial tantas veces como raciones se canjearon para mantener estadísticas exactas
         const registrosHistorial = Array(cantidadACanjear).fill({ 
           nombre_empleado: empleado.nombre_completo, 
           dependencia: empleado.dependencia 
         });
         await supabase.from('historial_comedor').insert(registrosHistorial);
         
-        // Marcar reservas si existen (solo marcamos la primera que encontremos como representativa)
         const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.estado === 'APARTADO');
         if (reservaExistente) {
             await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', reservaExistente.id);
         }
 
         const textoExito = cantidadACanjear > 1 
-          ? `¡VALE MÚLTIPLE CANJEADO! (${cantidadACanjear} RACIONES)` 
-          : '¡VALE CANJEADO!';
+          ? `¡CANJE MÚLTIPLE OK! (${cantidadACanjear} RACIONES)` 
+          : '¡VALE CANJEADO CON ÉXITO!';
 
         setMensaje({ 
           tipo: 'exito', 
@@ -176,7 +189,7 @@ export default function PantallaCajero() {
         await cargarDatosGlobales();
         setDirectorio(prev => prev.map(p => p.nombre_completo === empleado.nombre_completo ? { ...p, tickets_restantes: p.tickets_restantes - cantidadACanjear } : p));
       } else { 
-        setMensaje({ tipo: 'error', texto: 'ERROR AL ACTUALIZAR.' }); 
+        setMensaje({ tipo: 'error', texto: 'ERROR AL ACTUALIZAR EN BASE DE DATOS.' }); 
       }
     }
     setCargando(false);
@@ -298,7 +311,7 @@ export default function PantallaCajero() {
                   <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all shrink-0">{cargando ? <Loader2 className="animate-spin" size={20} /> : 'Validar'}</button>
                 </div>
               </form>
-              <p className="text-slate-400 text-[10px] mt-3 mb-8 text-center sm:text-left">Si la cámara falla, teclea el nombre y selecciónalo.</p>
+              <p className="text-slate-400 text-[10px] mt-3 mb-8 text-center sm:text-left">Si la cámara falla, teclea el nombre y selecciónalo de la lista.</p>
               
               {mensaje.tipo === 'exito' && (
                 <div className="bg-emerald-50 border-2 border-emerald-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in relative overflow-hidden">
@@ -313,6 +326,15 @@ export default function PantallaCajero() {
                   <p className="text-slate-400 text-xs font-bold uppercase mt-1">{mensaje.empleado.dependencia} — {mensaje.hora}</p>
                 </div>
               )}
+
+              {mensaje.tipo === 'quemado' && (
+                <div className="bg-red-50 border-2 border-red-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in">
+                  <AlertOctagon size={48} className="text-red-500 mb-4" />
+                  <h2 className="text-xl sm:text-2xl font-black text-red-800 uppercase mb-2">VALE DUPLICADO</h2>
+                  <p className="text-red-600 font-bold text-xs uppercase px-8 leading-relaxed text-center">{mensaje.texto}</p>
+                </div>
+              )}
+
               {mensaje.tipo === 'error' && (<div className="bg-red-50 border-2 border-red-200 rounded-3xl p-6 text-red-600 font-black text-center animate-fade-in uppercase">❌ {mensaje.texto}</div>)}
             </div>
           )}
@@ -332,6 +354,17 @@ export default function PantallaCajero() {
                       <button onClick={procesarPlanificador} disabled={cargando} className="w-full bg-[#1A2744] hover:bg-slate-800 text-white p-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all shadow-md mt-2">{cargando ? <Loader2 className="animate-spin" size={16}/> : 'Publicar Día'}</button>
                     </div>
                   </div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Activos (Día de Hoy)</h4>
+                  <div className="space-y-3">
+                    {todosMenus.filter(m => m.fecha === hoyReal).map((m, i) => (
+                      <div key={i} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center">
+                        <div className="flex-1 pr-2"><span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-wider">{m.tipo_comida}</span><p className="font-black text-[#1A2744] text-xs mt-1 uppercase leading-tight">{m.platillo}</p></div>
+                        <div className="flex items-center gap-1 mx-2 shrink-0 border border-slate-100 rounded-xl p-1 bg-slate-50"><button onClick={() => ajustarPorciones(m.id, m.porciones_disponibles, m.porciones_totales, -1)} className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Minus size={14}/></button><div className="w-6 text-center"><p className="text-sm font-black text-[#6366F1]">{m.porciones_disponibles}</p></div><button onClick={() => ajustarPorciones(m.id, m.porciones_disponibles, m.porciones_totales, 1)} className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"><Plus size={14}/></button></div>
+                        <button onClick={() => eliminarPlatillo(m.id, m.platillo)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-1" title="Eliminar Platillo"><Trash2 size={16} /></button>
+                      </div>
+                    ))}
+                    {todosMenus.filter(m => m.fecha === hoyReal).length === 0 && <p className="text-[10px] text-slate-400 text-center py-4 border border-dashed rounded-xl">Sin menú publicado hoy.</p>}
+                  </div>
                 </div>
 
                 <div className="flex flex-col h-full">
@@ -345,11 +378,26 @@ export default function PantallaCajero() {
                         </div>
                         <div className="flex items-center gap-2">
                           <button onClick={() => marcarComoCapturado(r.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-md active:scale-95 transition-all">Entregado</button>
-                          <button onClick={() => cancelarReservaCajero(r.id, r.menu_id, r.nombre_empleado)} className="bg-red-50 hover:bg-red-500 text-red-600 hover:text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-sm active:scale-95 transition-all border border-red-200 hover:border-red-500">Cancelar</button>
+                          <button onClick={() => cancelarReservaCajero(r.id, r.menu_id, r.nombre_empleado)} className="bg-red-50 hover:bg-red-500 text-red-600 hover:text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-sm active:scale-95 transition-all border border-red-200 hover:border-red-500" title="Cancelar y regresar porción al menú">Cancelar</button>
                         </div>
                       </div>
                     ))}
                     {reservasPendientes.length === 0 && (<div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl p-6"><CheckCircle2 size={32} className="mb-2 opacity-50"/><p className="text-xs font-bold uppercase tracking-widest">Todo entregado</p></div>)}
+                  </div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos ya entregados</h4>
+                  <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 opacity-60">
+                    {reservasCapturadas.map((r, i) => (
+                      <div key={i} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex justify-between items-center">
+                        <div className="flex-1 min-w-0">
+                            <p className="font-bold text-[#1A2744] text-[10px] uppercase truncate">{r.nombre_empleado}</p>
+                            <p className="text-[9px] font-bold text-slate-500 uppercase truncate">{r.menu_comedor?.platillo}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">Entregado</span>
+                            <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -383,9 +431,14 @@ export default function PantallaCajero() {
                             <p className="text-[8px] font-bold text-emerald-400 uppercase">Entregados</p>
                         </div>
                       </div>
+                      <div className="text-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                        <p className="text-2xl font-black text-slate-600">{m.porciones_disponibles}</p>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase">Stock Libre</p>
+                      </div>
                     </div>
                   );
                 })}
+                {menuMonitor.length === 0 && (<div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl"><ChefHat size={40} className="mb-4 opacity-50" /><p className="text-xs font-bold uppercase tracking-widest">Sin menú para esta fecha</p></div>)}
               </div>
             </div>
           )}
