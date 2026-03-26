@@ -22,7 +22,7 @@ async function buscarUsuarioPorEmail(email: string) {
   }
 }
 
-// 1. NUEVA FUNCIÓN DE AUDITORÍA (ESPÍA)
+// 1. FUNCIÓN DE AUDITORÍA
 export async function registrarLog(adminEmail: string, accion: string, detalle: string) {
   const { error } = await supabaseAdmin
     .from('auditoria_logs')
@@ -31,7 +31,70 @@ export async function registrarLog(adminEmail: string, accion: string, detalle: 
   if (error) console.error("Error guardando log de auditoría:", error.message);
 }
 
-// 2. FUNCIONES EXISTENTES (AHORA CON REGISTRO INVISIBLE Y PAGINACIÓN SEGURA)
+// 2. FUNCIÓN MAESTRA PARA EL DEV PANEL (Crea Auth + Perfil con Rol)
+export async function crearUsuarioGlobal(email: string, nombre: string, dependencia: string, rol: string, pass: string, adminEmail: string = 'Sistema-Dev') {
+  try {
+    // A. Crear el usuario en el módulo de Autenticación
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: email.toLowerCase().trim(),
+      password: pass,
+      email_confirm: true,
+      user_metadata: { full_name: nombre.toUpperCase().trim() }
+    });
+
+    if (authError) {
+      // Si ya existe en Auth, intentamos recuperar el ID para sincronizar el perfil por si acaso
+      if (authError.message.includes('already registered') || authError.message.includes('already exists')) {
+        const existingUser = await buscarUsuarioPorEmail(email);
+        if (existingUser) {
+          // Si ya existe, actualizamos su perfil en la DB para asegurar que el ROL sea correcto
+          const { error: syncError } = await supabaseAdmin
+            .from('perfiles')
+            .upsert({
+              email: email.toLowerCase().trim(),
+              nombre_completo: nombre.toUpperCase().trim(),
+              dependencia: dependencia.toUpperCase().trim(),
+              rol: rol,
+              tickets_restantes: rol === 'empleado' ? 5 : 0,
+              tickets_canjeado: 0
+            }, { onConflict: 'email' });
+
+          if (syncError) return { success: false, error: "Auth existe, pero falló sincronización de perfil: " + syncError.message };
+          
+          await registrarLog(adminEmail, 'SYNC_EXISTENTE', `Usuario ya existía. Se forzó rol ${rol} para: ${email}`);
+          return { success: true, msg: "El usuario ya existía, pero se actualizó su rol y perfil correctamente." };
+        }
+      }
+      return { success: false, error: authError.message };
+    }
+
+    // B. Crear el Perfil vinculado en la tabla 'perfiles'
+    const { error: profileError } = await supabaseAdmin
+      .from('perfiles')
+      .upsert({
+        email: email.toLowerCase().trim(),
+        nombre_completo: nombre.toUpperCase().trim(),
+        dependencia: dependencia.toUpperCase().trim(),
+        rol: rol,
+        tickets_restantes: rol === 'empleado' ? 5 : 0,
+        tickets_canjeado: 0
+      }, { onConflict: 'nombre_completo' });
+
+    if (profileError) {
+      // Si falla la DB, borramos el de Auth para no dejar basura inconsistente
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      return { success: false, error: "Error al crear perfil de base de datos: " + profileError.message };
+    }
+
+    await registrarLog(adminEmail, 'ALTA_MAESTRA', `Usuario creado con rol ${rol.toUpperCase()}: ${email}`);
+    return { success: true };
+
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// 3. FUNCIONES DE ADMINISTRACIÓN EXISTENTES (RESGUARDADAS)
 export async function crearUsuarioAdmin(email: string, nombre: string, adminEmail: string = 'Sistema', passwordInicial: string = 'FGE2026*') {
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email: email,
