@@ -23,7 +23,7 @@ export default function LoginScreen() {
     setError('');
 
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: email.toLowerCase().trim(),
       password: password
     });
 
@@ -34,23 +34,38 @@ export default function LoginScreen() {
     }
 
     // === INTERCEPCIÓN DE SEGURIDAD ===
-    // Si entró con la clave universal, levantamos la bandera para forzar el cambio.
     if (password === 'FGE2026*') {
       localStorage.setItem('debe_cambiar_password_fge', 'true');
     } else {
-      // Si ya tiene contraseña propia, limpiamos por si acaso
       localStorage.removeItem('debe_cambiar_password_fge');
     }
 
     if (data.user) {
-      const userEmail = data.user.email?.toLowerCase() || '';
-      
-      if (userEmail.includes('admin')) {
-        router.push('/admin');
-      } else if (userEmail.includes('comedor')) {
-        router.push('/cajero');
-      } else {
-        router.push('/mi-vale');
+      try {
+        const userEmail = data.user.email?.toLowerCase().trim() || '';
+        
+        // CONSULTA ESTRICTA DE ROL EN LA BASE DE DATOS
+        const { data: perfil } = await supabase
+          .from('perfiles')
+          .select('rol')
+          .eq('email', userEmail)
+          .maybeSingle();
+
+        const rol = perfil?.rol || 'empleado';
+
+        // REDIRECCIÓN INTELIGENTE BASADA EN EL ROL DE LA DB
+        if (rol === 'dev') {
+          router.push('/dev-panel');
+        } else if (rol === 'admin') {
+          router.push('/admin');
+        } else if (rol === 'cajero') {
+          router.push('/cajero');
+        } else {
+          router.push('/mi-vale');
+        }
+      } catch (err) {
+        console.error("Error consultando rol:", err);
+        router.push('/mi-vale'); // Fallback seguro
       }
     }
   };
