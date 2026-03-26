@@ -238,9 +238,7 @@ export default function MiValePage() {
       return;
     }
 
-    // REDUCCIÓN CRÍTICA DE CARACTERES PARA LECTOR FÍSICO
-    // Generamos un token extremadamente corto (Ej. "A4F2")
-    const uid = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const uid = Math.random().toString(36).substring(2, 9).toUpperCase();
     setTokenSeguridad(uid);
     setTokenTimestamp(Date.now());
 
@@ -287,11 +285,7 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // PAYLOAD EXTREMADAMENTE OPTIMIZADO PARA LECTORES LÁSER
-  // En vez del nombre completo, enviamos solo la primera parte del correo (ej. juan.perez)
-  const idCortoEmpleado = empleado?.email ? empleado.email.split('@')[0] : 'EMP';
-  // Formato final: juan.perez|1|TOKEN
-  const valorQR = `${idCortoEmpleado}|${cantidadACanjear}|${tokenSeguridad}`;
+  const valorQR = `${empleado?.nombre_completo}|${cantidadACanjear}|${tokenTimestamp}|${tokenSeguridad}`;
 
   if (estadoVista === 'cargando') {
     return (
@@ -317,7 +311,6 @@ export default function MiValePage() {
     );
   }
 
-  // --- COMPONENTE DE TARJETA OPTIMIZADO PARA MÓVIL (TÁCTIL) ---
   const TarjetaPlatillo = ({ m, index }: { m: any, index: number }) => (
     <div 
       className="anim-fade-up bg-white p-5 rounded-3xl flex justify-between items-center border border-slate-100 shadow-sm active:scale-[0.98] active:bg-slate-50 transition-all duration-200 mb-3 relative overflow-hidden"
@@ -339,7 +332,6 @@ export default function MiValePage() {
         <button 
           onClick={() => apartarComida(m)}
           disabled={cargandoApartado}
-          // Animación de Shimmer continua para que destaque en celular sin necesidad de Hover
           className="relative overflow-hidden w-full bg-gradient-to-r from-emerald-500 to-emerald-400 text-white py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-[0_4px_10px_rgba(16,185,129,0.3)] active:scale-90 active:shadow-sm transition-all flex items-center justify-center gap-1 before:absolute before:inset-0 before:bg-white/30 before:-translate-x-full before:animate-[shimmer_3s_infinite]"
         >
           {cargandoApartado ? <Loader2 className="anim-girar relative z-10" size={14}/> : <><Plus size={14} className="relative z-10"/> <span className="relative z-10">Apartar</span></>}
@@ -351,15 +343,14 @@ export default function MiValePage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-10 relative">
       
-      {/* DECORACIÓN DE FONDO GLOBAL */}
       <div className="fixed top-[-10%] right-[-5%] w-[40vh] h-[40vh] bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none z-0"></div>
       <div className="fixed bottom-[-10%] left-[-5%] w-[30vh] h-[30vh] bg-amber-500/5 rounded-full blur-[80px] pointer-events-none z-0"></div>
 
       <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 p-4 sticky top-0 z-50 shadow-sm flex justify-between items-center px-4 md:px-8">
         <div className="flex items-center gap-4">
-          <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0">
+          <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0 group hover:rotate-6 transition-transform duration-300">
             <UtensilsCrossed className="absolute text-white/10 w-6 h-6 -rotate-3" strokeWidth={1.5} />
-            <ChefHat className="relative text-amber-400 -rotate-3" size={20} strokeWidth={1.5} />
+            <ChefHat className="relative text-amber-400 -rotate-3 group-hover:scale-110 transition-transform duration-300" size={20} strokeWidth={1.5} />
           </div>
           <div className="overflow-hidden">
             <p className="text-amber-500 text-[8px] font-black tracking-[0.2em] uppercase mb-0.5">Comedor FGE</p>
@@ -370,7 +361,6 @@ export default function MiValePage() {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* ACCESO DIRECCIÓN PARA ADMINS */}
           {(empleado?.rol === 'admin' || empleado?.rol === 'dev') && (
             <button 
               onClick={() => router.push('/admin')} 
@@ -381,7 +371,6 @@ export default function MiValePage() {
             </button>
           )}
 
-          {/* ACCESO SECRETO PARA DEV */}
           {empleado?.rol === 'dev' && (
             <button 
               onClick={() => router.push('/dev-panel')} 
@@ -512,7 +501,6 @@ export default function MiValePage() {
 
                  <button 
                   onClick={iniciarGeneracion}
-                  // Destello continuo optimizado para móvil
                   className="relative w-full bg-[#1A2744] text-white py-5 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-95 transition-all flex items-center justify-center gap-3 overflow-hidden before:absolute before:inset-0 before:bg-white/10 before:-translate-x-full before:animate-[shimmer_3s_infinite]"
                 >
                   <span className="relative z-10 flex items-center gap-2">Generar Vale <Check size={16} className="text-amber-400" /></span>
@@ -739,15 +727,15 @@ export default function MiValePage() {
 
                 <div className="w-full bg-slate-50 p-6 rounded-[2rem] flex flex-col items-center mb-8 border border-slate-100 relative overflow-hidden">
                    
-                  <div className="relative z-10 w-full flex justify-center bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-4 overflow-hidden">
-                    {/* OPTIMIZACIÓN LÁSER: Líneas super gruesas (width=4) y amplios márgenes (margin=20) */}
+                  <div className="relative z-10 w-full flex justify-center bg-white py-4 px-2 rounded-xl shadow-sm border border-slate-100 mb-4 overflow-x-auto no-scrollbar">
                     <Barcode 
                       value={valorQR} 
                       format="CODE128"
-                      width={3}
-                      height={100}
-                      displayValue={false}
-                      margin={20}
+                      width={2}
+                      height={80}
+                      displayValue={true}
+                      fontSize={14}
+                      margin={10}
                       background="#ffffff"
                       lineColor="#000000"
                     />
