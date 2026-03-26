@@ -190,7 +190,19 @@ export default function PantallaCajero() {
       const lineas = texto.split('\n').map(l => l.trim().toUpperCase()).filter(l => l.length > 2);
       lineas.forEach(linea => { const platilloLimpio = linea.replace(/^[\*\-\.\d\s]+/, ''); platillosAInsertar.push({ fecha: fechaPlan, tipo_comida: tipo, platillo: platilloLimpio, descripcion: '', porciones_totales: porcionesDefecto, porciones_disponibles: porcionesDefecto }); });
     };
-    extraerLineas(textosPlan.desayuno, 'DESAYUNO', porcionesPlan.desayuno); extraerLineas(textosPlan.almuerzo, 'ALMUERZO', porcionesPlan.almuerzo); extraerLineas(textosPlan.cena, 'CENA', porcionesPlan.cena);
+    extraerLineas(textosPlan.desayuno, 'DESAYUNO', porcionesPlan.desayuno); 
+    extraerLineas(textosPlan.almuerzo, 'ALMUERZO', porcionesPlan.almuerzo); 
+    extraerLineas(textosPlan.cena, 'CENA', porcionesPlan.cena);
+
+    // INYECCIÓN DE CLÁSICOS (SOLO EN ALMUERZO CON STOCK 9999)
+    if (textosPlan.almuerzo.trim().length > 0) {
+      platillosAInsertar.push(
+        { fecha: fechaPlan, tipo_comida: 'ALMUERZO', platillo: 'PECHUGA A LA PLANCHA', descripcion: '', porciones_totales: 9999, porciones_disponibles: 9999 },
+        { fecha: fechaPlan, tipo_comida: 'ALMUERZO', platillo: 'PECHUGA EMPANIZADA', descripcion: '', porciones_totales: 9999, porciones_disponibles: 9999 },
+        { fecha: fechaPlan, tipo_comida: 'ALMUERZO', platillo: 'MILANESA A LA YUCATECA', descripcion: '', porciones_totales: 9999, porciones_disponibles: 9999 }
+      );
+    }
+
     if (platillosAInsertar.length > 0) {
       const { error } = await supabase.from('menu_comedor').insert(platillosAInsertar);
       if (error) { alert("❌ Error al guardar."); } else { alert(`✅ Se publicaron ${platillosAInsertar.length} platillos.`);
@@ -416,7 +428,8 @@ export default function PantallaCajero() {
                           </div>
                         </div>
                         <div className="text-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                          <p className="text-2xl font-black text-slate-600">{m.porciones_disponibles}</p>
+                          {/* SI EL STOCK ES 9999, MOSTRAMOS ∞ PARA QUE COCINA SEPA QUE ES UN GUISO FIJO */}
+                          <p className="text-2xl font-black text-slate-600">{m.porciones_disponibles >= 9000 ? '∞' : m.porciones_disponibles}</p>
                           <p className="text-[8px] font-bold text-slate-400 uppercase">Stock Libre</p>
                         </div>
                       </div>

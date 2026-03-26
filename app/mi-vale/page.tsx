@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -287,11 +287,14 @@ export default function MiValePage() {
     >
       <div className="flex-1 pr-4">
         <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1">{m.platillo}</h3>
-        {m.descripcion && <p className="text-slate-400 text-[10px] leading-snug font-medium">{m.descripcion}</p>}
+        {m.descripcion && <p className="text-slate-400 text-[10px] leading-snug font-medium mb-1">{m.descripcion}</p>}
+        {m.porciones_disponibles <= 15 && m.porciones_totales < 9000 && (
+          <span className="text-red-500 text-[9px] font-black uppercase flex items-center gap-1 anim-latido mt-1"><Flame size={12}/> ¡Quedan {m.porciones_disponibles}!</span>
+        )}
       </div>
       
       <div className="flex flex-col items-center gap-3 shrink-0">
-        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-xl w-14 h-14 ${m.porciones_disponibles <= 5 ? 'bg-red-50 text-red-600 anim-latido' : 'bg-indigo-50 text-[#6366F1]'}`}>
+        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-xl w-14 h-14 ${m.porciones_disponibles <= 15 ? 'bg-red-50 text-red-600 anim-latido' : 'bg-indigo-50 text-[#6366F1]'}`}>
           <p className="text-3xl font-black leading-none tracking-tighter">{m.porciones_disponibles}</p>
           <p className="text-[8px] font-black uppercase mt-0.5 opacity-60">Disp.</p>
         </div>
@@ -513,15 +516,49 @@ export default function MiValePage() {
                       </div>
                     )}
 
+                    {/* SECCIÓN DIVIDIDA PARA ALMUERZOS: ESPECIALIDADES VS CLÁSICOS */}
                     {almuerzos.length > 0 && (
                       <div>
                         <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
                           <Sun className="text-emerald-400" size={20} />
                           <h3 className="text-emerald-400 font-black text-xs uppercase tracking-[0.2em]">Almuerzos</h3>
                         </div>
-                        <div className="space-y-3">
-                          {almuerzos.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + i} />)}
-                        </div>
+
+                        {/* ESPECIALIDADES DEL DÍA (Stock < 9000) */}
+                        {almuerzos.filter(m => m.porciones_totales < 9000).length > 0 && (
+                          <div className="mb-8">
+                             <h4 className="text-white/60 text-[9px] uppercase tracking-widest font-bold mb-3 flex items-center gap-1"><Flame size={12}/> Especialidades del Día</h4>
+                             <div className="space-y-3">
+                               {almuerzos.filter(m => m.porciones_totales < 9000).map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + i} />)}
+                             </div>
+                          </div>
+                        )}
+
+                        {/* CLÁSICOS FGE (Stock >= 9000) EN CARRUSEL HORIZONTAL */}
+                        {almuerzos.filter(m => m.porciones_totales >= 9000).length > 0 && (
+                          <div>
+                            <h4 className="text-white/60 text-[9px] uppercase tracking-widest font-bold mb-3 flex items-center gap-1"><Star size={12}/> Clásicos FGE</h4>
+                            <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar snap-x">
+                               {almuerzos.filter(m => m.porciones_totales >= 9000).map((m, i) => (
+                                 <div key={m.id} className="snap-start min-w-[220px] bg-gradient-to-br from-[#1A2744] to-[#111A2E] p-5 rounded-3xl flex flex-col justify-between border border-[#C9A84C]/30 shadow-2xl transform hover:scale-105 transition-all">
+                                    <div>
+                                       <span className="text-[#C9A84C] text-[8px] font-black uppercase tracking-widest flex items-center gap-1 mb-2"><Star size={10} className="fill-[#C9A84C]"/> Menú Fijo</span>
+                                       <h3 className="text-white font-black text-sm uppercase leading-tight mb-2">{m.platillo}</h3>
+                                    </div>
+                                    <div className="mt-2 flex items-end justify-between gap-2">
+                                       <div className="flex flex-col">
+                                         <span className="text-emerald-400 text-[10px] font-black uppercase flex items-center gap-1"><Check size={12}/> Siempre</span>
+                                         <span className="text-emerald-400 text-[10px] font-black uppercase">Disponible</span>
+                                       </div>
+                                       <button onClick={() => apartarComida(m)} disabled={cargandoApartado} className="bg-[#C9A84C] hover:bg-white text-[#1A2744] px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md active:scale-95 transition-all flex items-center gap-1">
+                                         {cargandoApartado ? <Loader2 className="anim-girar" size={12}/> : 'Apartar'}
+                                       </button>
+                                    </div>
+                                 </div>
+                               ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -556,7 +593,6 @@ export default function MiValePage() {
                     <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Canjeado</span>
                   </div>
                 ))}
-                {historial.length === 0 && <p className="text-center text-slate-300 text-xs py-4 border border-dashed rounded-xl">No hay canjes previos</p>}
               </div>
             </div>
           </div>
@@ -590,7 +626,7 @@ export default function MiValePage() {
             <div className="bg-white rounded-[2rem] overflow-hidden shadow-2xl w-full border border-slate-100">
               <div className="bg-[#1A2744] p-6 text-center border-b-2 border-dashed border-slate-200 relative">
                 <p className="text-[#C9A84C] text-[10px] uppercase font-bold tracking-[0.2em] mb-1">Fiscalía General del Estado</p>
-                <h2 className="text-white text-xl font-black uppercase tracking-wider italic">Vale Digital</h2>
+                <h2 className="text-white text-xl font-black uppercase tracking-wider">Vale Digital</h2>
                 <div className="absolute -bottom-3 -left-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
                 <div className="absolute -bottom-3 -right-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
               </div>
@@ -612,8 +648,8 @@ export default function MiValePage() {
                     <Barcode 
                       value={valorQR} 
                       format="CODE128"
-                      width={2}
-                      height={60}
+                      width={2.5}
+                      height={80}
                       displayValue={false}
                       textAlign="center"
                       background="#ffffff"
