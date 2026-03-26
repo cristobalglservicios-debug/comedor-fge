@@ -311,16 +311,14 @@ export default function MiValePage() {
     );
   }
 
-  // --- COMPONENTE DE TARJETA MEJORADO CON BOTÓN ESMERALDA ---
+  // --- COMPONENTE DE TARJETA OPTIMIZADO PARA MÓVIL (TÁCTIL) ---
   const TarjetaPlatillo = ({ m, index }: { m: any, index: number }) => (
     <div 
-      className="group anim-fade-up bg-white p-5 rounded-3xl flex justify-between items-center border border-slate-100 transform hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(16,185,129,0.1)] hover:border-emerald-200/50 transition-all duration-500 mb-3 relative overflow-hidden"
+      className="anim-fade-up bg-white p-5 rounded-3xl flex justify-between items-center border border-slate-100 shadow-sm active:scale-[0.98] active:bg-slate-50 transition-all duration-200 mb-3 relative overflow-hidden"
       style={{ animationDelay: `${index * 100}ms` }}
     >
-      <div className="absolute inset-0 bg-gradient-to-r from-emerald-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-      
       <div className="flex-1 pr-4 relative z-10">
-        <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1 group-hover:text-emerald-950 transition-colors duration-300">{m.platillo}</h3>
+        <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1">{m.platillo}</h3>
         {m.descripcion && <p className="text-slate-400 text-[10px] leading-snug font-medium mb-1">{m.descripcion}</p>}
         {m.porciones_disponibles <= 15 && m.porciones_totales < 9000 && (
           <span className="text-red-500 text-[9px] font-black uppercase flex items-center gap-1 anim-latido mt-1 bg-red-50 inline-flex px-2 py-0.5 rounded-lg border border-red-100"><Flame size={12}/> ¡Quedan {m.porciones_disponibles}!</span>
@@ -328,14 +326,15 @@ export default function MiValePage() {
       </div>
       
       <div className="flex flex-col items-center gap-3 shrink-0 relative z-10">
-        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-2xl w-14 h-14 border transition-colors duration-500 ${m.porciones_disponibles <= 15 ? 'bg-red-50 border-red-100 text-red-600 anim-latido' : 'bg-slate-50 border-slate-100 text-[#1A2744] group-hover:bg-emerald-50 group-hover:border-emerald-100 group-hover:text-emerald-600'}`}>
+        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-2xl w-14 h-14 border transition-colors duration-300 ${m.porciones_disponibles <= 15 ? 'bg-red-50 border-red-100 text-red-600 anim-latido' : 'bg-slate-50 border-slate-100 text-[#1A2744]'}`}>
           <p className="text-2xl font-black leading-none tracking-tighter">{m.porciones_disponibles}</p>
           <p className="text-[8px] font-black uppercase mt-0.5 opacity-60">Disp.</p>
         </div>
         <button 
           onClick={() => apartarComida(m)}
           disabled={cargandoApartado}
-          className="relative overflow-hidden w-full bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-[0_8px_15px_rgba(16,185,129,0.25)] hover:shadow-[0_12px_20px_rgba(16,185,129,0.4)] transition-all active:scale-95 flex items-center justify-center gap-1 group/btn before:absolute before:inset-0 before:bg-white/20 before:-translate-x-full hover:before:animate-shimmer"
+          // Animación de Shimmer continua para que destaque en celular sin necesidad de Hover
+          className="relative overflow-hidden w-full bg-gradient-to-r from-emerald-500 to-emerald-400 text-white py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-[0_4px_10px_rgba(16,185,129,0.3)] active:scale-90 active:shadow-sm transition-all flex items-center justify-center gap-1 before:absolute before:inset-0 before:bg-white/30 before:-translate-x-full before:animate-[shimmer_3s_infinite]"
         >
           {cargandoApartado ? <Loader2 className="anim-girar relative z-10" size={14}/> : <><Plus size={14} className="relative z-10"/> <span className="relative z-10">Apartar</span></>}
         </button>
@@ -352,9 +351,9 @@ export default function MiValePage() {
 
       <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 p-4 sticky top-0 z-50 shadow-sm flex justify-between items-center px-4 md:px-8">
         <div className="flex items-center gap-4">
-          <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0 group hover:rotate-6 transition-transform duration-300">
+          <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0">
             <UtensilsCrossed className="absolute text-white/10 w-6 h-6 -rotate-3" strokeWidth={1.5} />
-            <ChefHat className="relative text-amber-400 -rotate-3 group-hover:scale-110 transition-transform duration-300" size={20} strokeWidth={1.5} />
+            <ChefHat className="relative text-amber-400 -rotate-3" size={20} strokeWidth={1.5} />
           </div>
           <div className="overflow-hidden">
             <p className="text-amber-500 text-[8px] font-black tracking-[0.2em] uppercase mb-0.5">Comedor FGE</p>
@@ -369,7 +368,7 @@ export default function MiValePage() {
           {(empleado?.rol === 'admin' || empleado?.rol === 'dev') && (
             <button 
               onClick={() => router.push('/admin')} 
-              className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl hover:bg-indigo-100 transition-all border border-indigo-100"
+              className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl active:bg-indigo-100 transition-all border border-indigo-100 active:scale-95"
               title="Panel Administración"
             >
               <ShieldCheck size={18} />
@@ -380,14 +379,14 @@ export default function MiValePage() {
           {empleado?.rol === 'dev' && (
             <button 
               onClick={() => router.push('/dev-panel')} 
-              className="bg-amber-50 text-amber-600 p-2.5 rounded-xl hover:bg-amber-100 transition-all border border-amber-100 anim-latido"
+              className="bg-amber-50 text-amber-600 p-2.5 rounded-xl active:bg-amber-100 transition-all border border-amber-100 anim-latido active:scale-95"
               title="Panel Developer"
             >
               <Terminal size={18} />
             </button>
           )}
 
-          <button onClick={handleLogout} className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-100 transition-all border border-red-100">
+          <button onClick={handleLogout} className="bg-red-50 text-red-600 p-2.5 rounded-xl active:bg-red-100 transition-all border border-red-100 active:scale-95">
             <LogOut size={18} />
           </button>
         </div>
@@ -404,8 +403,8 @@ export default function MiValePage() {
             <p className="text-slate-500 mb-8 text-xs font-medium">Por tu seguridad, debes crear una contraseña personal para acceder a tus vales.</p>
             
             <div className="space-y-4 mb-8">
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-[#1A2744] transition-colors"><Lock size={18} /></div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300"><Lock size={18} /></div>
                 <input 
                   type="password" 
                   value={nuevaPassword}
@@ -415,8 +414,8 @@ export default function MiValePage() {
                   required
                 />
               </div>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-[#1A2744] transition-colors"><Lock size={18} /></div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300"><Lock size={18} /></div>
                 <input 
                   type="password" 
                   value={confirmarPassword}
@@ -431,7 +430,7 @@ export default function MiValePage() {
             <button 
               type="submit" 
               disabled={cargandoPassword}
-              className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] transition-all shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] flex items-center justify-center gap-2 hover:bg-[#25365d]"
+              className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] transition-all shadow-xl shadow-[#1A2744]/20 active:scale-[0.95] flex items-center justify-center gap-2"
             >
               {cargandoPassword ? <Loader2 className="animate-spin text-amber-400" size={18}/> : 'Guardar y Continuar'}
             </button>
@@ -464,8 +463,8 @@ export default function MiValePage() {
                 <h3 className="text-3xl font-black text-[#1A2744] mb-1">{empleado.tickets_canjeado || 0}</h3>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Usados</p>
               </div>
-              <div className="bg-[#1A2744] p-5 rounded-[2rem] shadow-xl shadow-[#1A2744]/20 border border-[#2A3F6D] flex flex-col items-center text-center relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-400/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="bg-[#1A2744] p-5 rounded-[2rem] shadow-xl shadow-[#1A2744]/20 border border-[#2A3F6D] flex flex-col items-center text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-400/10 to-transparent opacity-50"></div>
                 <div className="relative z-10 flex flex-col items-center">
                   <div className="w-10 h-10 bg-[#2A3F6D] text-amber-400 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
                     <Utensils size={20} />
@@ -476,8 +475,7 @@ export default function MiValePage() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] border border-slate-100 relative overflow-hidden group">
-               <div className="absolute inset-0 bg-gradient-to-br from-slate-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="bg-white p-6 rounded-[2.5rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.1)] border border-slate-100 relative overflow-hidden">
                <div className="relative z-10">
                  <div className="flex items-center gap-3 mb-6">
                    <div className="bg-amber-50 border border-amber-100 p-3 rounded-2xl text-amber-500 shadow-sm"><QrCode size={20}/></div>
@@ -490,7 +488,7 @@ export default function MiValePage() {
                  <div className="flex items-center justify-between bg-slate-50/80 p-3 rounded-3xl border border-slate-100 mb-6">
                     <button 
                       onClick={() => setCantidadACanjear(Math.max(1, cantidadACanjear - 1))}
-                      className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm border border-slate-100 active:scale-90 hover:text-[#1A2744] hover:border-slate-300 transition-all"
+                      className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm border border-slate-100 active:scale-90 active:bg-slate-100 transition-transform"
                     >
                       <Minus size={20} />
                     </button>
@@ -500,7 +498,7 @@ export default function MiValePage() {
                     </div>
                     <button 
                       onClick={() => setCantidadACanjear(Math.min(empleado.tickets_restantes, cantidadACanjear + 1))}
-                      className="w-14 h-14 bg-[#1A2744] rounded-2xl flex items-center justify-center text-white shadow-md active:scale-90 hover:bg-[#25365d] hover:shadow-lg transition-all"
+                      className="w-14 h-14 bg-[#1A2744] rounded-2xl flex items-center justify-center text-white shadow-md active:scale-90 active:bg-[#25365d] transition-transform"
                     >
                       <Plus size={20} />
                     </button>
@@ -508,9 +506,9 @@ export default function MiValePage() {
 
                  <button 
                   onClick={iniciarGeneracion}
-                  className="relative w-full bg-[#1A2744] text-white py-5 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 overflow-hidden group/btn hover:shadow-2xl hover:bg-[#25365d]"
+                  // Destello continuo optimizado para móvil
+                  className="relative w-full bg-[#1A2744] text-white py-5 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-95 transition-all flex items-center justify-center gap-3 overflow-hidden before:absolute before:inset-0 before:bg-white/10 before:-translate-x-full before:animate-[shimmer_3s_infinite]"
                 >
-                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover/btn:animate-shimmer"></div>
                   <span className="relative z-10 flex items-center gap-2">Generar Vale <Check size={16} className="text-amber-400" /></span>
                 </button>
                </div>
@@ -538,7 +536,7 @@ export default function MiValePage() {
                       <button 
                         key={fecha} 
                         onClick={() => setFechaActiva(fecha)}
-                        className={`flex flex-col items-center justify-center rounded-[1.2rem] min-w-[70px] h-[85px] transition-all duration-300 border ${isActive ? 'bg-amber-400 text-[#1A2744] shadow-lg shadow-amber-400/20 border-amber-300 scale-105' : 'bg-[#2A3F6D]/50 border-[#2A3F6D] hover:bg-[#2A3F6D] text-slate-300'}`}
+                        className={`flex flex-col items-center justify-center rounded-[1.2rem] min-w-[70px] h-[85px] transition-all duration-300 border active:scale-95 ${isActive ? 'bg-amber-400 text-[#1A2744] shadow-lg shadow-amber-400/20 border-amber-300 scale-105' : 'bg-[#2A3F6D]/50 border-[#2A3F6D] text-slate-300'}`}
                       >
                         <span className="font-black text-2xl tracking-tighter">{day}</span>
                         <span className="text-[9px] font-black uppercase mt-1 tracking-widest opacity-80">{weekday}</span>
@@ -551,10 +549,10 @@ export default function MiValePage() {
               {/* BANNER DE ANTOJITOS FIJOS */}
               <button 
                 onClick={() => setMostrarMenuFijo(true)}
-                className="relative z-10 w-full mb-8 bg-[#2A3F6D]/40 border border-[#2A3F6D] hover:bg-[#2A3F6D] p-4 rounded-2xl flex items-center justify-between transition-all active:scale-[0.98] group"
+                className="relative z-10 w-full mb-8 bg-[#2A3F6D]/40 border border-[#2A3F6D] active:bg-[#2A3F6D] p-4 rounded-2xl flex items-center justify-between transition-all active:scale-95"
               >
                 <div className="flex items-center gap-4">
-                  <div className="bg-[#1A2744] p-2.5 rounded-xl text-amber-400 shadow-inner group-hover:rotate-6 transition-transform">
+                  <div className="bg-[#1A2744] p-2.5 rounded-xl text-amber-400 shadow-inner">
                     <Store size={18}/>
                   </div>
                   <div className="text-left">
@@ -562,7 +560,7 @@ export default function MiValePage() {
                     <p className="text-slate-400 text-[9px] font-bold uppercase tracking-wider">Ver menú mostrador</p>
                   </div>
                 </div>
-                <ChevronRight className="text-slate-500 group-hover:text-amber-400 transition-colors" size={20}/>
+                <ChevronRight className="text-slate-500" size={20}/>
               </button>
 
               <div key={fechaActiva} className="min-h-[150px] relative z-10">
@@ -570,8 +568,7 @@ export default function MiValePage() {
                 {reservasDelDia.length > 0 && (
                   <div className="space-y-4 mb-8">
                     {reservasDelDia.map((reserva) => (
-                      <div key={reserva.id} className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-[2rem] flex flex-col items-center text-center anim-fade-up relative overflow-hidden group" style={{animationDelay: '0ms'}}>
-                        <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                      <div key={reserva.id} className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-[2rem] flex flex-col items-center text-center anim-fade-up relative overflow-hidden" style={{animationDelay: '0ms'}}>
                         <div className="bg-emerald-500 text-white p-3 rounded-2xl mb-4 shadow-[0_0_20px_rgba(16,185,129,0.5)]">
                           <Check size={24}/>
                         </div>
@@ -582,7 +579,7 @@ export default function MiValePage() {
                         <button 
                           onClick={() => cancelarReserva(reserva)}
                           disabled={cargandoApartado || reserva.estado === 'CAPTURADO'}
-                          className={`w-full py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2 relative z-10 ${reserva.estado === 'CAPTURADO' ? 'bg-[#1A2744] text-slate-500 cursor-not-allowed' : 'bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500'}`}
+                          className={`w-full py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2 relative z-10 ${reserva.estado === 'CAPTURADO' ? 'bg-[#1A2744] text-slate-500 cursor-not-allowed' : 'bg-red-500/10 active:bg-red-500 text-red-400 active:text-white border border-red-500/20'}`}
                         >
                           {cargandoApartado ? <Loader2 className="anim-girar" size={14}/> : reserva.estado === 'CAPTURADO' ? 'En preparación' : <><X size={14}/> Cancelar Apartado</>}
                         </button>
@@ -630,9 +627,9 @@ export default function MiValePage() {
                             <h4 className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-black mb-4 flex items-center gap-2"><Star size={12} className="text-amber-400"/> Menú Fijo</h4>
                             <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x">
                                {almuerzos.filter(m => m.porciones_totales >= 9000).map((m, i) => (
-                                 <div key={m.id} className="snap-start min-w-[240px] bg-white p-5 rounded-3xl flex flex-col justify-between border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transform hover:-translate-y-1 hover:shadow-[0_15px_30px_rgba(16,185,129,0.15)] hover:border-emerald-200 transition-all duration-300 group">
+                                 <div key={m.id} className="snap-start min-w-[240px] bg-white p-5 rounded-3xl flex flex-col justify-between border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] active:scale-[0.98] transition-all duration-200">
                                    <div>
-                                       <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-4 group-hover:text-emerald-900 transition-colors">{m.platillo}</h3>
+                                       <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-4">{m.platillo}</h3>
                                    </div>
                                    <div className="flex items-end justify-between gap-2 mt-auto">
                                        <div className="flex flex-col">
@@ -642,7 +639,7 @@ export default function MiValePage() {
                                        <button 
                                           onClick={() => apartarComida(m)} 
                                           disabled={cargandoApartado} 
-                                          className="relative overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-[0_8px_15px_rgba(16,185,129,0.25)] active:scale-95 transition-all flex items-center justify-center gap-1 group/btn before:absolute before:inset-0 before:bg-white/20 before:-translate-x-full hover:before:animate-shimmer"
+                                          className="relative overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-400 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-[0_4px_10px_rgba(16,185,129,0.3)] active:scale-90 active:shadow-sm transition-all flex items-center justify-center gap-1 before:absolute before:inset-0 before:bg-white/30 before:-translate-x-full before:animate-[shimmer_3s_infinite]"
                                         >
                                          {cargandoApartado ? <Loader2 className="anim-girar relative z-10" size={12}/> : <><Plus size={12} className="relative z-10"/><span className="relative z-10">Apartar</span></>}
                                        </button>
@@ -671,14 +668,14 @@ export default function MiValePage() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 mb-6 group hover:shadow-md transition-shadow">
+            <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 mb-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-slate-400 group-hover:text-[#1A2744] transition-colors"><History size={18} /></div>
+                <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-slate-400"><History size={18} /></div>
                 <h3 className="text-sm font-black text-[#1A2744] uppercase tracking-tight">Historial</h3>
               </div>
               <div className="flex flex-col gap-3">
                 {historial.map((h, i) => (
-                  <div key={i} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
+                  <div key={i} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <div>
                       <p className="font-black text-[#1A2744] text-xs uppercase">{new Date(h.fecha_hora).toLocaleDateString('es-MX')}</p>
                       <p className="text-slate-400 text-[10px] font-bold tracking-widest uppercase mt-1">🕒 {new Date(h.fecha_hora).toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'})}</p>
@@ -769,7 +766,7 @@ export default function MiValePage() {
 
             <button 
               onClick={() => { setEstadoVista('dashboard'); setCantidadACanjear(1); }} 
-              className="bg-slate-200 hover:bg-slate-300 text-slate-600 px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] active:scale-95 transition-all w-full"
+              className="bg-slate-200 active:bg-slate-300 text-slate-600 px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] active:scale-95 transition-all w-full"
             >
               Finalizar y Regresar
             </button>
@@ -785,7 +782,7 @@ export default function MiValePage() {
             <div className="bg-white p-6 pb-4 shrink-0 border-b border-slate-100 relative z-10 rounded-t-[2.5rem] sm:rounded-t-[2rem]">
               <button 
                 onClick={() => setMostrarMenuFijo(false)}
-                className="absolute top-6 right-6 bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 p-2.5 rounded-full transition-all border border-slate-100"
+                className="absolute top-6 right-6 bg-slate-50 text-slate-400 active:text-red-500 active:bg-red-50 p-2.5 rounded-full transition-all border border-slate-100"
               >
                 <X size={20} />
               </button>
@@ -799,9 +796,9 @@ export default function MiValePage() {
             
             <div className="p-6 overflow-y-auto flex-1 space-y-4 no-scrollbar pb-20">
               {MENU_ANTOJITOS.map((categoria, i) => (
-                <div key={i} className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] anim-fade-up hover:border-amber-200 transition-colors group" style={{animationDelay: `${i * 50}ms`}}>
+                <div key={i} className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] anim-fade-up" style={{animationDelay: `${i * 50}ms`}}>
                   <div className="flex items-center gap-3 mb-4 border-b border-slate-50 pb-3">
-                    <span className="text-2xl bg-slate-50 w-10 h-10 flex items-center justify-center rounded-xl border border-slate-100 group-hover:bg-amber-50 group-hover:border-amber-100 transition-colors">{categoria.icono}</span>
+                    <span className="text-2xl bg-slate-50 w-10 h-10 flex items-center justify-center rounded-xl border border-slate-100">{categoria.icono}</span>
                     <h3 className="text-[#1A2744] font-black text-xs uppercase tracking-wider">{categoria.categoria}</h3>
                   </div>
                   <ul className="space-y-3">
