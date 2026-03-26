@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck, UtensilsCrossed } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -288,12 +288,32 @@ export default function MiValePage() {
   const valorQR = `${empleado?.nombre_completo}|${cantidadACanjear}|${tokenTimestamp}|${tokenSeguridad}`;
 
   if (estadoVista === 'cargando') {
-    return <div className="min-h-screen bg-[#F0F3F6] flex items-center justify-center font-bold text-slate-400">Verificando acceso...</div>;
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1A2744]/5 to-transparent z-0"></div>
+        <div className="relative z-10 flex flex-col items-center animate-pulse-slow">
+          <div className="relative flex items-center justify-center mb-6">
+            <div className="absolute inset-0 bg-amber-500/20 rounded-full blur-xl animate-pulse"></div>
+            <div className="w-16 h-16 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-[1.5rem] rotate-3 flex items-center justify-center shadow-2xl">
+              <ChefHat className="text-amber-400 -rotate-3" size={28} strokeWidth={1.5} />
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-[#1A2744]">
+            <Loader2 className="animate-spin text-amber-500" size={16} />
+            <p className="text-[10px] font-black tracking-[0.3em] uppercase">Verificando Perfil...</p>
+          </div>
+        </div>
+        <style dangerouslySetInnerHTML={{__html: `
+          @keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+          .animate-pulse-slow { animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        `}} />
+      </div>
+    );
   }
 
   const TarjetaPlatillo = ({ m, index }: { m: any, index: number }) => (
     <div 
-      className="anim-cascada bg-white p-5 rounded-3xl flex justify-between items-center shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 transform hover:scale-[1.02] active:scale-[0.98] transition-all mb-3"
+      className="anim-fade-up bg-white p-5 rounded-3xl flex justify-between items-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 transform hover:-translate-y-1 hover:shadow-[0_15px_30px_rgb(0,0,0,0.08)] transition-all duration-300 mb-3"
       style={{ animationDelay: `${index * 100}ms` }}
     >
       <div className="flex-1 pr-4">
@@ -305,14 +325,14 @@ export default function MiValePage() {
       </div>
       
       <div className="flex flex-col items-center gap-3 shrink-0">
-        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-xl w-14 h-14 ${m.porciones_disponibles <= 15 ? 'bg-red-50 text-red-600 anim-latido' : 'bg-indigo-50 text-[#6366F1]'}`}>
-          <p className="text-3xl font-black leading-none tracking-tighter">{m.porciones_disponibles}</p>
+        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-2xl w-14 h-14 border ${m.porciones_disponibles <= 15 ? 'bg-red-50 border-red-100 text-red-600 anim-latido' : 'bg-slate-50 border-slate-100 text-[#1A2744]'}`}>
+          <p className="text-2xl font-black leading-none tracking-tighter">{m.porciones_disponibles}</p>
           <p className="text-[8px] font-black uppercase mt-0.5 opacity-60">Disp.</p>
         </div>
         <button 
           onClick={() => apartarComida(m)}
           disabled={cargandoApartado}
-          className="w-full bg-[#1A2744] hover:bg-[#C9A84C] text-white hover:text-[#1A2744] px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-md transition-colors active:scale-95 flex items-center justify-center"
+          className="w-full bg-[#1A2744] hover:bg-[#C9A84C] text-white py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-[#1A2744]/20 transition-all active:scale-95 flex items-center justify-center"
         >
           {cargandoApartado ? <Loader2 className="anim-girar" size={12}/> : 'Apartar'}
         </button>
@@ -321,18 +341,22 @@ export default function MiValePage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans pb-10 relative">
       
-      <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
+      {/* DECORACIÓN DE FONDO GLOBAL */}
+      <div className="fixed top-[-10%] right-[-5%] w-[40vh] h-[40vh] bg-amber-500/5 rounded-full blur-[80px] pointer-events-none z-0"></div>
+
+      <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 p-4 sticky top-0 z-50 shadow-sm flex justify-between items-center px-4 md:px-8">
         <div className="flex items-center gap-4">
-          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner shrink-0">
-            <img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" />
+          <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0">
+            <UtensilsCrossed className="absolute text-white/10 w-6 h-6 -rotate-3" strokeWidth={1.5} />
+            <ChefHat className="relative text-amber-400 -rotate-3" size={20} strokeWidth={1.5} />
           </div>
           <div className="overflow-hidden">
-            <h1 className="font-black text-sm uppercase tracking-wider leading-tight truncate">
+            <p className="text-amber-500 text-[8px] font-black tracking-[0.2em] uppercase mb-0.5">Comedor FGE</p>
+            <h1 className="font-black text-xs md:text-sm uppercase tracking-wider leading-tight text-[#1A2744] truncate">
               {empleado ? empleado.nombre_completo : 'Panel Empleado'}
             </h1>
-            <p className="text-[#C9A84C] text-[9px] font-bold tracking-widest truncate uppercase">Fiscalía General</p>
           </div>
         </div>
         
@@ -341,7 +365,7 @@ export default function MiValePage() {
           {(empleado?.rol === 'admin' || empleado?.rol === 'dev') && (
             <button 
               onClick={() => router.push('/admin')} 
-              className="bg-indigo-500/20 text-indigo-300 p-2 rounded-xl hover:bg-indigo-500 hover:text-white transition-all border border-indigo-500/30"
+              className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl hover:bg-indigo-100 transition-all border border-indigo-100"
               title="Panel Administración"
             >
               <ShieldCheck size={18} />
@@ -352,119 +376,125 @@ export default function MiValePage() {
           {empleado?.rol === 'dev' && (
             <button 
               onClick={() => router.push('/dev-panel')} 
-              className="bg-amber-500/20 text-amber-400 p-2 rounded-xl hover:bg-amber-500 hover:text-white transition-all border border-amber-500/30 anim-latido"
+              className="bg-amber-50 text-amber-600 p-2.5 rounded-xl hover:bg-amber-100 transition-all border border-amber-100 anim-latido"
               title="Panel Developer"
             >
               <Terminal size={18} />
             </button>
           )}
 
-          <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all">
+          <button onClick={handleLogout} className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-100 transition-all border border-red-100">
             <LogOut size={18} />
           </button>
         </div>
       </nav>
 
-      <div className="max-w-md mx-auto px-4 mt-6">
+      <div className="max-w-md mx-auto px-4 mt-6 relative z-10">
 
         {estadoVista === 'cambiar_password' && empleado && (
-          <form onSubmit={actualizarPasswordUsuario} className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 anim-entrada-suave text-center">
-            <div className="w-16 h-16 bg-amber-50 text-[#C9A84C] rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-              <Lock size={32} />
+          <form onSubmit={actualizarPasswordUsuario} className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 anim-fade-up text-center">
+            <div className="w-20 h-20 bg-amber-50 border border-amber-100 text-amber-500 rounded-[2rem] rotate-3 flex items-center justify-center mx-auto mb-6 shadow-sm">
+              <Lock size={32} className="-rotate-3" />
             </div>
             <h2 className="text-2xl font-black text-[#1A2744] mb-2 uppercase tracking-tight">Seguridad FGE</h2>
-            <p className="text-slate-500 mb-6 text-xs font-medium">Por tu seguridad, debes crear una contraseña personal para acceder a tus vales de comida.</p>
+            <p className="text-slate-500 mb-8 text-xs font-medium">Por tu seguridad, debes crear una contraseña personal para acceder a tus vales.</p>
             
-            <div className="space-y-4 mb-6">
-              <input 
-                type="password" 
-                value={nuevaPassword}
-                onChange={(e) => setNuevaPassword(e.target.value)}
-                className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center font-bold text-slate-800 focus:border-[#C9A84C] outline-none transition-colors"
-                placeholder="Nueva Contraseña"
-                required
-              />
-              <input 
-                type="password" 
-                value={confirmarPassword}
-                onChange={(e) => setConfirmarPassword(e.target.value)}
-                className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center font-bold text-slate-800 focus:border-[#C9A84C] outline-none transition-colors"
-                placeholder="Confirmar Contraseña"
-                required
-              />
+            <div className="space-y-4 mb-8">
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-[#1A2744] transition-colors"><Lock size={18} /></div>
+                <input 
+                  type="password" 
+                  value={nuevaPassword}
+                  onChange={(e) => setNuevaPassword(e.target.value)}
+                  className="w-full pl-11 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all placeholder:font-normal placeholder:text-slate-300 tracking-widest"
+                  placeholder="Nueva Contraseña"
+                  required
+                />
+              </div>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-[#1A2744] transition-colors"><Lock size={18} /></div>
+                <input 
+                  type="password" 
+                  value={confirmarPassword}
+                  onChange={(e) => setConfirmarPassword(e.target.value)}
+                  className="w-full pl-11 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all placeholder:font-normal placeholder:text-slate-300 tracking-widest"
+                  placeholder="Confirmar Contraseña"
+                  required
+                />
+              </div>
             </div>
             
             <button 
               type="submit" 
               disabled={cargandoPassword}
-              className="w-full bg-[#1A2744] hover:bg-[#C9A84C] text-white py-4 rounded-xl font-black uppercase tracking-widest transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+              className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] transition-all shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] flex items-center justify-center gap-2 hover:bg-[#25365d]"
             >
-              {cargandoPassword ? <Loader2 className="animate-spin" size={18}/> : 'Guardar y Continuar'}
+              {cargandoPassword ? <Loader2 className="animate-spin text-amber-400" size={18}/> : 'Guardar y Continuar'}
             </button>
-            {errorPassword && <p className="text-red-500 mt-4 text-center text-sm font-medium">{errorPassword}</p>}
+            {errorPassword && <p className="text-red-500 mt-6 text-center text-xs font-black uppercase tracking-wider">{errorPassword}</p>}
           </form>
         )}
 
         {estadoVista === 'dashboard' && empleado && (
-          <div className="flex flex-col gap-5 anim-entrada-suave">
+          <div className="flex flex-col gap-6 anim-fade-up">
             
             {mostrarBannerCierre && (
-              <div className="bg-red-50 border border-red-200 p-4 rounded-3xl shadow-sm flex items-start gap-3 anim-latido shadow-sm">
-                <div className="bg-red-100 text-red-600 p-2 rounded-full shrink-0 mt-0.5">
+              <div className="bg-red-50 border border-red-200 p-4 rounded-3xl flex items-start gap-3 anim-latido shadow-sm">
+                <div className="bg-white border border-red-100 text-red-600 p-2 rounded-xl shrink-0 mt-0.5 shadow-sm">
                   <AlertTriangle size={18} />
                 </div>
                 <div>
-                  <h4 className="text-red-800 font-black text-xs uppercase tracking-wider mb-1">¡Cierre de Semana!</h4>
+                  <h4 className="text-red-800 font-black text-xs uppercase tracking-wider mb-1">Cierre de Semana</h4>
                   <p className="text-red-600 text-[10px] font-bold leading-relaxed">
-                    Aún te quedan <span className="text-red-800 text-xs font-black bg-red-100 px-1 rounded">{empleado.tickets_restantes} vales</span>. Recuerda apartar tu comida. Los vales no son acumulables y tu saldo se reiniciará el domingo.
+                    Aún tienes <span className="text-red-800 font-black bg-white px-1.5 py-0.5 rounded shadow-sm border border-red-100">{empleado.tickets_restantes} vales</span>. Aparta tu comida. Los vales no son acumulables.
                   </p>
                 </div>
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
-                <div className="w-8 h-8 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-2">
-                  <TicketCheck size={18} />
+              <div className="bg-white p-5 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center text-center">
+                <div className="w-10 h-10 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mb-3">
+                  <TicketCheck size={20} />
                 </div>
-                <h3 className="text-2xl font-black text-[#1A2744]">{empleado.tickets_canjeado || 0}</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Usados</p>
+                <h3 className="text-3xl font-black text-[#1A2744] mb-1">{empleado.tickets_canjeado || 0}</h3>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Usados</p>
               </div>
-              <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-indigo-50/40 anim-latido opacity-50"></div>
+              <div className="bg-[#1A2744] p-5 rounded-[2rem] shadow-xl shadow-[#1A2744]/20 border border-[#2A3F6D] flex flex-col items-center text-center relative overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-400/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 <div className="relative z-10 flex flex-col items-center">
-                  <div className="w-8 h-8 bg-amber-50 text-[#C9A84C] rounded-full flex items-center justify-center mb-2">
-                    <Utensils size={18} />
+                  <div className="w-10 h-10 bg-[#2A3F6D] text-amber-400 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
+                    <Utensils size={20} />
                   </div>
-                  <h3 className="text-2xl font-black text-[#6366F1]">{empleado.tickets_restantes || 0}</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Disponibles</p>
+                  <h3 className="text-3xl font-black text-white mb-1">{empleado.tickets_restantes || 0}</h3>
+                  <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest">Disponibles</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100">
+            <div className="bg-white p-6 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] border border-slate-100">
                <div className="flex items-center gap-3 mb-6">
-                 <div className="bg-[#1A2744] p-2 rounded-xl text-[#C9A84C]"><QrCode size={20}/></div>
+                 <div className="bg-amber-50 border border-amber-100 p-3 rounded-2xl text-amber-500"><QrCode size={20}/></div>
                  <div>
-                   <h3 className="text-[#1A2744] font-black text-xs uppercase tracking-tight">Canje de Raciones</h3>
-                   <p className="text-slate-400 text-[9px] font-bold uppercase">Selecciona cuántas raciones retirarás</p>
+                   <h3 className="text-[#1A2744] font-black text-sm uppercase tracking-tight">Canje Rápido</h3>
+                   <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mt-0.5">Generar Vale Digital</p>
                  </div>
                </div>
 
-               <div className="flex items-center justify-between bg-slate-50 p-4 rounded-3xl border border-slate-100 mb-6">
+               <div className="flex items-center justify-between bg-slate-50/80 p-3 rounded-3xl border border-slate-100 mb-6">
                   <button 
                     onClick={() => setCantidadACanjear(Math.max(1, cantidadACanjear - 1))}
-                    className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-[#1A2744] shadow-sm active:scale-90 transition-transform"
+                    className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm border border-slate-100 active:scale-90 hover:text-[#1A2744] transition-all"
                   >
                     <Minus size={20} />
                   </button>
-                  <div className="text-center">
+                  <div className="text-center flex-1">
                     <span className="text-4xl font-black text-[#1A2744]">{cantidadACanjear}</span>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Unidades</p>
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Unidades</p>
                   </div>
                   <button 
                     onClick={() => setCantidadACanjear(Math.min(empleado.tickets_restantes, cantidadACanjear + 1))}
-                    className="w-12 h-12 bg-[#C9A84C] rounded-2xl flex items-center justify-center text-[#1A2744] shadow-sm active:scale-90 transition-transform"
+                    className="w-14 h-14 bg-[#1A2744] rounded-2xl flex items-center justify-center text-white shadow-md active:scale-90 hover:bg-[#25365d] transition-all"
                   >
                     <Plus size={20} />
                   </button>
@@ -472,25 +502,28 @@ export default function MiValePage() {
 
                <button 
                 onClick={iniciarGeneracion}
-                className="w-full bg-[#1A2744] text-white py-5 rounded-[1.5rem] font-black uppercase text-[11px] tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 transform hover:-translate-y-0.5"
+                className="relative w-full bg-[#1A2744] text-white py-5 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 overflow-hidden group"
               >
-                Generar Vale Digital <Check size={16} className="text-[#C9A84C]" />
+                <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:animate-shimmer"></div>
+                <span className="relative z-10 flex items-center gap-2">Generar Vale <Check size={16} className="text-amber-400" /></span>
               </button>
             </div>
 
-            <div className="bg-gradient-to-br from-[#1A2744] to-[#25365d] rounded-[2rem] shadow-2xl p-6 border border-slate-700 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-3xl opacity-20"></div>
+            <div className="bg-gradient-to-br from-[#1A2744] to-[#25365d] rounded-[2.5rem] shadow-2xl p-6 border border-slate-700 relative overflow-hidden">
+              <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-amber-400/10 rounded-full blur-[40px] pointer-events-none"></div>
               
-              <div className="flex items-center gap-3 mb-6 relative z-10">
-                <ChefHat className="text-[#C9A84C]" size={28}/>
+              <div className="flex items-center gap-4 mb-8 relative z-10">
+                <div className="bg-[#2A3F6D] p-3 rounded-2xl shadow-inner border border-slate-600/50">
+                  <ChefHat className="text-amber-400" size={24}/>
+                </div>
                 <div>
-                  <h2 className="text-white text-xl font-black uppercase tracking-wider">Menú del Comedor</h2>
-                  <p className="text-slate-400 text-[10px] uppercase font-bold tracking-[0.2em]">Aparta tu platillo</p>
+                  <h2 className="text-white text-xl font-black uppercase tracking-wider">Menú FGE</h2>
+                  <p className="text-amber-400/80 text-[9px] uppercase font-black tracking-[0.2em] mt-1">Planifica tus comidas</p>
                 </div>
               </div>
 
               {fechasDisponibles.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-4 mb-4 no-scrollbar border-b border-white/10 relative z-10">
+                <div className="flex gap-3 overflow-x-auto pb-6 mb-2 no-scrollbar border-b border-white/5 relative z-10">
                   {fechasDisponibles.map(fecha => {
                     const { day, weekday } = formatearFechaPestaña(fecha);
                     const isActive = fechaActiva === fecha;
@@ -498,52 +531,53 @@ export default function MiValePage() {
                       <button 
                         key={fecha} 
                         onClick={() => setFechaActiva(fecha)}
-                        className={`flex flex-col items-center justify-center p-3 rounded-2xl min-w-[65px] h-[75px] transition-all duration-300 ${isActive ? 'bg-[#C9A84C] text-[#1A2744] shadow-lg scale-105' : 'bg-white/10 hover:bg-white/20 text-slate-300'}`}
+                        className={`flex flex-col items-center justify-center rounded-[1.2rem] min-w-[70px] h-[85px] transition-all duration-300 border ${isActive ? 'bg-amber-400 text-[#1A2744] shadow-lg shadow-amber-400/20 border-amber-300 scale-105' : 'bg-[#2A3F6D]/50 border-[#2A3F6D] hover:bg-[#2A3F6D] text-slate-300'}`}
                       >
-                        <span className="font-black text-2xl">{day}</span>
-                        <span className="text-[10px] font-bold uppercase mt-1 opacity-80">{weekday}</span>
+                        <span className="font-black text-2xl tracking-tighter">{day}</span>
+                        <span className="text-[9px] font-black uppercase mt-1 tracking-widest opacity-80">{weekday}</span>
                       </button>
                     );
                   })}
                 </div>
               )}
 
-              {/* BANNER DE ANTOJITOS FIJOS (ABRE EL MODAL) */}
+              {/* BANNER DE ANTOJITOS FIJOS */}
               <button 
                 onClick={() => setMostrarMenuFijo(true)}
-                className="relative z-10 w-full mb-6 bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 hover:bg-amber-500/30 p-4 rounded-2xl flex items-center justify-between transition-all active:scale-95 group"
+                className="relative z-10 w-full mb-8 bg-[#2A3F6D]/40 border border-[#2A3F6D] hover:bg-[#2A3F6D] p-4 rounded-2xl flex items-center justify-between transition-all active:scale-[0.98] group"
               >
-                <div className="flex items-center gap-3">
-                  <div className="bg-amber-500/20 p-2 rounded-xl text-amber-400 group-hover:scale-110 transition-transform">
-                    <Store size={20}/>
+                <div className="flex items-center gap-4">
+                  <div className="bg-[#1A2744] p-2.5 rounded-xl text-amber-400 shadow-inner group-hover:rotate-6 transition-transform">
+                    <Store size={18}/>
                   </div>
                   <div className="text-left">
-                    <h4 className="text-amber-400 font-black text-xs uppercase tracking-widest">¿Antojo de algo más?</h4>
-                    <p className="text-amber-200/70 text-[9px] font-bold uppercase">Ver menú fijo de comida rápida</p>
+                    <h4 className="text-white font-black text-xs uppercase tracking-widest mb-0.5">Comida Rápida</h4>
+                    <p className="text-slate-400 text-[9px] font-bold uppercase tracking-wider">Ver menú mostrador</p>
                   </div>
                 </div>
-                <ChevronRight className="text-amber-400/50" size={20}/>
+                <ChevronRight className="text-slate-500 group-hover:text-amber-400 transition-colors" size={20}/>
               </button>
 
               <div key={fechaActiva} className="min-h-[150px] relative z-10">
                 
                 {reservasDelDia.length > 0 && (
-                  <div className="space-y-4 mb-6">
+                  <div className="space-y-4 mb-8">
                     {reservasDelDia.map((reserva) => (
-                      <div key={reserva.id} className="bg-emerald-500/20 border border-emerald-500/30 p-6 rounded-3xl flex flex-col items-center text-center anim-cascada" style={{animationDelay: '0ms'}}>
-                        <div className="bg-emerald-500 text-white p-3 rounded-full mb-3 shadow-lg">
+                      <div key={reserva.id} className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-[2rem] flex flex-col items-center text-center anim-fade-up relative overflow-hidden" style={{animationDelay: '0ms'}}>
+                        <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none"></div>
+                        <div className="bg-emerald-500 text-white p-3 rounded-2xl mb-4 shadow-[0_0_15px_rgba(16,185,129,0.4)]">
                           <Check size={24}/>
                         </div>
-                        <p className="text-white font-black uppercase text-xs mb-1">¡Buen provecho!</p>
-                        <p className="text-emerald-200 text-sm font-black uppercase tracking-wide bg-emerald-900/60 border border-emerald-500/30 px-4 py-2 rounded-xl mt-2 mb-4 max-w-full truncate">
+                        <p className="text-emerald-400 font-black uppercase text-[10px] tracking-[0.2em] mb-1">Apartado Confirmado</p>
+                        <p className="text-white text-sm font-black uppercase leading-tight mt-2 mb-6 max-w-full">
                           {reserva.menu_comedor?.platillo}
                         </p>
                         <button 
                           onClick={() => cancelarReserva(reserva)}
                           disabled={cargandoApartado || reserva.estado === 'CAPTURADO'}
-                          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${reserva.estado === 'CAPTURADO' ? 'bg-slate-500/50 text-slate-300 cursor-not-allowed' : 'bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white border border-red-500/30'}`}
+                          className={`w-full py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${reserva.estado === 'CAPTURADO' ? 'bg-[#1A2744] text-slate-500 cursor-not-allowed' : 'bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500'}`}
                         >
-                          {cargandoApartado ? <Loader2 className="anim-girar" size={14}/> : reserva.estado === 'CAPTURADO' ? 'Pedido en preparación' : <><X size={14}/> Cancelar Reserva</>}
+                          {cargandoApartado ? <Loader2 className="anim-girar" size={14}/> : reserva.estado === 'CAPTURADO' ? 'En preparación' : <><X size={14}/> Cancelar Apartado</>}
                         </button>
                       </div>
                     ))}
@@ -551,17 +585,17 @@ export default function MiValePage() {
                 )}
 
                 {menusParaMostrar.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center text-slate-400 py-10 border-2 border-dashed border-white/10 rounded-3xl bg-white/5">
-                    <Calendar size={32} className="mb-3 opacity-40"/>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-center">Menú no publicado para<br/>esta fecha</p>
+                  <div className="flex flex-col items-center justify-center text-slate-400 py-12 border-2 border-dashed border-[#2A3F6D] rounded-[2rem] bg-[#2A3F6D]/10">
+                    <Calendar size={32} className="mb-4 opacity-40"/>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-center leading-relaxed">Menú no publicado<br/>para esta fecha</p>
                   </div>
                 ) : (
-                  <div className="space-y-8">
+                  <div className="space-y-10">
                     {desayunos.length > 0 && (
                       <div>
-                        <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
-                          <Sunrise className="text-[#C9A84C]" size={20} />
-                          <h3 className="text-[#C9A84C] font-black text-xs uppercase tracking-[0.2em]">Desayunos</h3>
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="bg-amber-400/10 p-2 rounded-lg"><Sunrise className="text-amber-400" size={18} /></div>
+                          <h3 className="text-white font-black text-sm uppercase tracking-[0.2em]">Desayunos</h3>
                         </div>
                         <div className="space-y-3">
                           {desayunos.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={i} />)}
@@ -571,14 +605,13 @@ export default function MiValePage() {
 
                     {almuerzos.length > 0 && (
                       <div>
-                        <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
-                          <Sun className="text-emerald-400" size={20} />
-                          <h3 className="text-emerald-400 font-black text-xs uppercase tracking-[0.2em]">Almuerzos</h3>
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="bg-emerald-400/10 p-2 rounded-lg"><Sun className="text-emerald-400" size={18} /></div>
+                          <h3 className="text-white font-black text-sm uppercase tracking-[0.2em]">Almuerzos</h3>
                         </div>
 
                         {almuerzos.filter(m => m.porciones_totales < 9000).length > 0 && (
-                          <div className="mb-8">
-                             <h4 className="text-white/60 text-[9px] uppercase tracking-widest font-bold mb-3 flex items-center gap-1"><Flame size={12}/> Especialidades del Día</h4>
+                          <div className="mb-10">
                              <div className="space-y-3">
                                {almuerzos.filter(m => m.porciones_totales < 9000).map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + i} />)}
                              </div>
@@ -586,21 +619,20 @@ export default function MiValePage() {
                         )}
 
                         {almuerzos.filter(m => m.porciones_totales >= 9000).length > 0 && (
-                          <div>
-                            <h4 className="text-white/60 text-[9px] uppercase tracking-widest font-bold mb-3 flex items-center gap-1"><Star size={12}/> Clásicos del comedor</h4>
-                            <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar snap-x">
+                          <div className="bg-[#2A3F6D]/30 p-5 rounded-[2rem] border border-[#2A3F6D]">
+                            <h4 className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-black mb-4 flex items-center gap-2"><Star size={12} className="text-amber-400"/> Menú Fijo</h4>
+                            <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x">
                                {almuerzos.filter(m => m.porciones_totales >= 9000).map((m, i) => (
-                                 <div key={m.id} className="snap-start min-w-[220px] bg-gradient-to-br from-[#1A2744] to-[#111A2E] p-5 rounded-3xl flex flex-col justify-between border border-[#C9A84C]/30 shadow-2xl transform hover:scale-105 transition-all">
+                                 <div key={m.id} className="snap-start min-w-[240px] bg-white p-5 rounded-3xl flex flex-col justify-between border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
                                    <div>
-                                       <span className="text-[#C9A84C] text-[8px] font-black uppercase tracking-widest flex items-center gap-1 mb-2"><Star size={10} className="fill-[#C9A84C]"/> Menú Fijo</span>
-                                       <h3 className="text-white font-black text-sm uppercase leading-tight mb-2">{m.platillo}</h3>
+                                       <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-4">{m.platillo}</h3>
                                    </div>
-                                   <div className="mt-2 flex items-end justify-between gap-2">
+                                   <div className="flex items-end justify-between gap-2 mt-auto">
                                        <div className="flex flex-col">
-                                         <span className="text-emerald-400 text-[10px] font-black uppercase flex items-center gap-1"><Check size={12}/> Siempre</span>
-                                         <span className="text-emerald-400 text-[10px] font-black uppercase">Disponible</span>
+                                         <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Check size={10}/> Siempre</span>
+                                         <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest">Disponible</span>
                                        </div>
-                                       <button onClick={() => apartarComida(m)} disabled={cargandoApartado} className="bg-[#C9A84C] hover:bg-white text-[#1A2744] px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md active:scale-95 transition-all flex items-center gap-1">
+                                       <button onClick={() => apartarComida(m)} disabled={cargandoApartado} className="bg-[#1A2744] hover:bg-[#C9A84C] text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-md active:scale-95 transition-all flex items-center justify-center">
                                          {cargandoApartado ? <Loader2 className="anim-girar" size={12}/> : 'Apartar'}
                                        </button>
                                    </div>
@@ -614,9 +646,9 @@ export default function MiValePage() {
 
                     {cenas.length > 0 && (
                       <div>
-                        <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
-                          <Moon className="text-blue-400" size={20} />
-                          <h3 className="text-blue-400 font-black text-xs uppercase tracking-[0.2em]">Cenas</h3>
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="bg-blue-400/10 p-2 rounded-lg"><Moon className="text-blue-400" size={18} /></div>
+                          <h3 className="text-white font-black text-sm uppercase tracking-[0.2em]">Cenas</h3>
                         </div>
                         <div className="space-y-3">
                           {cenas.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + almuerzos.length + i} />)}
@@ -628,74 +660,72 @@ export default function MiValePage() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 mb-6">
-              <div className="flex items-center gap-2 mb-4">
-                <History size={16} className="text-slate-400" />
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Historial reciente</h3>
+            <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 mb-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-slate-400"><History size={18} /></div>
+                <h3 className="text-sm font-black text-[#1A2744] uppercase tracking-tight">Historial</h3>
               </div>
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
                 {historial.map((h, i) => (
-                  <div key={i} className="flex justify-between items-center border-b border-slate-50 pb-3 last:border-0 last:pb-0">
+                  <div key={i} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <div>
-                      <p className="font-bold text-[#1A2744] text-sm">{new Date(h.fecha_hora).toLocaleDateString('es-MX')}</p>
-                      <p className="text-slate-400 text-[10px] font-medium uppercase tracking-tighter">🕒 {new Date(h.fecha_hora).toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'})}</p>
+                      <p className="font-black text-[#1A2744] text-xs uppercase">{new Date(h.fecha_hora).toLocaleDateString('es-MX')}</p>
+                      <p className="text-slate-400 text-[10px] font-bold tracking-widest uppercase mt-1">🕒 {new Date(h.fecha_hora).toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'})}</p>
                     </div>
-                    <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Canjeado</span>
+                    <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest">Canjeado</span>
                   </div>
                 ))}
-                {historial.length === 0 && <p className="text-center text-slate-300 text-xs py-4 border border-dashed rounded-xl">No hay canjes previos</p>}
+                {historial.length === 0 && <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6 border-2 border-dashed border-slate-100 rounded-2xl">No hay canjes previos</p>}
               </div>
             </div>
-          </div>
-        )}
-
-        {estadoVista === 'busqueda' && (
-          <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 anim-entrada-suave">
-            <h2 className="text-2xl font-black text-[#1A2744] mb-2 uppercase tracking-tight">Comedor FGE Yucatán</h2>
-            <p className="text-slate-500 mb-6 text-sm">Inicia sesión desde la pantalla principal para continuar.</p>
           </div>
         )}
 
         {estadoVista === 'animando' && (
-          <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 flex flex-col items-center">
-            <div className="w-20 h-20 bg-[#1A2744] rounded-full flex items-center justify-center text-3xl mb-8 relative shadow-lg">
-              📊 <div className="absolute inset-0 rounded-full border-4 border-[#1A2744]/20 anim-latido"></div>
+          <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl border border-slate-100 flex flex-col items-center justify-center min-h-[400px]">
+            <div className="w-24 h-24 bg-[#1A2744] rounded-[2rem] rotate-3 flex items-center justify-center mb-10 relative shadow-[0_15px_30px_rgba(26,39,68,0.2)] border border-slate-100">
+              <QrCode size={36} className="text-amber-400 -rotate-3" />
+              <div className="absolute inset-0 rounded-[2rem] border-4 border-amber-400/20 anim-latido"></div>
             </div>
-            <h3 className="text-lg font-bold text-[#1A2744] mb-8 uppercase tracking-widest">Generando...</h3>
-            <div className="w-full flex flex-col gap-4 mb-8">
-              <PasoCheck visible={pasoAnimacion >= 1} texto="Verificando identidad..." completed={pasoAnimacion > 1} />
-              <PasoCheck visible={pasoAnimacion >= 2} texto={`Solicitando ${cantidadACanjear} raciones...`} completed={pasoAnimacion > 2} />
-              <PasoCheck visible={pasoAnimacion >= 3} texto="Validando ID único de canje..." completed={pasoAnimacion > 3} />
-              <PasoCheck visible={pasoAnimacion >= 4} texto="Generando QR Seguro..." completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
-              <PasoCheck visible={pasoAnimacion >= 5} texto="¡Vale generado!" completed={pasoAnimacion >= 5} />
+            <h3 className="text-sm font-black text-[#1A2744] mb-8 uppercase tracking-[0.2em]">Generando Vale</h3>
+            <div className="w-full flex flex-col gap-5">
+              <PasoCheck visible={pasoAnimacion >= 1} texto="Verificando Identidad" completed={pasoAnimacion > 1} />
+              <PasoCheck visible={pasoAnimacion >= 2} texto={`Aprobando ${cantidadACanjear} Raciones`} completed={pasoAnimacion > 2} />
+              <PasoCheck visible={pasoAnimacion >= 3} texto="Asignando Token Seguro" completed={pasoAnimacion > 3} />
+              <PasoCheck visible={pasoAnimacion >= 4} texto="Renderizando QR" completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
             </div>
           </div>
         )}
 
         {estadoVista === 'ticket' && (
-          <div className="flex flex-col items-center gap-4 anim-cascada" style={{animationDelay: '0ms'}}>
-            <div className="bg-white rounded-[2rem] overflow-hidden shadow-2xl w-full border border-slate-100">
-              <div className="bg-[#1A2744] p-6 text-center border-b-2 border-dashed border-slate-200 relative">
-                <p className="text-[#C9A84C] text-[10px] uppercase font-bold tracking-[0.2em] mb-1">Fiscalía General del Estado</p>
-                <h2 className="text-white text-xl font-black uppercase tracking-wider italic">Vale Digital</h2>
-                <div className="absolute -bottom-3 -left-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
-                <div className="absolute -bottom-3 -right-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
+          <div className="flex flex-col items-center gap-6 anim-fade-up">
+            <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl w-full border border-slate-100 relative">
+              
+              <div className="bg-[#1A2744] p-8 text-center border-b-2 border-dashed border-slate-200 relative">
+                <ChefHat className="text-amber-400/20 absolute top-4 left-4 w-16 h-16 -rotate-12" />
+                <p className="text-amber-400 text-[9px] uppercase font-black tracking-[0.3em] mb-2 relative z-10">Comedor Fiscalía</p>
+                <h2 className="text-white text-2xl font-black uppercase tracking-widest relative z-10">Vale Digital</h2>
+                
+                {/* Muescas del ticket */}
+                <div className="absolute -bottom-4 -left-4 w-8 h-8 bg-[#F8FAFC] rounded-full shadow-inner"></div>
+                <div className="absolute -bottom-4 -right-4 w-8 h-8 bg-[#F8FAFC] rounded-full shadow-inner"></div>
               </div>
-              <div className="p-8 flex flex-col items-center">
+
+              <div className="p-8 flex flex-col items-center relative">
                 <div className="flex justify-between w-full mb-8 gap-4 text-center">
                   <div className="flex-1">
-                    <p className="text-slate-400 text-[9px] uppercase font-bold tracking-wider mb-1">Empleado</p>
-                    <p className="text-[#1A2744] text-[11px] font-black leading-tight uppercase truncate">{empleado.nombre_completo}</p>
+                    <p className="text-slate-400 text-[8px] uppercase font-black tracking-[0.2em] mb-1">Titular</p>
+                    <p className="text-[#1A2744] text-xs font-black leading-tight uppercase truncate">{empleado.nombre_completo}</p>
                   </div>
-                  <div className="flex-1 border-l pl-4 border-slate-100">
-                    <p className="text-slate-400 text-[9px] uppercase font-bold tracking-wider mb-1">Fecha</p>
-                    <p className="text-[#1A2744] text-xs font-black">{hoyCorto}</p>
+                  <div className="flex-1 border-l border-slate-100">
+                    <p className="text-slate-400 text-[8px] uppercase font-black tracking-[0.2em] mb-1">Fecha</p>
+                    <p className="text-[#1A2744] text-xs font-black uppercase">{hoyCorto}</p>
                   </div>
                 </div>
-                <div className="w-full bg-[#F8FAFC] p-6 rounded-2xl flex flex-col items-center mb-6 border border-slate-50 relative overflow-hidden">
-                   <div className="absolute inset-0 bg-indigo-50/50 anim-latido opacity-50"></div>
-                  
-                  <div className="relative z-10 w-full flex justify-center bg-white p-2 rounded-xl">
+
+                <div className="w-full bg-slate-50 p-6 rounded-[2rem] flex flex-col items-center mb-8 border border-slate-100 relative overflow-hidden">
+                   
+                  <div className="relative z-10 w-full flex justify-center bg-white p-3 rounded-xl shadow-sm border border-slate-100 mb-4">
                     <Barcode 
                       value={valorQR} 
                       format="CODE128"
@@ -704,29 +734,34 @@ export default function MiValePage() {
                       displayValue={false}
                       textAlign="center"
                       background="#ffffff"
-                      lineColor="#000000"
+                      lineColor="#1A2744"
                     />
                   </div>
                   
-                  <div className="relative z-10 bg-[#1A2744] text-[#C9A84C] px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-widest mt-4 shadow-lg animate-bounce flex items-center gap-2">
+                  <div className="relative z-10 bg-amber-400 text-[#1A2744] px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-amber-400/30 flex items-center gap-2">
                     <Layers size={14}/> {cantidadACanjear} RACIONES
                   </div>
-                  <div className="mt-4 flex items-center gap-1.5 text-slate-400 relative z-10">
-                    <Clock size={12}/> <p className="text-[9px] font-black uppercase">VÁLIDO POR UN SOLO ESCANEO</p>
-                  </div>
 
-                  <div className="relative z-10 mt-6 pt-4 border-t border-slate-200 w-full text-center">
-                    <p className="text-slate-400 text-[8px] font-black uppercase tracking-widest mb-1">Folio de Seguridad (Manual)</p>
-                    <div className="flex justify-center items-center gap-2 text-[#1A2744] font-black text-xl tracking-[0.3em]">
-                        <Hash size={16} className="text-[#C9A84C]"/> {tokenSeguridad}
+                  <div className="relative z-10 mt-8 pt-6 border-t border-slate-200 w-full text-center">
+                    <p className="text-slate-400 text-[8px] font-black uppercase tracking-[0.2em] mb-2">Token de Validación</p>
+                    <div className="flex justify-center items-center gap-2 text-[#1A2744] font-black text-2xl tracking-[0.3em]">
+                        <Hash size={20} className="text-slate-300"/> {tokenSeguridad}
                     </div>
                   </div>
-
                 </div>
-                <div className="w-full bg-emerald-50 text-emerald-600 p-3 rounded-2xl text-center font-black text-[11px] uppercase tracking-widest border border-emerald-100 anim-latido">✓ Muestre en Ventanilla</div>
+
+                <div className="w-full bg-emerald-50 text-emerald-600 p-4 rounded-xl text-center font-black text-[10px] uppercase tracking-[0.2em] border border-emerald-100 flex justify-center items-center gap-2 anim-latido">
+                  <Check size={16}/> Muestre en Ventanilla
+                </div>
               </div>
             </div>
-            <button onClick={() => { setEstadoVista('dashboard'); setCantidadACanjear(1); }} className="bg-[#1A2744]/10 text-[#1A2744] px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest mt-4 active:scale-95 transition-all">Finalizar y Regresar</button>
+
+            <button 
+              onClick={() => { setEstadoVista('dashboard'); setCantidadACanjear(1); }} 
+              className="bg-slate-200 hover:bg-slate-300 text-slate-600 px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] active:scale-95 transition-all w-full"
+            >
+              Finalizar y Regresar
+            </button>
           </div>
         )}
 
@@ -734,43 +769,44 @@ export default function MiValePage() {
 
       {/* MODAL BOTTOM SHEET: MENÚ DE ANTOJITOS */}
       {mostrarMenuFijo && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#1A2744]/80 backdrop-blur-sm anim-entrada-suave">
-          <div className="bg-[#F8FAFC] w-full max-w-md h-[85vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2rem] rounded-t-[2.5rem] overflow-hidden flex flex-col shadow-2xl relative">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#1A2744]/90 backdrop-blur-sm anim-fade-up">
+          <div className="bg-[#F8FAFC] w-full max-w-md h-[85vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2.5rem] rounded-t-[2.5rem] overflow-hidden flex flex-col shadow-2xl relative">
             <div className="bg-white p-6 pb-4 shrink-0 border-b border-slate-100 relative z-10 rounded-t-[2.5rem] sm:rounded-t-[2rem]">
               <button 
                 onClick={() => setMostrarMenuFijo(false)}
-                className="absolute top-6 right-6 bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-all"
+                className="absolute top-6 right-6 bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 p-2.5 rounded-full transition-all border border-slate-100"
               >
                 <X size={20} />
               </button>
               <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden"></div>
-              <h2 className="text-[#1A2744] text-xl font-black uppercase tracking-tight flex items-center gap-2">
-                <Store className="text-[#C9A84C]" size={24}/> Menú de Antojitos
+              <h2 className="text-[#1A2744] text-lg font-black uppercase tracking-tight flex items-center gap-3">
+                <div className="bg-amber-50 p-2 rounded-xl text-amber-500 border border-amber-100"><Store size={20}/></div> 
+                Comida Rápida
               </h2>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Disponibles todos los días en mostrador</p>
+              <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest mt-2 ml-14">Disponibles todos los días</p>
             </div>
             
-            <div className="p-6 overflow-y-auto flex-1 space-y-6 no-scrollbar pb-20">
+            <div className="p-6 overflow-y-auto flex-1 space-y-4 no-scrollbar pb-20">
               {MENU_ANTOJITOS.map((categoria, i) => (
-                <div key={i} className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm anim-cascada" style={{animationDelay: `${i * 50}ms`}}>
-                  <div className="flex items-center gap-2 mb-4 border-b border-slate-50 pb-3">
-                    <span className="text-2xl">{categoria.icono}</span>
-                    <h3 className="text-[#1A2744] font-black text-sm uppercase tracking-wider">{categoria.categoria}</h3>
+                <div key={i} className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] anim-fade-up" style={{animationDelay: `${i * 50}ms`}}>
+                  <div className="flex items-center gap-3 mb-4 border-b border-slate-50 pb-3">
+                    <span className="text-2xl bg-slate-50 w-10 h-10 flex items-center justify-center rounded-xl border border-slate-100">{categoria.icono}</span>
+                    <h3 className="text-[#1A2744] font-black text-xs uppercase tracking-wider">{categoria.categoria}</h3>
                   </div>
-                  <ul className="space-y-2">
+                  <ul className="space-y-3">
                     {categoria.items.map((item, j) => (
                       <li key={j} className="flex items-start gap-2 text-xs font-bold text-slate-600">
-                        <span className="text-[#C9A84C] mt-0.5">•</span> 
-                        <span className="leading-snug uppercase text-[11px]">{item}</span>
+                        <span className="text-amber-400 mt-0.5">•</span> 
+                        <span className="leading-snug uppercase text-[10px] tracking-wide">{item}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               ))}
               
-              <div className="bg-amber-50 p-5 rounded-3xl border border-amber-200 text-center">
-                <p className="text-amber-800 text-[10px] font-black uppercase tracking-widest leading-relaxed">
-                  ⚠️ Estos platillos se preparan al momento. Solicítalos directamente en ventanilla.
+              <div className="bg-blue-50 p-5 rounded-[1.5rem] border border-blue-100 text-center mt-6">
+                <p className="text-blue-800 text-[10px] font-black uppercase tracking-widest leading-relaxed">
+                  Estos platillos se preparan al momento. Solicítalos en ventanilla.
                 </p>
               </div>
             </div>
@@ -779,27 +815,35 @@ export default function MiValePage() {
       )}
 
       <style dangerouslySetInnerHTML={{__html: `
-        @keyframes fadeUpIn {
-          0% { opacity: 0; transform: translateY(20px); }
-          100% { opacity: 1; transform: translateY(0); }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
         }
         @keyframes pulseSoft {
           0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.7; transform: scale(1.05); }
+          50% { opacity: 0.8; transform: scale(1.05); }
         }
         @keyframes spinSlow {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
-        .anim-entrada-suave {
-          animation: fadeUpIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        @keyframes shimmer {
+          100% { transform: translateX(100%); }
         }
-        .anim-cascada {
+        .anim-fade-up {
           opacity: 0;
-          animation: fadeUpIn 0.5s ease-out forwards;
+          animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .anim-scale-in {
+          opacity: 0;
+          animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
         .anim-latido {
-          animation: pulseSoft 2s infinite;
+          animation: pulseSoft 2s ease-in-out infinite;
         }
         .anim-girar {
           animation: spinSlow 1s linear infinite;
@@ -814,9 +858,9 @@ export default function MiValePage() {
 function PasoCheck({ visible, texto, completed, active }: { visible: boolean, texto: string, completed: boolean, active?: boolean }) {
   if (!visible) return null;
   return (
-    <div className={`flex items-center gap-3 text-xs font-bold transition-all duration-300 ${completed ? 'text-slate-700' : active ? 'text-[#6366F1]' : 'text-slate-300'}`}>
-      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${completed ? 'bg-emerald-400 text-white' : active ? 'border-2 border-[#6366F1]' : 'bg-slate-100'}`}>
-        {completed ? '✓' : ''} {active && <div className="w-2 h-2 bg-[#6366F1] rounded-full anim-latido"></div>}
+    <div className={`flex items-center gap-4 text-[10px] uppercase tracking-widest font-black transition-all duration-500 ${completed ? 'text-[#1A2744]' : active ? 'text-amber-500' : 'text-slate-300'}`}>
+      <div className={`w-6 h-6 rounded-xl flex items-center justify-center text-[10px] transition-colors duration-500 ${completed ? 'bg-emerald-50 text-emerald-500 border border-emerald-100' : active ? 'border-2 border-amber-400 bg-white' : 'bg-slate-50 border border-slate-100'}`}>
+        {completed ? '✓' : ''} {active && <div className="w-2 h-2 bg-amber-400 rounded-full anim-latido"></div>}
       </div>
       {texto}
     </div>
