@@ -311,30 +311,33 @@ export default function MiValePage() {
     );
   }
 
+  // --- COMPONENTE DE TARJETA MEJORADO CON BOTÓN ESMERALDA ---
   const TarjetaPlatillo = ({ m, index }: { m: any, index: number }) => (
     <div 
-      className="anim-fade-up bg-white p-5 rounded-3xl flex justify-between items-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 transform hover:-translate-y-1 hover:shadow-[0_15px_30px_rgb(0,0,0,0.08)] transition-all duration-300 mb-3"
+      className="group anim-fade-up bg-white p-5 rounded-3xl flex justify-between items-center border border-slate-100 transform hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(16,185,129,0.1)] hover:border-emerald-200/50 transition-all duration-500 mb-3 relative overflow-hidden"
       style={{ animationDelay: `${index * 100}ms` }}
     >
-      <div className="flex-1 pr-4">
-        <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1">{m.platillo}</h3>
+      <div className="absolute inset-0 bg-gradient-to-r from-emerald-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+      
+      <div className="flex-1 pr-4 relative z-10">
+        <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1 group-hover:text-emerald-950 transition-colors duration-300">{m.platillo}</h3>
         {m.descripcion && <p className="text-slate-400 text-[10px] leading-snug font-medium mb-1">{m.descripcion}</p>}
         {m.porciones_disponibles <= 15 && m.porciones_totales < 9000 && (
-          <span className="text-red-500 text-[9px] font-black uppercase flex items-center gap-1 anim-latido mt-1"><Flame size={12}/> ¡Quedan {m.porciones_disponibles}!</span>
+          <span className="text-red-500 text-[9px] font-black uppercase flex items-center gap-1 anim-latido mt-1 bg-red-50 inline-flex px-2 py-0.5 rounded-lg border border-red-100"><Flame size={12}/> ¡Quedan {m.porciones_disponibles}!</span>
         )}
       </div>
       
-      <div className="flex flex-col items-center gap-3 shrink-0">
-        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-2xl w-14 h-14 border ${m.porciones_disponibles <= 15 ? 'bg-red-50 border-red-100 text-red-600 anim-latido' : 'bg-slate-50 border-slate-100 text-[#1A2744]'}`}>
+      <div className="flex flex-col items-center gap-3 shrink-0 relative z-10">
+        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-2xl w-14 h-14 border transition-colors duration-500 ${m.porciones_disponibles <= 15 ? 'bg-red-50 border-red-100 text-red-600 anim-latido' : 'bg-slate-50 border-slate-100 text-[#1A2744] group-hover:bg-emerald-50 group-hover:border-emerald-100 group-hover:text-emerald-600'}`}>
           <p className="text-2xl font-black leading-none tracking-tighter">{m.porciones_disponibles}</p>
           <p className="text-[8px] font-black uppercase mt-0.5 opacity-60">Disp.</p>
         </div>
         <button 
           onClick={() => apartarComida(m)}
           disabled={cargandoApartado}
-          className="w-full bg-[#1A2744] hover:bg-[#C9A84C] text-white py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-[#1A2744]/20 transition-all active:scale-95 flex items-center justify-center"
+          className="relative overflow-hidden w-full bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-[0_8px_15px_rgba(16,185,129,0.25)] hover:shadow-[0_12px_20px_rgba(16,185,129,0.4)] transition-all active:scale-95 flex items-center justify-center gap-1 group/btn before:absolute before:inset-0 before:bg-white/20 before:-translate-x-full hover:before:animate-shimmer"
         >
-          {cargandoApartado ? <Loader2 className="anim-girar" size={12}/> : 'Apartar'}
+          {cargandoApartado ? <Loader2 className="anim-girar relative z-10" size={14}/> : <><Plus size={14} className="relative z-10"/> <span className="relative z-10">Apartar</span></>}
         </button>
       </div>
     </div>
@@ -344,13 +347,14 @@ export default function MiValePage() {
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-10 relative">
       
       {/* DECORACIÓN DE FONDO GLOBAL */}
-      <div className="fixed top-[-10%] right-[-5%] w-[40vh] h-[40vh] bg-amber-500/5 rounded-full blur-[80px] pointer-events-none z-0"></div>
+      <div className="fixed top-[-10%] right-[-5%] w-[40vh] h-[40vh] bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none z-0"></div>
+      <div className="fixed bottom-[-10%] left-[-5%] w-[30vh] h-[30vh] bg-amber-500/5 rounded-full blur-[80px] pointer-events-none z-0"></div>
 
       <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 p-4 sticky top-0 z-50 shadow-sm flex justify-between items-center px-4 md:px-8">
         <div className="flex items-center gap-4">
-          <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0">
+          <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0 group hover:rotate-6 transition-transform duration-300">
             <UtensilsCrossed className="absolute text-white/10 w-6 h-6 -rotate-3" strokeWidth={1.5} />
-            <ChefHat className="relative text-amber-400 -rotate-3" size={20} strokeWidth={1.5} />
+            <ChefHat className="relative text-amber-400 -rotate-3 group-hover:scale-110 transition-transform duration-300" size={20} strokeWidth={1.5} />
           </div>
           <div className="overflow-hidden">
             <p className="text-amber-500 text-[8px] font-black tracking-[0.2em] uppercase mb-0.5">Comedor FGE</p>
@@ -472,41 +476,44 @@ export default function MiValePage() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] border border-slate-100">
-               <div className="flex items-center gap-3 mb-6">
-                 <div className="bg-amber-50 border border-amber-100 p-3 rounded-2xl text-amber-500"><QrCode size={20}/></div>
-                 <div>
-                   <h3 className="text-[#1A2744] font-black text-sm uppercase tracking-tight">Canje Rápido</h3>
-                   <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mt-0.5">Generar Vale Digital</p>
+            <div className="bg-white p-6 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] border border-slate-100 relative overflow-hidden group">
+               <div className="absolute inset-0 bg-gradient-to-br from-slate-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+               <div className="relative z-10">
+                 <div className="flex items-center gap-3 mb-6">
+                   <div className="bg-amber-50 border border-amber-100 p-3 rounded-2xl text-amber-500 shadow-sm"><QrCode size={20}/></div>
+                   <div>
+                     <h3 className="text-[#1A2744] font-black text-sm uppercase tracking-tight">Canje Rápido</h3>
+                     <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mt-0.5">Generar Vale Digital</p>
+                   </div>
                  </div>
-               </div>
 
-               <div className="flex items-center justify-between bg-slate-50/80 p-3 rounded-3xl border border-slate-100 mb-6">
-                  <button 
-                    onClick={() => setCantidadACanjear(Math.max(1, cantidadACanjear - 1))}
-                    className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm border border-slate-100 active:scale-90 hover:text-[#1A2744] transition-all"
-                  >
-                    <Minus size={20} />
-                  </button>
-                  <div className="text-center flex-1">
-                    <span className="text-4xl font-black text-[#1A2744]">{cantidadACanjear}</span>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Unidades</p>
-                  </div>
-                  <button 
-                    onClick={() => setCantidadACanjear(Math.min(empleado.tickets_restantes, cantidadACanjear + 1))}
-                    className="w-14 h-14 bg-[#1A2744] rounded-2xl flex items-center justify-center text-white shadow-md active:scale-90 hover:bg-[#25365d] transition-all"
-                  >
-                    <Plus size={20} />
-                  </button>
-               </div>
+                 <div className="flex items-center justify-between bg-slate-50/80 p-3 rounded-3xl border border-slate-100 mb-6">
+                    <button 
+                      onClick={() => setCantidadACanjear(Math.max(1, cantidadACanjear - 1))}
+                      className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm border border-slate-100 active:scale-90 hover:text-[#1A2744] hover:border-slate-300 transition-all"
+                    >
+                      <Minus size={20} />
+                    </button>
+                    <div className="text-center flex-1">
+                      <span className="text-4xl font-black text-[#1A2744]">{cantidadACanjear}</span>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Unidades</p>
+                    </div>
+                    <button 
+                      onClick={() => setCantidadACanjear(Math.min(empleado.tickets_restantes, cantidadACanjear + 1))}
+                      className="w-14 h-14 bg-[#1A2744] rounded-2xl flex items-center justify-center text-white shadow-md active:scale-90 hover:bg-[#25365d] hover:shadow-lg transition-all"
+                    >
+                      <Plus size={20} />
+                    </button>
+                 </div>
 
-               <button 
-                onClick={iniciarGeneracion}
-                className="relative w-full bg-[#1A2744] text-white py-5 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 overflow-hidden group"
-              >
-                <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:animate-shimmer"></div>
-                <span className="relative z-10 flex items-center gap-2">Generar Vale <Check size={16} className="text-amber-400" /></span>
-              </button>
+                 <button 
+                  onClick={iniciarGeneracion}
+                  className="relative w-full bg-[#1A2744] text-white py-5 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 overflow-hidden group/btn hover:shadow-2xl hover:bg-[#25365d]"
+                >
+                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover/btn:animate-shimmer"></div>
+                  <span className="relative z-10 flex items-center gap-2">Generar Vale <Check size={16} className="text-amber-400" /></span>
+                </button>
+               </div>
             </div>
 
             <div className="bg-gradient-to-br from-[#1A2744] to-[#25365d] rounded-[2.5rem] shadow-2xl p-6 border border-slate-700 relative overflow-hidden">
@@ -563,9 +570,9 @@ export default function MiValePage() {
                 {reservasDelDia.length > 0 && (
                   <div className="space-y-4 mb-8">
                     {reservasDelDia.map((reserva) => (
-                      <div key={reserva.id} className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-[2rem] flex flex-col items-center text-center anim-fade-up relative overflow-hidden" style={{animationDelay: '0ms'}}>
-                        <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none"></div>
-                        <div className="bg-emerald-500 text-white p-3 rounded-2xl mb-4 shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+                      <div key={reserva.id} className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-[2rem] flex flex-col items-center text-center anim-fade-up relative overflow-hidden group" style={{animationDelay: '0ms'}}>
+                        <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                        <div className="bg-emerald-500 text-white p-3 rounded-2xl mb-4 shadow-[0_0_20px_rgba(16,185,129,0.5)]">
                           <Check size={24}/>
                         </div>
                         <p className="text-emerald-400 font-black uppercase text-[10px] tracking-[0.2em] mb-1">Apartado Confirmado</p>
@@ -575,7 +582,7 @@ export default function MiValePage() {
                         <button 
                           onClick={() => cancelarReserva(reserva)}
                           disabled={cargandoApartado || reserva.estado === 'CAPTURADO'}
-                          className={`w-full py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${reserva.estado === 'CAPTURADO' ? 'bg-[#1A2744] text-slate-500 cursor-not-allowed' : 'bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500'}`}
+                          className={`w-full py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2 relative z-10 ${reserva.estado === 'CAPTURADO' ? 'bg-[#1A2744] text-slate-500 cursor-not-allowed' : 'bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500'}`}
                         >
                           {cargandoApartado ? <Loader2 className="anim-girar" size={14}/> : reserva.estado === 'CAPTURADO' ? 'En preparación' : <><X size={14}/> Cancelar Apartado</>}
                         </button>
@@ -623,17 +630,21 @@ export default function MiValePage() {
                             <h4 className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-black mb-4 flex items-center gap-2"><Star size={12} className="text-amber-400"/> Menú Fijo</h4>
                             <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x">
                                {almuerzos.filter(m => m.porciones_totales >= 9000).map((m, i) => (
-                                 <div key={m.id} className="snap-start min-w-[240px] bg-white p-5 rounded-3xl flex flex-col justify-between border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                                 <div key={m.id} className="snap-start min-w-[240px] bg-white p-5 rounded-3xl flex flex-col justify-between border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transform hover:-translate-y-1 hover:shadow-[0_15px_30px_rgba(16,185,129,0.15)] hover:border-emerald-200 transition-all duration-300 group">
                                    <div>
-                                       <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-4">{m.platillo}</h3>
+                                       <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-4 group-hover:text-emerald-900 transition-colors">{m.platillo}</h3>
                                    </div>
                                    <div className="flex items-end justify-between gap-2 mt-auto">
                                        <div className="flex flex-col">
                                          <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Check size={10}/> Siempre</span>
                                          <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest">Disponible</span>
                                        </div>
-                                       <button onClick={() => apartarComida(m)} disabled={cargandoApartado} className="bg-[#1A2744] hover:bg-[#C9A84C] text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-md active:scale-95 transition-all flex items-center justify-center">
-                                         {cargandoApartado ? <Loader2 className="anim-girar" size={12}/> : 'Apartar'}
+                                       <button 
+                                          onClick={() => apartarComida(m)} 
+                                          disabled={cargandoApartado} 
+                                          className="relative overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-[0_8px_15px_rgba(16,185,129,0.25)] active:scale-95 transition-all flex items-center justify-center gap-1 group/btn before:absolute before:inset-0 before:bg-white/20 before:-translate-x-full hover:before:animate-shimmer"
+                                        >
+                                         {cargandoApartado ? <Loader2 className="anim-girar relative z-10" size={12}/> : <><Plus size={12} className="relative z-10"/><span className="relative z-10">Apartar</span></>}
                                        </button>
                                    </div>
                                  </div>
@@ -660,14 +671,14 @@ export default function MiValePage() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 mb-6">
+            <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 mb-6 group hover:shadow-md transition-shadow">
               <div className="flex items-center gap-3 mb-6">
-                <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-slate-400"><History size={18} /></div>
+                <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-slate-400 group-hover:text-[#1A2744] transition-colors"><History size={18} /></div>
                 <h3 className="text-sm font-black text-[#1A2744] uppercase tracking-tight">Historial</h3>
               </div>
               <div className="flex flex-col gap-3">
                 {historial.map((h, i) => (
-                  <div key={i} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <div key={i} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
                     <div>
                       <p className="font-black text-[#1A2744] text-xs uppercase">{new Date(h.fecha_hora).toLocaleDateString('es-MX')}</p>
                       <p className="text-slate-400 text-[10px] font-bold tracking-widest uppercase mt-1">🕒 {new Date(h.fecha_hora).toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'})}</p>
@@ -788,9 +799,9 @@ export default function MiValePage() {
             
             <div className="p-6 overflow-y-auto flex-1 space-y-4 no-scrollbar pb-20">
               {MENU_ANTOJITOS.map((categoria, i) => (
-                <div key={i} className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] anim-fade-up" style={{animationDelay: `${i * 50}ms`}}>
+                <div key={i} className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] anim-fade-up hover:border-amber-200 transition-colors group" style={{animationDelay: `${i * 50}ms`}}>
                   <div className="flex items-center gap-3 mb-4 border-b border-slate-50 pb-3">
-                    <span className="text-2xl bg-slate-50 w-10 h-10 flex items-center justify-center rounded-xl border border-slate-100">{categoria.icono}</span>
+                    <span className="text-2xl bg-slate-50 w-10 h-10 flex items-center justify-center rounded-xl border border-slate-100 group-hover:bg-amber-50 group-hover:border-amber-100 transition-colors">{categoria.icono}</span>
                     <h3 className="text-[#1A2744] font-black text-xs uppercase tracking-wider">{categoria.categoria}</h3>
                   </div>
                   <ul className="space-y-3">
