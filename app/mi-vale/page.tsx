@@ -238,7 +238,7 @@ export default function MiValePage() {
       return;
     }
 
-    const uid = Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 100);
+    const uid = Math.random().toString(36).substring(2, 9).toUpperCase();
     setTokenSeguridad(uid);
     setTokenTimestamp(Date.now());
 
@@ -285,9 +285,8 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // RECORTE DRÁSTICO PARA QUE EL CÓDIGO NO SEA ANCHO
-  const idCortoEmpleado = empleado?.email ? empleado.email.split('@')[0].substring(0, 8).toUpperCase() : 'EMP';
-  const valorQR = `${idCortoEmpleado}|${cantidadACanjear}|${tokenSeguridad}`;
+  // REGRESAMOS EL PAYLOAD EXACTO DEL PRINCIPIO PARA QUE FUNCIONE PERFECTO
+  const valorQR = `${empleado?.nombre_completo}|${cantidadACanjear}|${tokenTimestamp}|${tokenSeguridad}`;
 
   if (estadoVista === 'cargando') {
     return (
@@ -365,7 +364,6 @@ export default function MiValePage() {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* ACCESO DIRECCIÓN PARA ADMINS */}
           {(empleado?.rol === 'admin' || empleado?.rol === 'dev') && (
             <button 
               onClick={() => router.push('/admin')} 
@@ -376,7 +374,6 @@ export default function MiValePage() {
             </button>
           )}
 
-          {/* ACCESO SECRETO PARA DEV */}
           {empleado?.rol === 'dev' && (
             <button 
               onClick={() => router.push('/dev-panel')} 
@@ -731,23 +728,21 @@ export default function MiValePage() {
                   </div>
                 </div>
 
-                <div className="w-full bg-slate-50 p-4 rounded-[2rem] flex flex-col items-center mb-8 border border-slate-100 relative overflow-hidden">
+                <div className="w-full bg-slate-50 py-6 px-2 rounded-[2rem] flex flex-col items-center mb-8 border border-slate-100 relative overflow-hidden">
                    
-                  {/* CONTENEDOR PROTEGIDO CONTRA APLASTAMIENTO DE PANTALLA */}
-                  <div className="relative z-10 w-full flex justify-center bg-white py-4 px-2 rounded-xl shadow-sm border border-slate-100 mb-4 overflow-x-auto no-scrollbar" style={{ touchAction: 'pan-x' }}>
-                    <div style={{ minWidth: 'max-content' }}>
-                      <Barcode 
-                        value={valorQR} 
-                        format="CODE128"
-                        width={2}
-                        height={80}
-                        displayValue={true}
-                        fontSize={14}
-                        margin={10}
-                        background="#ffffff"
-                        lineColor="#000000"
-                      />
-                    </div>
+                  {/* QUITAR CAJAS RESTRICTIVAS Y PONER WIDTH 1.5 PARA QUE EL LASER LO LEA PERFECTO */}
+                  <div className="relative z-10 w-full flex justify-center bg-white py-4 mb-4">
+                    <Barcode 
+                      value={valorQR} 
+                      format="CODE128"
+                      width={1.5}
+                      height={80}
+                      displayValue={true}
+                      fontSize={12}
+                      background="#ffffff"
+                      lineColor="#000000"
+                      margin={0}
+                    />
                   </div>
                   
                   <div className="relative z-10 bg-amber-400 text-[#1A2744] px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-amber-400/30 flex items-center gap-2">
