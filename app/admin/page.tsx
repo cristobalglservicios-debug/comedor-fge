@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
-import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText, ShieldCheck, RefreshCw, ChefHat, UtensilsCrossed, Users, Ticket, Building2, Terminal } from 'lucide-react';
 import { crearUsuarioAdmin, eliminarUsuarioAdmin, actualizarPasswordAdmin, registrarLog } from './actions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -52,6 +52,7 @@ export default function AdminDashboard() {
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isDev, setIsDev] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [empleadoEdit, setEmpleadoEdit] = useState<any>(null);
@@ -76,7 +77,7 @@ export default function AdminDashboard() {
         const rol = miPerfil?.rol || 'empleado';
 
         const esTuCuenta = email === 'admin.cristobal@fge.gob.mx' || rol === 'dev';
-        const esAdminOficial = rol === 'admin' || email.startsWith('admin.') || email.includes('.admin@'); // Mantenemos el string fallback por precaución
+        const esAdminOficial = rol === 'admin' || email.startsWith('admin.') || email.includes('.admin@'); 
         
         if (!esTuCuenta && !esAdminOficial) {
           router.push('/dashboard');
@@ -84,6 +85,7 @@ export default function AdminDashboard() {
         }
         
         setIsSuperAdmin(esTuCuenta);
+        setIsDev(rol === 'dev');
         setUserEmail(email);
         setLoadingAcceso(false);
         cargarDatosGenerales();
@@ -371,11 +373,9 @@ export default function AdminDashboard() {
 
   const exportarHistorialExcel = () => {
     if (historial.length === 0) return alert("No hay registros");
-    const data = historial.map(h => ({ Empleado: h.nombre_empleado, Fecha_Hora: new Date(h.fecha_hora).toLocaleString('es-MX') }));
-    const hoja = XLSX.utils.json_to_sheet(data);
-    const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, "Bitacora");
-    XLSX.writeFile(libro, "Reporte_Comedor_FGE.xlsx");
+    const data = historial.map(h => ({ Empleado: h.nombre_empleado, Dependencia: h.dependencia, Fecha_Hora: new Date(h.fecha_hora).toLocaleString('es-MX') }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Canjes"); XLSX.writeFile(wb, `Reporte_Cajero_${new Date().getTime()}.xlsx`);
   };
 
   const generarCortePDF = (tipo: 'diario' | 'semanal') => {
@@ -450,241 +450,410 @@ export default function AdminDashboard() {
     return acc;
   }, {} as any)).map(([nombre, vals]: [string, any]) => ({ nombre, ...vals })).sort((a, b) => b.asignados - a.asignados);
 
-  if (loadingAcceso) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="animate-spin" size={40} /></div>;
-
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 pb-20">
-      <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center border border-[#C9A84C]/30 shadow-inner"><img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" /></div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-black text-sm md:text-lg uppercase tracking-tight">Dirección Administración</h1>
-              {isSuperAdmin && <span className="bg-[#C9A84C] text-[#1A2744] text-[8px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm"><ShieldCheck size={10} /> SUPER ADMIN</span>}
+  if (loadingAcceso) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1A2744]/5 to-transparent z-0"></div>
+        <div className="relative z-10 flex flex-col items-center animate-pulse-slow">
+          <div className="relative flex items-center justify-center mb-6">
+            <div className="absolute inset-0 bg-amber-500/20 rounded-full blur-xl animate-pulse"></div>
+            <div className="w-16 h-16 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-[1.5rem] rotate-3 flex items-center justify-center shadow-2xl">
+              <ChefHat className="text-amber-400 -rotate-3" size={28} strokeWidth={1.5} />
             </div>
-            <p className="text-[#C9A84C] text-[9px] font-bold">{userEmail}</p>
+          </div>
+          <div className="flex items-center gap-3 text-[#1A2744]">
+            <Loader2 className="animate-spin text-amber-500" size={16} />
+            <p className="text-[10px] font-black tracking-[0.3em] uppercase">Autenticando Administración...</p>
           </div>
         </div>
-        <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 transition-all"><LogOut size={18} /></button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] text-[#1A2744] font-sans pb-20 relative">
+      
+      {/* BACKGROUND DECORATION */}
+      <div className="fixed top-0 left-0 w-full h-[40vh] bg-gradient-to-b from-[#1A2744] to-[#F8FAFC] -z-10"></div>
+      <div className="fixed top-[-20%] right-[-10%] w-[60vh] h-[60vh] bg-amber-500/10 rounded-full blur-[100px] -z-10"></div>
+
+      {/* NAVBAR PREMIUM */}
+      <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 p-4 sticky top-0 z-50 shadow-sm flex justify-between items-center px-4 md:px-8">
+        <div className="flex items-center gap-4">
+          <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0 group hover:rotate-6 transition-transform duration-300">
+            <UtensilsCrossed className="absolute text-white/10 w-6 h-6 -rotate-3" strokeWidth={1.5} />
+            <ChefHat className="relative text-amber-400 -rotate-3 group-hover:scale-110 transition-transform duration-300" size={20} strokeWidth={1.5} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight text-[#1A2744]">Administración</h1>
+              {isSuperAdmin && <span className="bg-amber-400 text-[#1A2744] text-[8px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm tracking-widest"><ShieldCheck size={10} /> SUPER ADMIN</span>}
+            </div>
+            <p className="text-amber-500 text-[9px] font-black tracking-[0.2em] uppercase mt-0.5">{userEmail}</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {/* ACCESO SECRETO PARA DEV */}
+          {isDev && (
+            <button 
+              onClick={() => router.push('/dev-panel')} 
+              className="bg-amber-50 text-amber-600 p-2.5 rounded-xl active:bg-amber-100 transition-all border border-amber-100 anim-latido active:scale-95 hidden md:block"
+              title="Panel Developer"
+            >
+              <Terminal size={18} />
+            </button>
+          )}
+          <button onClick={handleLogout} className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-100 active:scale-95 transition-all border border-red-100"><LogOut size={18} /></button>
+        </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto p-4 md:p-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatCard title="Asignados" val={stats.total} color="bg-slate-50" text="text-[#1A2744]" />
-          <StatCard title="Canjeados" val={stats.canjeados} color="bg-emerald-50" text="text-emerald-500" />
-          <StatCard title="Disponibles" val={stats.disponibles} color="bg-amber-50" text="text-[#C9A84C]" />
-          <StatCard title="Dependencias" val={stats.dependencias} color="bg-purple-50" text="text-purple-600" />
+      <div className="max-w-7xl mx-auto px-4 md:px-8 mt-8 relative z-10">
+        
+        {/* STATS HEADERS PREMIUM */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8 anim-fade-up" style={{animationDelay: '100ms'}}>
+          <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute -right-6 -top-6 text-slate-50 opacity-50 group-hover:scale-110 transition-transform"><Ticket size={100} /></div>
+            <h2 className="text-4xl font-black text-[#1A2744] relative z-10">{stats.total}</h2>
+            <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Vales Asignados</p>
+          </div>
+          <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute -right-6 -top-6 text-emerald-50 opacity-50 group-hover:scale-110 transition-transform"><CheckCircle2 size={100} /></div>
+            <h2 className="text-4xl font-black text-emerald-500 relative z-10">{stats.canjeados}</h2>
+            <p className="text-emerald-600/60 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Vales Canjeados</p>
+          </div>
+          <div className="bg-[#1A2744] p-6 rounded-[2rem] shadow-xl shadow-[#1A2744]/20 border border-[#2A3F6D] flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-400/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="absolute -right-6 -top-6 text-white/5 group-hover:scale-110 transition-transform"><Layers size={100} /></div>
+            <h2 className="text-4xl font-black text-white relative z-10">{stats.disponibles}</h2>
+            <p className="text-amber-400 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Stock Disponible</p>
+          </div>
+          <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute -right-6 -top-6 text-blue-50 opacity-50 group-hover:scale-110 transition-transform"><Building2 size={100} /></div>
+            <h2 className="text-4xl font-black text-blue-600 relative z-10">{stats.dependencias}</h2>
+            <p className="text-blue-500/60 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Áreas Activas</p>
+          </div>
         </div>
 
-        <div className="flex gap-4 border-b mb-6 overflow-x-auto">
-          {['cuotas', 'empleados', 'reportes', 'auditoría'].map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-4 font-bold text-xs uppercase border-b-4 transition-all ${activeTab === tab ? 'border-[#1A2744] text-[#1A2744]' : 'border-transparent text-slate-400'}`}>{tab}</button>
-          ))}
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-xl p-4 md:p-8">
+        {/* TABS STYLING PREMIUM */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl sm:rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white overflow-hidden anim-fade-up" style={{animationDelay: '200ms'}}>
           
-          {activeTab === 'cuotas' && (
-            <div className="divide-y">
-              {dependenciasArray.map((dep, i) => (
-                <div key={i} className="flex py-4 items-center">
-                  <div className="flex-1 font-bold text-xs uppercase">{dep.nombre}</div>
-                  <div className="flex gap-4 text-[10px] font-black uppercase text-center">
-                    <div className="w-12">Asig <br/> {dep.asignados}</div>
-                    <div className="w-12 text-emerald-500">Canj <br/> {dep.canjeados}</div>
-                    <div className="w-12 text-[#C9A84C]">Disp <br/> {dep.disponibles}</div>
+          <div className="flex p-3 gap-2 overflow-x-auto bg-slate-50/50 border-b border-slate-100 no-scrollbar">
+            {[
+              { id: 'cuotas', label: 'Cuotas Globales', icon: <Building2 size={16}/> },
+              { id: 'empleados', label: 'Plantilla Laboral', icon: <Users size={16}/> },
+              { id: 'reportes', label: 'Reportes y Cierres', icon: <FileText size={16}/> },
+              { id: 'auditoría', label: 'Security Logs', icon: <ShieldCheck size={16}/> }
+            ].map(tab => (
+              <button 
+                key={tab.id} 
+                onClick={() => setActiveTab(tab.id)} 
+                className={`flex-1 min-w-[150px] py-3.5 px-4 rounded-[1.2rem] font-black text-[10px] uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden ${activeTab === tab.id ? 'bg-[#1A2744] text-amber-400 shadow-xl shadow-[#1A2744]/20 scale-100' : 'bg-transparent text-slate-500 hover:bg-slate-100 active:scale-95'}`}
+              >
+                {tab.icon} <span className="mt-0.5">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="p-6 sm:p-10 min-h-[500px]">
+            
+            {activeTab === 'cuotas' && (
+              <div className="animate-in fade-in duration-500">
+                <div className="flex items-center gap-3 mb-8 border-b border-slate-100 pb-4">
+                  <div className="bg-blue-50 p-2.5 rounded-xl text-blue-500"><Building2 size={20}/></div>
+                  <div>
+                    <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Desglose por Dependencia</h3>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Control de cuotas asignadas</p>
                   </div>
                 </div>
-              ))}
-              {dependenciasArray.length === 0 && <p className="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">Sin datos reales para contabilizar</p>}
-            </div>
-          )}
 
-          {activeTab === 'empleados' && (
-            <div className="animate-in fade-in">
-              <div className="flex flex-col md:flex-row gap-4 mb-6">
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input type="text" placeholder="Buscar empleado..." value={filtroNombre} onChange={(e) => setFiltroNombre(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-slate-50 border rounded-xl" />
-                </div>
-                <button onClick={() => setModalNuevo(true)} className="bg-emerald-600 text-white px-4 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-emerald-900/10"><UserPlus size={16}/> Alta Manual</button>
-                <input type="file" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
-                <button onClick={() => fileInputRef.current?.click()} className="bg-[#1A2744] text-white px-4 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shrink-0 shadow-lg">
-                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <FileSpreadsheet size={16}/>} Cargar Nómina
-                </button>
-                <button onClick={descargarAccesos} className="bg-slate-100 text-[#1A2744] px-4 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shrink-0 hover:bg-slate-200">
-                  <Download size={16}/> Accesos
-                </button>
-              </div>
-              <div className="overflow-x-auto border rounded-2xl max-h-[500px]">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 sticky top-0 text-[10px] uppercase font-bold border-b z-10">
-                    <tr>
-                      <th className="p-4">Empleado</th>
-                      <th className="p-4">Correo Institucional</th>
-                      <th className="p-4 text-center">Cuota Actual</th>
-                      <th className="p-4 text-center">Programado (Futuro)</th>
-                      <th className="p-4 text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {empleadosFiltrados.map((emp, i) => {
-                      const cuotaFutura = cuotasProgramadas.find(c => c.empleado_id === emp.id);
-                      return (
-                        <tr key={i} className={`hover:bg-slate-50 ${emp.rol === 'dev' ? 'opacity-50 grayscale hover:opacity-100' : ''}`}>
-                          <td className="p-4 font-bold text-xs uppercase flex items-center gap-2">
-                            {emp.nombre_completo}
-                            {emp.rol === 'dev' && <span className="bg-slate-800 text-white text-[8px] px-1.5 py-0.5 rounded">DEV</span>}
-                          </td>
-                          <td className="p-4 text-[10px] text-blue-600 font-bold">{emp.email}</td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes - 1)} className="w-6 h-6 rounded bg-slate-100 font-bold">-</button>
-                              <span className="font-black text-sm">{emp.tickets_restantes}</span>
-                              <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes + 1)} className="w-6 h-6 rounded bg-slate-100 font-bold">+</button>
-                            </div>
-                          </td>
-                          <td className="p-4 text-center">
-                            {cuotaFutura ? (
-                              <div className="flex flex-col items-center">
-                                <span className="bg-blue-50 text-blue-600 border border-blue-100 px-2 py-1 rounded-md text-[10px] font-black uppercase shadow-sm">
-                                  {cuotaFutura.cuota} vales
-                                </span>
-                                <span className="text-slate-400 text-[8px] font-bold mt-1 uppercase">Lunes {cuotaFutura.fecha_lunes}</span>
-                              </div>
-                            ) : (
-                              <span className="text-slate-300 text-[10px] font-bold">-</span>
-                            )}
-                          </td>
-                          <td className="p-4 text-right"><button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 p-2 hover:text-[#C9A84C] transition-colors"><UserCog size={18}/></button></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'reportes' && (
-            <div className="animate-in fade-in">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                <h3 className="text-lg font-black uppercase">Control Bitácora</h3>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={reiniciarSemana} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-all shadow-md"><RefreshCw size={16}/> Reiniciar para Nueva Semana</button>
-                  {isSuperAdmin && (
-                    <button onClick={limpiarHistorialPruebas} className="border-2 border-red-100 text-red-500 px-6 py-3 rounded-xl font-bold text-xs uppercase hover:bg-red-500 hover:text-white transition-all"><Trash2 size={16}/></button>
+                <div className="grid gap-4">
+                  {dependenciasArray.map((dep, i) => (
+                    <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-white rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-md hover:border-slate-200 transition-all group">
+                      <div className="mb-4 sm:mb-0">
+                        <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-1 rounded-md uppercase tracking-[0.2em] mb-2 inline-block">Área / Depto</span>
+                        <h4 className="font-black text-sm uppercase text-[#1A2744] group-hover:text-blue-600 transition-colors">{dep.nombre}</h4>
+                      </div>
+                      <div className="flex gap-3 sm:gap-6 justify-between sm:justify-end">
+                        <div className="bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100 text-center min-w-[80px]">
+                          <p className="text-xl font-black text-[#1A2744] leading-none mb-1">{dep.asignados}</p>
+                          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Asignados</p>
+                        </div>
+                        <div className="bg-emerald-50 px-4 py-3 rounded-2xl border border-emerald-100 text-center min-w-[80px]">
+                          <p className="text-xl font-black text-emerald-600 leading-none mb-1">{dep.canjeados}</p>
+                          <p className="text-[8px] font-black uppercase tracking-widest text-emerald-500">Canjeados</p>
+                        </div>
+                        <div className="bg-amber-50 px-4 py-3 rounded-2xl border border-amber-100 text-center min-w-[80px]">
+                          <p className="text-xl font-black text-amber-500 leading-none mb-1">{dep.disponibles}</p>
+                          <p className="text-[8px] font-black uppercase tracking-widest text-amber-500/70">Disponibles</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {dependenciasArray.length === 0 && (
+                    <div className="py-20 text-center bg-slate-50 rounded-[2rem] border border-slate-100">
+                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Sin datos para contabilizar</p>
+                    </div>
                   )}
-                  <button onClick={exportarHistorialExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileSpreadsheet size={16}/> Excel</button>
-                  <button onClick={() => generarCortePDF('diario')} className="bg-[#1A2744] hover:bg-[#2a3f6d] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileText size={16}/> PDF Diario</button>
-                  <button onClick={() => generarCortePDF('semanal')} className="bg-[#C9A84C] hover:bg-[#e0bc5a] text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors"><FileText size={16}/> PDF Semanal</button>
                 </div>
               </div>
-              <div className="overflow-x-auto border rounded-2xl max-h-[400px]">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 text-[10px] uppercase font-bold border-b">
-                    <tr><th className="p-4">Empleado</th><th className="p-4">Fecha/Hora</th></tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {historial.map((h, i) => (
-                      <tr key={i} className="text-[11px]"><td className="p-4 font-bold uppercase">{h.nombre_empleado}</td><td className="p-4">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === 'auditoría' && (
-            <div className="animate-in fade-in">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-black uppercase flex items-center gap-2"><ShieldCheck className="text-[#C9A84C]" size={24} /> Registro de Seguridad</h3>
-                <button onClick={cargarDatosGenerales} className="text-xs font-bold text-slate-400 hover:text-[#1A2744] flex items-center gap-1 transition-colors"><RefreshCw size={14}/> Actualizar</button>
-              </div>
-              <div className="overflow-x-auto border rounded-2xl max-h-[500px]">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 sticky top-0 text-[10px] uppercase font-bold border-b z-10">
-                    <tr>
-                      <th className="p-4 w-40">Fecha / Hora</th>
-                      <th className="p-4">Administrador</th>
-                      <th className="p-4">Acción</th>
-                      <th className="p-4">Detalle del Movimiento</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {auditoriaLogs.map((log, i) => (
-                      <tr key={i} className="hover:bg-slate-50 text-[11px]">
-                        <td className="p-4 whitespace-nowrap text-slate-500 font-medium">{new Date(log.creado_en).toLocaleString('es-MX')}</td>
-                        <td className="p-4 font-black text-[#1A2744]">{log.admin_email}</td>
-                        <td className="p-4">
-                          <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-[9px] font-black tracking-wider uppercase border border-slate-200">
-                            {log.accion}
-                          </span>
-                        </td>
-                        <td className="p-4 uppercase font-bold text-slate-500">{log.detalle}</td>
+            {activeTab === 'empleados' && (
+              <div className="animate-in fade-in duration-500">
+                <div className="flex flex-col xl:flex-row gap-4 mb-8">
+                  <div className="relative flex-1 group/input">
+                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within/input:text-amber-500 transition-colors" size={20} />
+                    <input type="text" placeholder="Buscar por nombre o dependencia..." value={filtroNombre} onChange={(e) => setFiltroNombre(e.target.value)} className="w-full pl-14 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all uppercase placeholder:font-normal placeholder:text-slate-400" />
+                  </div>
+                  <div className="flex gap-3 flex-wrap sm:flex-nowrap">
+                    <button onClick={() => setModalNuevo(true)} className="flex-1 sm:flex-none bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap"><UserPlus size={16}/> Alta Manual</button>
+                    <input type="file" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
+                    <button onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none bg-[#1A2744] hover:bg-[#25365d] active:scale-95 text-white px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-[#1A2744]/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap">
+                      {cargando ? <Loader2 className="animate-spin text-amber-400" size={16}/> : <FileSpreadsheet size={16} className="text-amber-400"/>} Cargar Nómina
+                    </button>
+                    <button onClick={descargarAccesos} className="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 active:scale-95 text-[#1A2744] px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 whitespace-nowrap border border-slate-200">
+                      <Download size={16}/> Accesos
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="overflow-x-auto border border-slate-100 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] bg-white max-h-[600px] no-scrollbar">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 sticky top-0 text-[9px] tracking-[0.2em] uppercase font-black text-slate-400 border-b border-slate-100 z-10">
+                      <tr>
+                        <th className="p-5 pl-8">Empleado Registrado</th>
+                        <th className="p-5">Correo Institucional</th>
+                        <th className="p-5 text-center">Cuota Actual</th>
+                        <th className="p-5 text-center">Programado (Futuro)</th>
+                        <th className="p-5 text-right pr-8">Ajustes</th>
                       </tr>
-                    ))}
-                    {auditoriaLogs.length === 0 && (
-                      <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold uppercase text-xs">No hay movimientos registrados</td></tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {empleadosFiltrados.map((emp, i) => {
+                        const cuotaFutura = cuotasProgramadas.find(c => c.empleado_id === emp.id);
+                        return (
+                          <tr key={i} className={`hover:bg-slate-50/50 transition-colors group ${emp.rol === 'dev' ? 'opacity-50 grayscale hover:opacity-100' : ''}`}>
+                            <td className="p-5 pl-8">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 font-black text-xs border border-slate-200 uppercase">{emp.nombre_completo.substring(0,2)}</div>
+                                  <div>
+                                    <p className="font-black text-[#1A2744] text-xs uppercase flex items-center gap-2">
+                                      {emp.nombre_completo}
+                                      {emp.rol === 'dev' && <span className="bg-slate-800 text-white text-[8px] px-1.5 py-0.5 rounded tracking-widest shadow-sm">DEV</span>}
+                                    </p>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{emp.dependencia}</p>
+                                  </div>
+                                </div>
+                            </td>
+                            <td className="p-5 text-[10px] text-slate-500 font-bold">{emp.email}</td>
+                            <td className="p-5">
+                              <div className="flex items-center justify-center gap-2 bg-slate-50 w-max mx-auto p-1.5 rounded-2xl border border-slate-100">
+                                <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes - 1)} className="w-8 h-8 rounded-xl bg-white shadow-sm border border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-200 transition-colors flex items-center justify-center"><Minus size={14}/></button>
+                                <span className="font-black text-[#1A2744] text-sm w-6 text-center">{emp.tickets_restantes}</span>
+                                <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes + 1)} className="w-8 h-8 rounded-xl bg-white shadow-sm border border-slate-100 text-slate-400 hover:text-emerald-500 hover:border-emerald-200 transition-colors flex items-center justify-center"><Plus size={14}/></button>
+                              </div>
+                            </td>
+                            <td className="p-5 text-center">
+                              {cuotaFutura ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="bg-blue-50 text-blue-600 border border-blue-100 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1">
+                                    <Ticket size={12}/> {cuotaFutura.cuota} vales
+                                  </span>
+                                  <span className="text-slate-400 text-[8px] font-bold uppercase tracking-widest flex items-center gap-1"><CalendarPlus size={10}/> Lunes {cuotaFutura.fecha_lunes}</span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-300 bg-slate-50 px-3 py-1 rounded-md text-[10px] font-black border border-slate-100">-</span>
+                              )}
+                            </td>
+                            <td className="p-5 text-right pr-8">
+                                <button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 p-2.5 bg-white rounded-xl shadow-sm border border-slate-100 hover:text-amber-500 hover:border-amber-200 active:scale-95 transition-all"><UserCog size={18}/></button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {empleadosFiltrados.length === 0 && (
+                        <tr><td colSpan={5} className="py-20 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">No se encontraron empleados</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
+            {activeTab === 'reportes' && (
+              <div className="animate-in fade-in duration-500">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 border-b border-slate-100 pb-6">
+                  <div>
+                    <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Reportes y Auditoría</h3>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Control y Cierres de Bitácora</p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <button onClick={reiniciarSemana} className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 transition-all border border-blue-200 active:scale-95"><RefreshCw size={16}/> Nueva Semana</button>
+                    {isSuperAdmin && (
+                      <button onClick={limpiarHistorialPruebas} className="bg-red-50 hover:bg-red-100 text-red-500 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 transition-all border border-red-200 active:scale-95"><Trash2 size={16}/> Purgar Todo</button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
+                  <button onClick={exportarHistorialExcel} className="group flex flex-col items-center justify-center p-10 bg-white border border-slate-100 rounded-[2.5rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(16,185,129,0.1)] hover:border-emerald-200 transition-all duration-300 active:scale-95">
+                    <div className="bg-emerald-50 text-emerald-500 p-5 rounded-[1.5rem] mb-6 group-hover:scale-110 transition-transform duration-300"><FileSpreadsheet size={40} strokeWidth={1.5}/></div>
+                    <span className="font-black text-[#1A2744] text-xs uppercase tracking-widest mb-1">Data Excel</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Base en crudo</span>
+                  </button>
+                  
+                  <button onClick={() => generarCortePDF('diario')} className="group flex flex-col items-center justify-center p-10 bg-[#1A2744] border border-[#2A3F6D] rounded-[2.5rem] shadow-[0_10px_30px_rgba(26,39,68,0.2)] hover:shadow-[0_20px_40px_rgba(26,39,68,0.4)] hover:bg-[#2A3F6D] transition-all duration-300 relative overflow-hidden active:scale-95">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="bg-blue-500/20 text-blue-400 p-5 rounded-[1.5rem] mb-6 group-hover:scale-110 transition-transform duration-300 border border-blue-500/30 relative z-10"><FileText size={40} strokeWidth={1.5}/></div>
+                    <span className="font-black text-white text-xs uppercase tracking-widest mb-1 relative z-10">Corte Diario</span>
+                    <span className="text-[9px] text-blue-300/70 font-bold uppercase tracking-widest relative z-10">PDF Oficial</span>
+                  </button>
+
+                  <button onClick={() => generarCortePDF('semanal')} className="group flex flex-col items-center justify-center p-10 bg-white border border-slate-100 rounded-[2.5rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(251,191,36,0.1)] hover:border-amber-200 transition-all duration-300 active:scale-95">
+                    <div className="bg-amber-50 text-amber-500 p-5 rounded-[1.5rem] mb-6 group-hover:scale-110 transition-transform duration-300"><FileText size={40} strokeWidth={1.5}/></div>
+                    <span className="font-black text-[#1A2744] text-xs uppercase tracking-widest mb-1">Concentrado</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Semanal PDF</span>
+                  </button>
+                </div>
+
+                <div className="bg-white border border-slate-100 rounded-[2rem] shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-slate-50 flex items-center gap-3">
+                    <History size={18} className="text-slate-400" />
+                    <h4 className="text-xs font-black text-[#1A2744] uppercase tracking-widest">Pre-visualización de Canjes (Bitácora)</h4>
+                  </div>
+                  <div className="overflow-x-auto max-h-[300px] no-scrollbar">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 sticky top-0 text-[9px] uppercase font-black text-slate-400 tracking-[0.2em] border-b border-slate-100 z-10">
+                        <tr><th className="p-5 pl-8">Empleado Registrado</th><th className="p-5 text-right pr-8">Fecha y Hora de Canje</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {historial.map((h, i) => (
+                          <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="p-5 pl-8 font-black text-xs text-[#1A2744] uppercase">{h.nombre_empleado}</td>
+                            <td className="p-5 text-right pr-8 text-[10px] font-bold text-slate-500">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td>
+                          </tr>
+                        ))}
+                        {historial.length === 0 && <tr><td colSpan={2} className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">Sin registros</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'auditoría' && (
+              <div className="animate-in fade-in duration-500 max-w-5xl mx-auto">
+                <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-amber-50 p-2.5 rounded-xl text-amber-500"><ShieldCheck size={20}/></div>
+                    <div>
+                      <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Security Logs</h3>
+                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Auditoría de acciones administrativas</p>
+                    </div>
+                  </div>
+                  <button onClick={cargarDatosGenerales} className="text-[10px] font-black text-slate-400 hover:text-[#1A2744] flex items-center gap-1.5 transition-colors uppercase tracking-widest bg-white p-3 rounded-xl border border-slate-100 shadow-sm active:scale-95"><RefreshCw size={14}/> Sincronizar</button>
+                </div>
+                
+                <div className="overflow-x-auto border border-slate-100 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] bg-white max-h-[600px] no-scrollbar">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 sticky top-0 text-[9px] uppercase font-black text-slate-400 tracking-[0.2em] border-b border-slate-100 z-10">
+                      <tr>
+                        <th className="p-5 pl-8 w-48">Fecha / Hora</th>
+                        <th className="p-5">Usuario Admin</th>
+                        <th className="p-5">Acción Ejecutada</th>
+                        <th className="p-5 pr-8">Detalle Técnico</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {auditoriaLogs.map((log, i) => (
+                        <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
+                          <td className="p-5 pl-8 whitespace-nowrap text-[10px] font-bold text-slate-500">{new Date(log.creado_en).toLocaleString('es-MX')}</td>
+                          <td className="p-5 font-black text-xs text-[#1A2744] group-hover:text-amber-600 transition-colors">{log.admin_email}</td>
+                          <td className="p-5">
+                            <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest uppercase border border-slate-200 group-hover:border-slate-300 transition-colors">
+                              {log.accion}
+                            </span>
+                          </td>
+                          <td className="p-5 text-[10px] font-bold text-slate-500 uppercase pr-8 leading-relaxed">{log.detalle}</td>
+                        </tr>
+                      ))}
+                      {auditoriaLogs.length === 0 && (
+                        <tr><td colSpan={4} className="p-16 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest">No hay movimientos en el registro</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+          </div>
         </div>
       </div>
 
       {/* MODAL PROGRAMAR SEMANA */}
       {modalProgramar && (
-        <div className="fixed inset-0 bg-[#1A2744]/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
-            <h2 className="text-xl font-black text-[#1A2744] uppercase mb-2">Programar Cuotas</h2>
-            <p className="text-xs text-slate-400 font-bold mb-6">Se detectaron {datosPendientesExcel.length} empleados en el Excel. ¿Cuándo se aplicarán estos vales?</p>
-            
-            <div className="space-y-4 mb-6">
-              <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Semana de Aplicación</label>
-              <select 
-                value={semanaDestino} 
-                onChange={e => setSemanaDestino(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold outline-none focus:border-[#C9A84C]"
-              >
-                {getLunesOpciones().map((op, i) => (
-                  <option key={i} value={op.value}>{op.label}</option>
-                ))}
-              </select>
+        <div className="fixed inset-0 bg-[#1A2744]/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden border border-white/10">
+            <div className="bg-slate-50 p-8 border-b border-slate-100 text-center relative">
+              <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-[1.5rem] rotate-3 flex items-center justify-center mx-auto mb-4 shadow-sm border border-blue-100"><CalendarPlus size={28} className="-rotate-3"/></div>
+              <h2 className="text-xl font-black text-[#1A2744] uppercase tracking-tight">Programar Cuotas</h2>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">Nómina detectada: <span className="text-blue-600 font-black bg-blue-100 px-2 py-0.5 rounded">{datosPendientesExcel.length} Empleados</span></p>
             </div>
+            
+            <div className="p-8">
+              <div className="space-y-3 mb-8">
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block ml-1">Selecciona la semana de aplicación</label>
+                <select 
+                  value={semanaDestino} 
+                  onChange={e => setSemanaDestino(e.target.value)}
+                  className="w-full bg-white border-2 border-slate-200 p-4 rounded-2xl text-xs font-black text-[#1A2744] outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-400/10 transition-all uppercase cursor-pointer"
+                >
+                  {getLunesOpciones().map((op, i) => (
+                    <option key={i} value={op.value}>{op.label}</option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="flex gap-3">
-              <button onClick={() => { setModalProgramar(false); setDatosPendientesExcel([]); }} className="flex-1 py-3 text-xs font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Cancelar</button>
-              <button onClick={confirmarCargaExcel} disabled={cargando} className="flex-1 bg-[#1A2744] text-white py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors">
-                {cargando ? <Loader2 className="animate-spin" size={16} /> : 'Guardar Cuotas'}
-              </button>
+              <div className="flex gap-4">
+                <button onClick={() => { setModalProgramar(false); setDatosPendientesExcel([]); }} className="flex-1 py-4 text-[10px] font-black uppercase text-slate-400 hover:text-[#1A2744] transition-colors bg-slate-50 rounded-2xl hover:bg-slate-100">Cancelar</button>
+                <button onClick={confirmarCargaExcel} disabled={cargando} className="flex-[2] bg-[#1A2744] text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-[#25365d] active:scale-95 transition-all shadow-xl shadow-[#1A2744]/20 disabled:opacity-50 disabled:active:scale-100">
+                  {cargando ? <Loader2 className="animate-spin text-amber-400" size={18} /> : 'Guardar y Procesar'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL GESTIONAR */}
+      {/* MODAL GESTIONAR EMPLEADO */}
       {empleadoEdit && (
-        <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
-            <h2 className="text-xl font-black text-[#1A2744] uppercase mb-2">Gestionar Usuario</h2>
-            <p className="text-xs text-slate-400 font-bold uppercase mb-6">{empleadoEdit.nombre_completo}</p>
-            <div className="space-y-4">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Reiniciar Contraseña</label>
-                <div className="flex gap-2">
-                  <input type="text" placeholder="Nueva contraseña" value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm outline-none focus:border-[#C9A84C]" />
-                  <button onClick={handleCambiarPassword} disabled={cargando} className="bg-[#1A2744] hover:bg-[#C9A84C] text-white px-4 rounded-lg transition-colors flex items-center justify-center">{cargando ? <Loader2 className="animate-spin" size={16} /> : <Key size={16}/>}</button>
+        <div className="fixed inset-0 bg-[#1A2744]/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden border border-white/10">
+            <div className="bg-gradient-to-b from-slate-50 to-white p-10 text-center relative border-b border-slate-100">
+               <button onClick={() => setEmpleadoEdit(null)} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 bg-white p-2 rounded-full shadow-sm border border-slate-100 transition-colors active:scale-90"><X size={16}/></button>
+               <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-[2rem] rotate-3 flex items-center justify-center mx-auto mb-6 shadow-sm border border-amber-100"><UserCog size={36} className="-rotate-3"/></div>
+               <h2 className="text-2xl font-black text-[#1A2744] uppercase mb-2 tracking-tight">Gestión de Identidad</h2>
+               <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] bg-slate-100 inline-block px-3 py-1 rounded-md">{empleadoEdit.nombre_completo}</p>
+            </div>
+
+            <div className="p-10 space-y-6">
+              <div className="p-6 bg-slate-50/80 rounded-[2rem] border border-slate-100">
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block mb-3 ml-1">Restablecer Contraseña</label>
+                <div className="flex gap-3">
+                  <input type="text" placeholder="Nueva Contraseña..." value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-4 rounded-xl text-xs font-bold outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all placeholder:text-slate-300" />
+                  <button onClick={handleCambiarPassword} disabled={cargando} className="bg-[#1A2744] hover:bg-[#25365d] text-white w-14 rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center shrink-0">
+                    {cargando ? <Loader2 className="animate-spin text-amber-400" size={16} /> : <Key size={16} className="text-amber-400"/>}
+                  </button>
                 </div>
               </div>
-              <div className="p-4 bg-red-50 rounded-2xl border border-red-100">
-                <label className="text-[10px] font-black uppercase text-red-400 block mb-2">Zona de Peligro</label>
-                <button onClick={handleEliminarEmpleado} disabled={cargando} className="w-full bg-red-500 hover:bg-red-600 text-white p-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors">{cargando ? <Loader2 className="animate-spin" size={16}/> : <Trash2 size={16}/>} Eliminar Empleado</button>
+
+              <div className="p-6 bg-red-50/50 rounded-[2rem] border border-red-100">
+                <label className="text-[9px] font-black uppercase text-red-400 tracking-[0.2em] block mb-3 ml-1 flex items-center gap-1.5"><AlertOctagon size={12}/> Zona de Peligro</label>
+                <button onClick={handleEliminarEmpleado} disabled={cargando} className="w-full bg-white hover:bg-red-500 text-red-500 hover:text-white border border-red-200 p-4 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95">
+                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <Trash2 size={16}/>} Dar de Baja Definitiva
+                </button>
               </div>
-              <button onClick={() => setEmpleadoEdit(null)} className="w-full py-4 text-xs font-black uppercase text-slate-400 hover:text-[#1A2744] transition-colors">Cerrar Ventana</button>
             </div>
           </div>
         </div>
@@ -692,30 +861,49 @@ export default function AdminDashboard() {
 
       {/* MODAL ALTA MANUAL */}
       {modalNuevo && (
-        <div className="fixed inset-0 bg-[#1A2744]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-200">
-            <h2 className="text-xl font-black text-[#1A2744] uppercase mb-6">Alta Manual de Empleado</h2>
-            <div className="space-y-4">
-              <div><label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Nombre Completo</label><input type="text" placeholder="Ej. JUAN PEREZ LOPEZ" value={nuevoEmp.nombre} onChange={e => setNuevoEmp({...nuevoEmp, nombre: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm uppercase outline-none focus:border-[#C9A84C]" /></div>
-              <div><label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Dependencia</label><input type="text" placeholder="Ej. ADMINISTRACION" value={nuevoEmp.dependencia} onChange={e => setNuevoEmp({...nuevoEmp, dependencia: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm uppercase outline-none focus:border-[#C9A84C]" /></div>
-              <div><label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Cuota Semanal</label><input type="number" min="0" value={nuevoEmp.cuota} onChange={e => setNuevoEmp({...nuevoEmp, cuota: parseInt(e.target.value) || 0})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none focus:border-[#C9A84C]" /></div>
-              <div className="flex gap-3 mt-6">
-                <button onClick={() => setModalNuevo(false)} className="flex-1 py-3 text-xs font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Cancelar</button>
-                <button onClick={guardarNuevoEmpleado} disabled={cargando} className="flex-1 bg-[#1A2744] text-white py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors">{cargando ? <Loader2 className="animate-spin" size={16} /> : 'Guardar Empleado'}</button>
+        <div className="fixed inset-0 bg-[#1A2744]/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden border border-white/10">
+            <div className="bg-gradient-to-b from-slate-50 to-white p-8 text-center relative border-b border-slate-100">
+               <button onClick={() => setModalNuevo(false)} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 bg-white p-2 rounded-full shadow-sm border border-slate-100 transition-colors active:scale-90"><X size={16}/></button>
+               <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-[1.5rem] rotate-3 flex items-center justify-center mx-auto mb-4 shadow-sm border border-emerald-100"><UserPlus size={28} className="-rotate-3"/></div>
+               <h2 className="text-xl font-black text-[#1A2744] uppercase mb-1 tracking-tight">Alta Manual</h2>
+               <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em]">Registro Individual</p>
+            </div>
+            
+            <div className="p-8 space-y-5">
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block mb-2 ml-1">Nombre Completo</label>
+                <input type="text" placeholder="Ej. JUAN PEREZ LOPEZ" value={nuevoEmp.nombre} onChange={e => setNuevoEmp({...nuevoEmp, nombre: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs font-black uppercase text-[#1A2744] outline-none focus:bg-white focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 transition-all placeholder:font-normal placeholder:text-slate-300" />
               </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block mb-2 ml-1">Dependencia / Área</label>
+                <input type="text" placeholder="Ej. ADMINISTRACION" value={nuevoEmp.dependencia} onChange={e => setNuevoEmp({...nuevoEmp, dependencia: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs font-black uppercase text-[#1A2744] outline-none focus:bg-white focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 transition-all placeholder:font-normal placeholder:text-slate-300" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block mb-2 ml-1">Cuota Inicial (Vales)</label>
+                <input type="number" min="0" value={nuevoEmp.cuota} onChange={e => setNuevoEmp({...nuevoEmp, cuota: parseInt(e.target.value) || 0})} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-lg text-center font-black text-[#1A2744] outline-none focus:bg-white focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 transition-all" />
+              </div>
+              
+              <button onClick={guardarNuevoEmpleado} disabled={cargando} className="w-full mt-4 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-xl shadow-emerald-500/20 disabled:opacity-50 disabled:active:scale-100">
+                {cargando ? <Loader2 className="animate-spin text-white" size={18} /> : <><CheckCircle2 size={16}/> Confirmar Alta</>}
+              </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-function StatCard({ title, val, color, text }: any) {
-  return (
-    <div className={`${color} p-5 rounded-3xl border shadow-sm`}>
-      <h2 className={`text-3xl md:text-4xl font-black ${text}`}>{val}</h2>
-      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mt-1">{title}</p>
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .anim-fade-up {
+          opacity: 0;
+          animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}} />
     </div>
   );
 }
