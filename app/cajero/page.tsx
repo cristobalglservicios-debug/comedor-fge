@@ -162,14 +162,28 @@ export default function PantallaCajero() {
     }
 
     const partes = rawInput.split('|');
-    const nombreEscaneado = partes[0];
-    const cantidadACanjear = parseInt(partes[1]) || 1;
-    const valeUID = partes[3] || '';
+    let identificador = partes[0];
+    let cantidadACanjear = 1;
+    let valeUID = '';
 
-    ejecutarCanjeFinal(nombreEscaneado, cantidadACanjear, valeUID);
+    // LÓGICA HÍBRIDA INTELIGENTE PARA LECTORES LÁSER
+    if (partes.length >= 4) {
+      // Formato viejo: NOMBRE|CANTIDAD|TIMESTAMP|TOKEN
+      cantidadACanjear = parseInt(partes[1]) || 1;
+      valeUID = partes[3] || '';
+    } else if (partes.length === 3) {
+      // Formato nuevo (optimizado láser): EMAIL_CORTO|CANTIDAD|TOKEN
+      cantidadACanjear = parseInt(partes[1]) || 1;
+      valeUID = partes[2] || '';
+    } else {
+      setMensaje({ tipo: 'error', texto: 'FORMATO DE CÓDIGO INVÁLIDO.' });
+      setInputLectura(''); return;
+    }
+
+    ejecutarCanjeFinal(identificador, cantidadACanjear, valeUID);
   };
 
-  const ejecutarCanjeFinal = async (nombre: string, cantidad: number, uid: string) => {
+  const ejecutarCanjeFinal = async (identificador: string, cantidad: number, uid: string) => {
     setMensaje({ tipo: null, texto: '' }); setCargando(true);
 
     if (!uid) {
@@ -183,10 +197,20 @@ export default function PantallaCajero() {
       setCargando(false); setFolioManual(''); setModalManual(false); return;
     }
 
-    const { data: empleado } = await supabase.from('perfiles').select('*').eq('nombre_completo', nombre).maybeSingle();
+    // BÚSQUEDA ROBUSTA (Nombre o Email)
+    let empleado = null;
+    const { data: empNombre } = await supabase.from('perfiles').select('*').eq('nombre_completo', identificador).maybeSingle();
+    
+    if (empNombre) {
+        empleado = empNombre;
+    } else {
+        // Si no lo encuentra por nombre, busca por email_corto
+        const { data: empEmail } = await supabase.from('perfiles').select('*').ilike('email', `${identificador.toLowerCase()}@%`).maybeSingle();
+        empleado = empEmail;
+    }
 
     if (!empleado) { 
-      setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ EL PERFIL: ${nombre}` }); 
+      setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ EL PERFIL: ${identificador}` }); 
     } 
     else if (empleado.tickets_restantes < cantidad) { 
       setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} NO TIENE SALDO PARA ${cantidad} RACIONES.` }); 
