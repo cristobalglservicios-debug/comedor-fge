@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus, Layers, AlertOctagon, KeyRound } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus, Layers, AlertOctagon, KeyRound, ShieldCheck } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -33,6 +33,7 @@ export default function PantallaCajero() {
   const [cargando, setCargando] = useState(false);
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState('');
+  const [miRol, setMiRol] = useState('');
   const [usarCamara, setUsarCamara] = useState(false);
   const [directorio, setDirectorio] = useState<any[]>([]);
   const [sugerencias, setSugerencias] = useState<any[]>([]);
@@ -57,13 +58,36 @@ export default function PantallaCajero() {
     const inicializarCajero = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push('/dashboard'); return; }
+      
       const email = session.user.email?.toLowerCase() || '';
-      if (!email.includes('comedor') && !email.includes('cajero') && !email.includes('admin')) { router.push('/'); return; }
-      setUserEmail(email); setLoadingAcceso(false); await cargarDatosDia(); await cargarDatosGlobales();
+
+      // BLINDAJE POR ROL: Consultamos directamente la tabla perfiles
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('rol')
+        .eq('email', email)
+        .maybeSingle();
+
+      const rol = perfil?.rol || 'empleado';
+      setMiRol(rol);
+
+      // Solo permitimos Cajero, Admin o Dev
+      if (rol !== 'cajero' && rol !== 'admin' && rol !== 'dev') {
+        router.push('/');
+        return;
+      }
+
+      setUserEmail(email); 
+      setLoadingAcceso(false); 
+      await cargarDatosDia(); 
+      await cargarDatosGlobales();
+      
       const { data: perfiles } = await supabase.from('perfiles').select('nombre_completo, dependencia, tickets_restantes');
       if (perfiles) setDirectorio(perfiles);
+      
       setTimeout(() => inputRef.current?.focus(), 500);
     };
+
     inicializarCajero();
     const interval = setInterval(() => { cargarDatosGlobales(); }, 5000);
     return () => clearInterval(interval);
@@ -267,8 +291,27 @@ export default function PantallaCajero() {
   return (
     <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
       <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
-        <div className="flex items-center gap-4"><div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center shrink-0"><img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" /></div><div><h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight">Punto de Canje</h1><p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest uppercase">Fiscalía General</p></div></div>
-        <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 transition-all border border-white/5"><LogOut size={18} /></button>
+        <div className="flex items-center gap-4">
+          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center shrink-0">
+            <img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" />
+          </div>
+          <div>
+            <h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight">Punto de Canje</h1>
+            <p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest uppercase">Fiscalía General</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {(miRol === 'admin' || miRol === 'dev') && (
+            <button 
+              onClick={() => router.push('/admin')} 
+              className="bg-white/10 p-2 rounded-xl hover:bg-indigo-500 transition-all border border-white/5"
+              title="Ir a Administración"
+            >
+              <ShieldCheck size={18} />
+            </button>
+          )}
+          <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 transition-all border border-white/5"><LogOut size={18} /></button>
+        </div>
       </nav>
 
       <div className="w-full max-w-4xl mx-auto px-4 mt-6">
