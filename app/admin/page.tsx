@@ -45,7 +45,7 @@ export default function AdminDashboard() {
   const [historial, setHistorial] = useState<any[]>([]);
   const [empleados, setEmpleados] = useState<any[]>([]);
   const [auditoriaLogs, setAuditoriaLogs] = useState<any[]>([]);
-  const [cuotasProgramadas, setCuotasProgramadas] = useState<any[]>([]); // ESTADO NUEVO
+  const [cuotasProgramadas, setCuotasProgramadas] = useState<any[]>([]);
   const [filtroNombre, setFiltroNombre] = useState('');
   const [stats, setStats] = useState({ total: 0, canjeados: 0, disponibles: 0, dependencias: 0 });
   const [cargando, setCargando] = useState(false);
@@ -70,8 +70,13 @@ export default function AdminDashboard() {
         if (error || !session) { router.push('/dashboard'); return; }
         
         const email = session.user.email?.toLowerCase() || '';
-        const esTuCuenta = email === 'admin.cristobal@fge.gob.mx';
-        const esAdminOficial = email.startsWith('admin.') || email.includes('.admin@');
+        
+        // NUEVA SEGURIDAD POR ROLES
+        const { data: miPerfil } = await supabase.from('perfiles').select('rol').eq('email', email).maybeSingle();
+        const rol = miPerfil?.rol || 'empleado';
+
+        const esTuCuenta = email === 'admin.cristobal@fge.gob.mx' || rol === 'dev';
+        const esAdminOficial = rol === 'admin' || email.startsWith('admin.') || email.includes('.admin@'); // Mantenemos el string fallback por precaución
         
         if (!esTuCuenta && !esAdminOficial) {
           router.push('/dashboard');
@@ -89,23 +94,36 @@ export default function AdminDashboard() {
 
   const cargarDatosGenerales = async () => {
     const { data: dataEmpleados } = await supabase.from('perfiles').select('*').order('nombre_completo', { ascending: true });
+    
     if (dataEmpleados) {
       setEmpleados(dataEmpleados);
-      const dependenciasUnicas = new Set(dataEmpleados.map(e => e.dependencia)).size;
-      let totalAsignados = 0; let totalCanjeados = 0;
-      dataEmpleados.forEach(emp => {
+      
+      // BLINDAJE MATEMÁTICO: IGNORAR CUENTAS DEV Y DE PRUEBA EN LAS ESTADÍSTICAS
+      const empleadosReales = dataEmpleados.filter(e => e.rol !== 'dev' && !e.dependencia?.toUpperCase().includes('PRUEBA'));
+      
+      const dependenciasUnicas = new Set(empleadosReales.map(e => e.dependencia)).size;
+      let totalAsignados = 0; 
+      let totalCanjeados = 0;
+      
+      empleadosReales.forEach(emp => {
         totalCanjeados += (emp.tickets_canjeado || 0);
         totalAsignados += (emp.tickets_restantes || 0) + (emp.tickets_canjeado || 0);
       });
-      setStats({ total: totalAsignados, canjeados: totalCanjeados, disponibles: totalAsignados - totalCanjeados, dependencias: dependenciasUnicas });
+      
+      setStats({ 
+        total: totalAsignados, 
+        canjeados: totalCanjeados, 
+        disponibles: totalAsignados - totalCanjeados, 
+        dependencias: dependenciasUnicas 
+      });
     }
+
     const { data: dataHistorial } = await supabase.from('historial_comedor').select('*').order('fecha_hora', { ascending: false });
     if (dataHistorial) setHistorial(dataHistorial);
 
     const { data: dataLogs } = await supabase.from('auditoria_logs').select('*').order('creado_en', { ascending: false }).limit(200);
     if (dataLogs) setAuditoriaLogs(dataLogs);
 
-    // NUEVO: CARGAR CUOTAS EN ESPERA
     const { data: dataProg } = await supabase.from('cuotas_programadas').select('*');
     if (dataProg) setCuotasProgramadas(dataProg);
   };
@@ -419,7 +437,11 @@ export default function AdminDashboard() {
   
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/dashboard'); };
   const empleadosFiltrados = empleados.filter(e => e.nombre_completo.toLowerCase().includes(filtroNombre.toLowerCase()) || e.dependencia.toLowerCase().includes(filtroNombre.toLowerCase()));
+  
+  // BLINDAJE MATEMÁTICO: IGNORAR DEV/PRUEBAS EN LA TABLA DE DEPENDENCIAS
   const dependenciasArray = Object.entries(empleados.reduce((acc, emp) => {
+    if (emp.rol === 'dev' || emp.dependencia?.toUpperCase().includes('PRUEBA')) return acc;
+    
     const dep = emp.dependencia || 'Sin Asignar';
     if (!acc[dep]) acc[dep] = { asignados: 0, canjeados: 0, disponibles: 0 };
     acc[dep].asignados += (emp.tickets_restantes || 0) + (emp.tickets_canjeado || 0);
@@ -474,6 +496,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               ))}
+              {dependenciasArray.length === 0 && <p className="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">Sin datos reales para contabilizar</p>}
             </div>
           )}
 
@@ -508,8 +531,11 @@ export default function AdminDashboard() {
                     {empleadosFiltrados.map((emp, i) => {
                       const cuotaFutura = cuotasProgramadas.find(c => c.empleado_id === emp.id);
                       return (
-                        <tr key={i} className="hover:bg-slate-50">
-                          <td className="p-4 font-bold text-xs uppercase">{emp.nombre_completo}</td>
+                        <tr key={i} className={`hover:bg-slate-50 ${emp.rol === 'dev' ? 'opacity-50 grayscale hover:opacity-100' : ''}`}>
+                          <td className="p-4 font-bold text-xs uppercase flex items-center gap-2">
+                            {emp.nombre_completo}
+                            {emp.rol === 'dev' && <span className="bg-slate-800 text-white text-[8px] px-1.5 py-0.5 rounded">DEV</span>}
+                          </td>
                           <td className="p-4 text-[10px] text-blue-600 font-bold">{emp.email}</td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center gap-2">
