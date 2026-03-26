@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
+// AQUÍ ESTÁ LA CORRECCIÓN: Agregué CheckCircle2 a los imports
 import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText, ShieldCheck, RefreshCw, ChefHat, UtensilsCrossed, Users, Ticket, Building2, Terminal, CheckCircle2, Layers, CalendarPlus, Minus, Plus, History, ClipboardList, X, KeyRound, AlertOctagon } from 'lucide-react';
 import { crearUsuarioAdmin, eliminarUsuarioAdmin, actualizarPasswordAdmin, registrarLog } from './actions';
 import jsPDF from 'jspdf';
@@ -72,7 +73,6 @@ export default function AdminDashboard() {
         
         const email = session.user.email?.toLowerCase() || '';
         
-        // NUEVA SEGURIDAD POR ROLES
         const { data: miPerfil } = await supabase.from('perfiles').select('rol').eq('email', email).maybeSingle();
         const rol = miPerfil?.rol || 'empleado';
 
@@ -100,7 +100,6 @@ export default function AdminDashboard() {
     if (dataEmpleados) {
       setEmpleados(dataEmpleados);
       
-      // BLINDAJE MATEMÁTICO: IGNORAR CUENTAS DEV Y DE PRUEBA EN LAS ESTADÍSTICAS
       const empleadosReales = dataEmpleados.filter(e => e.rol !== 'dev' && !e.dependencia?.toUpperCase().includes('PRUEBA'));
       
       const dependenciasUnicas = new Set(empleadosReales.map(e => e.dependencia)).size;
@@ -438,7 +437,6 @@ export default function AdminDashboard() {
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/dashboard'); };
   const empleadosFiltrados = empleados.filter(e => e.nombre_completo.toLowerCase().includes(filtroNombre.toLowerCase()) || e.dependencia.toLowerCase().includes(filtroNombre.toLowerCase()));
   
-  // BLINDAJE MATEMÁTICO: IGNORAR DEV/PRUEBAS EN LA TABLA DE DEPENDENCIAS
   const dependenciasArray = Object.entries(empleados.reduce((acc, emp) => {
     if (emp.rol === 'dev' || emp.dependencia?.toUpperCase().includes('PRUEBA')) return acc;
     
@@ -473,11 +471,9 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#1A2744] font-sans pb-20 relative">
       
-      {/* BACKGROUND DECORATION */}
       <div className="fixed top-0 left-0 w-full h-[40vh] bg-gradient-to-b from-[#1A2744] to-[#F8FAFC] -z-10"></div>
       <div className="fixed top-[-20%] right-[-10%] w-[60vh] h-[60vh] bg-amber-500/10 rounded-full blur-[100px] -z-10"></div>
 
-      {/* NAVBAR PREMIUM */}
       <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 p-4 sticky top-0 z-50 shadow-sm flex justify-between items-center px-4 md:px-8">
         <div className="flex items-center gap-4">
           <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0 group hover:rotate-6 transition-transform duration-300">
@@ -494,7 +490,6 @@ export default function AdminDashboard() {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* ACCESO SECRETO PARA DEV */}
           {isDev && (
             <button 
               onClick={() => router.push('/dev-panel')} 
@@ -510,7 +505,6 @@ export default function AdminDashboard() {
 
       <div className="max-w-7xl mx-auto px-4 md:px-8 mt-8 relative z-10">
         
-        {/* STATS HEADERS PREMIUM */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8 anim-fade-up" style={{animationDelay: '100ms'}}>
           <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
             <div className="absolute -right-6 -top-6 text-slate-50 opacity-50 group-hover:scale-110 transition-transform"><Ticket size={100} /></div>
@@ -535,7 +529,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* TABS STYLING PREMIUM */}
         <div className="bg-white/80 backdrop-blur-xl rounded-2xl sm:rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white overflow-hidden anim-fade-up" style={{animationDelay: '200ms'}}>
           
           <div className="flex p-3 gap-2 overflow-x-auto bg-slate-50/50 border-b border-slate-100 no-scrollbar">

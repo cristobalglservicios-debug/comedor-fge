@@ -154,7 +154,12 @@ export default function PantallaCajero() {
 
   const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
-    const rawInput = (codigoDirecto || inputLectura).trim().toUpperCase(); if (!rawInput) return;
+    let rawInput = (codigoDirecto || inputLectura).trim().toUpperCase(); 
+    if (!rawInput) return;
+
+    // --- CORRECCIÓN MAGICA PARA LECTOR DESCONFIGURADO ---
+    // Cambia cualquier símbolo raro que meta el escáner por el palito | correcto
+    rawInput = rawInput.replace(/[<>}Ñ~¿'¡!,\.\-]/g, '|');
 
     if (!rawInput.includes('|')) {
       setMensaje({ tipo: 'error', texto: 'ENTRADA MANUAL BLOQUEADA. SELECCIONE EL NOMBRE E INGRESE EL FOLIO.' });
@@ -162,23 +167,10 @@ export default function PantallaCajero() {
     }
 
     const partes = rawInput.split('|');
-    let identificador = partes[0];
-    let cantidadACanjear = 1;
-    let valeUID = '';
-
-    // LÓGICA HÍBRIDA INTELIGENTE PARA LECTORES LÁSER
-    if (partes.length >= 4) {
-      // Formato viejo: NOMBRE|CANTIDAD|TIMESTAMP|TOKEN
-      cantidadACanjear = parseInt(partes[1]) || 1;
-      valeUID = partes[3] || '';
-    } else if (partes.length === 3) {
-      // Formato nuevo (optimizado láser): EMAIL_CORTO|CANTIDAD|TOKEN
-      cantidadACanjear = parseInt(partes[1]) || 1;
-      valeUID = partes[2] || '';
-    } else {
-      setMensaje({ tipo: 'error', texto: 'FORMATO DE CÓDIGO INVÁLIDO.' });
-      setInputLectura(''); return;
-    }
+    const identificador = partes[0];
+    // Soportamos el código original de 4 partes (con timestamp en la posición 2)
+    const cantidadACanjear = parseInt(partes[1]) || 1;
+    const valeUID = partes[3] || partes[2] || '';
 
     ejecutarCanjeFinal(identificador, cantidadACanjear, valeUID);
   };
