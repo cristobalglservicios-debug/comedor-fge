@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -26,6 +26,18 @@ const getDiaSemanaMerida = () => {
   return fecha.getDay(); 
 };
 
+// --- DATA: MENÚ FIJO DE ANTOJITOS ---
+const MENU_ANTOJITOS = [
+  { categoria: 'Tortas', icono: '🥖', items: ['Asado', 'Empanizado', 'Cochinita', 'Pescado empanizado', 'Jamón y queso', 'Jamón, queso daysi y pastel mosaico'] },
+  { categoria: 'Tacos', icono: '🌮', items: ['Asado', 'Empanizado', 'Cochinita', 'Pescado empanizado', 'Cherna'] },
+  { categoria: 'Salbutes y Panuchos', icono: '🥙', items: ['Pollo', 'Empanizado', 'Picadillo', 'Huevo'] },
+  { categoria: 'Empanadas', icono: '🥟', items: ['Queso Manchego', 'Picadillo', 'Queso y picadillo'] },
+  { categoria: 'Huevos al gusto', icono: '🍳', items: ['Jamón', 'Longaniza', 'Chaya'] },
+  { categoria: 'Sopes', icono: '🫓', items: ['Asado', 'Cochinita'] },
+  { categoria: 'Tamales', icono: '🫔', items: ['Vaporcitos'] },
+  { categoria: 'Otros', icono: '🍔', items: ['Sandwich club', 'Hamburguesa', 'Hotdogs'] }
+];
+
 export default function MiValePage() {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,10 +59,12 @@ export default function MiValePage() {
   const [errorPassword, setErrorPassword] = useState('');
   const [cargandoPassword, setCargandoPassword] = useState(false);
 
-  // NUEVOS ESTADOS PARA SEGURIDAD ANTI-REPETICIÓN
   const [cantidadACanjear, setCantidadACanjear] = useState(1);
   const [tokenSeguridad, setTokenSeguridad] = useState('');
   const [tokenTimestamp, setTokenTimestamp] = useState(Date.now());
+
+  // ESTADO PARA EL PANEL DE ANTOJITOS
+  const [mostrarMenuFijo, setMostrarMenuFijo] = useState(false);
 
   useEffect(() => {
     const intentarAutoLogin = async () => {
@@ -224,7 +238,6 @@ export default function MiValePage() {
       return;
     }
 
-    // GENERAR ID ÚNICO PARA QUE EL VALE SEA DE UN SOLO USO
     const uid = Math.random().toString(36).substring(2, 9).toUpperCase();
     setTokenSeguridad(uid);
     setTokenTimestamp(Date.now());
@@ -273,7 +286,6 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // PROTOCOLO ÚNICO BLINDADO: NOMBRE|CANTIDAD|TIMESTAMP|UID
   const valorQR = `${empleado?.nombre_completo}|${cantidadACanjear}|${tokenTimestamp}|${tokenSeguridad}`;
 
   if (estadoVista === 'cargando') {
@@ -472,6 +484,23 @@ export default function MiValePage() {
                 </div>
               )}
 
+              {/* BANNER DE ANTOJITOS FIJOS (ABRE EL MODAL) */}
+              <button 
+                onClick={() => setMostrarMenuFijo(true)}
+                className="relative z-10 w-full mb-6 bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 hover:bg-amber-500/30 p-4 rounded-2xl flex items-center justify-between transition-all active:scale-95 group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="bg-amber-500/20 p-2 rounded-xl text-amber-400 group-hover:scale-110 transition-transform">
+                    <Store size={20}/>
+                  </div>
+                  <div className="text-left">
+                    <h4 className="text-amber-400 font-black text-xs uppercase tracking-widest">¿Antojo de algo más?</h4>
+                    <p className="text-amber-200/70 text-[9px] font-bold uppercase">Ver menú fijo de comida rápida</p>
+                  </div>
+                </div>
+                <ChevronRight className="text-amber-400/50" size={20}/>
+              </button>
+
               <div key={fechaActiva} className="min-h-[150px] relative z-10">
                 
                 {reservasDelDia.length > 0 && (
@@ -516,7 +545,6 @@ export default function MiValePage() {
                       </div>
                     )}
 
-                    {/* SECCIÓN DIVIDIDA PARA ALMUERZOS: ESPECIALIDADES VS CLÁSICOS */}
                     {almuerzos.length > 0 && (
                       <div>
                         <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
@@ -524,7 +552,6 @@ export default function MiValePage() {
                           <h3 className="text-emerald-400 font-black text-xs uppercase tracking-[0.2em]">Almuerzos</h3>
                         </div>
 
-                        {/* ESPECIALIDADES DEL DÍA (Stock < 9000) */}
                         {almuerzos.filter(m => m.porciones_totales < 9000).length > 0 && (
                           <div className="mb-8">
                              <h4 className="text-white/60 text-[9px] uppercase tracking-widest font-bold mb-3 flex items-center gap-1"><Flame size={12}/> Especialidades del Día</h4>
@@ -534,7 +561,6 @@ export default function MiValePage() {
                           </div>
                         )}
 
-                        {/* CLÁSICOS DEL COMEDOR (Stock >= 9000) EN CARRUSEL HORIZONTAL */}
                         {almuerzos.filter(m => m.porciones_totales >= 9000).length > 0 && (
                           <div>
                             <h4 className="text-white/60 text-[9px] uppercase tracking-widest font-bold mb-3 flex items-center gap-1"><Star size={12}/> Clásicos del comedor</h4>
@@ -593,6 +619,7 @@ export default function MiValePage() {
                     <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Canjeado</span>
                   </div>
                 ))}
+                {historial.length === 0 && <p className="text-center text-slate-300 text-xs py-4 border border-dashed rounded-xl">No hay canjes previos</p>}
               </div>
             </div>
           </div>
@@ -681,6 +708,52 @@ export default function MiValePage() {
 
       </div>
 
+      {/* MODAL BOTTOM SHEET: MENÚ DE ANTOJITOS */}
+      {mostrarMenuFijo && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#1A2744]/80 backdrop-blur-sm anim-entrada-suave">
+          <div className="bg-[#F8FAFC] w-full max-w-md h-[85vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2rem] rounded-t-[2.5rem] overflow-hidden flex flex-col shadow-2xl relative">
+            <div className="bg-white p-6 pb-4 shrink-0 border-b border-slate-100 relative z-10 rounded-t-[2.5rem] sm:rounded-t-[2rem]">
+              <button 
+                onClick={() => setMostrarMenuFijo(false)}
+                className="absolute top-6 right-6 bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-all"
+              >
+                <X size={20} />
+              </button>
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden"></div>
+              <h2 className="text-[#1A2744] text-xl font-black uppercase tracking-tight flex items-center gap-2">
+                <Store className="text-[#C9A84C]" size={24}/> Menú de Antojitos
+              </h2>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Disponibles todos los días en mostrador</p>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-6 no-scrollbar pb-20">
+              {MENU_ANTOJITOS.map((categoria, i) => (
+                <div key={i} className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm anim-cascada" style={{animationDelay: `${i * 50}ms`}}>
+                  <div className="flex items-center gap-2 mb-4 border-b border-slate-50 pb-3">
+                    <span className="text-2xl">{categoria.icono}</span>
+                    <h3 className="text-[#1A2744] font-black text-sm uppercase tracking-wider">{categoria.categoria}</h3>
+                  </div>
+                  <ul className="space-y-2">
+                    {categoria.items.map((item, j) => (
+                      <li key={j} className="flex items-start gap-2 text-xs font-bold text-slate-600">
+                        <span className="text-[#C9A84C] mt-0.5">•</span> 
+                        <span className="leading-snug uppercase text-[11px]">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+              
+              <div className="bg-amber-50 p-5 rounded-3xl border border-amber-200 text-center">
+                <p className="text-amber-800 text-[10px] font-black uppercase tracking-widest leading-relaxed">
+                  ⚠️ Estos platillos se preparan al momento. Solicítalos directamente en ventanilla.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeUpIn {
           0% { opacity: 0; transform: translateY(20px); }
@@ -695,7 +768,7 @@ export default function MiValePage() {
           to { transform: rotate(360deg); }
         }
         .anim-entrada-suave {
-          animation: fadeUpIn 0.6s ease-out forwards;
+          animation: fadeUpIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
         .anim-cascada {
           opacity: 0;
