@@ -238,7 +238,9 @@ export default function MiValePage() {
       return;
     }
 
-    const uid = Math.random().toString(36).substring(2, 9).toUpperCase();
+    // REDUCCIÓN CRÍTICA DE CARACTERES PARA LECTOR FÍSICO
+    // Generamos un token extremadamente corto (Ej. "A4F2")
+    const uid = Math.random().toString(36).substring(2, 6).toUpperCase();
     setTokenSeguridad(uid);
     setTokenTimestamp(Date.now());
 
@@ -285,7 +287,11 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  const valorQR = `${empleado?.nombre_completo}|${cantidadACanjear}|${tokenTimestamp}|${tokenSeguridad}`;
+  // PAYLOAD EXTREMADAMENTE OPTIMIZADO PARA LECTORES LÁSER
+  // En vez del nombre completo, enviamos solo la primera parte del correo (ej. juan.perez)
+  const idCortoEmpleado = empleado?.email ? empleado.email.split('@')[0] : 'EMP';
+  // Formato final: juan.perez|1|TOKEN
+  const valorQR = `${idCortoEmpleado}|${cantidadACanjear}|${tokenSeguridad}`;
 
   if (estadoVista === 'cargando') {
     return (
@@ -463,7 +469,7 @@ export default function MiValePage() {
                 <h3 className="text-3xl font-black text-[#1A2744] mb-1">{empleado.tickets_canjeado || 0}</h3>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Usados</p>
               </div>
-              <div className="bg-[#1A2744] p-5 rounded-[2rem] shadow-xl shadow-[#1A2744]/20 border border-[#2A3F6D] flex flex-col items-center text-center relative overflow-hidden">
+              <div className="bg-[#1A2744] p-5 rounded-[2rem] shadow-xl shadow-[#1A2744]/20 border border-[#2A3F6D] flex flex-col items-center text-center relative overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-400/10 to-transparent opacity-50"></div>
                 <div className="relative z-10 flex flex-col items-center">
                   <div className="w-10 h-10 bg-[#2A3F6D] text-amber-400 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
@@ -700,7 +706,7 @@ export default function MiValePage() {
               <PasoCheck visible={pasoAnimacion >= 1} texto="Verificando Identidad" completed={pasoAnimacion > 1} />
               <PasoCheck visible={pasoAnimacion >= 2} texto={`Aprobando ${cantidadACanjear} Raciones`} completed={pasoAnimacion > 2} />
               <PasoCheck visible={pasoAnimacion >= 3} texto="Asignando Token Seguro" completed={pasoAnimacion > 3} />
-              <PasoCheck visible={pasoAnimacion >= 4} texto="Renderizando QR" completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
+              <PasoCheck visible={pasoAnimacion >= 4} texto="Renderizando Código" completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
             </div>
           </div>
         )}
@@ -733,16 +739,17 @@ export default function MiValePage() {
 
                 <div className="w-full bg-slate-50 p-6 rounded-[2rem] flex flex-col items-center mb-8 border border-slate-100 relative overflow-hidden">
                    
-                  <div className="relative z-10 w-full flex justify-center bg-white p-3 rounded-xl shadow-sm border border-slate-100 mb-4">
+                  <div className="relative z-10 w-full flex justify-center bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-4 overflow-hidden">
+                    {/* OPTIMIZACIÓN LÁSER: Líneas super gruesas (width=4) y amplios márgenes (margin=20) */}
                     <Barcode 
                       value={valorQR} 
                       format="CODE128"
-                      width={2.5}
-                      height={80}
+                      width={3}
+                      height={100}
                       displayValue={false}
-                      textAlign="center"
+                      margin={20}
                       background="#ffffff"
-                      lineColor="#1A2744"
+                      lineColor="#000000"
                     />
                   </div>
                   
@@ -796,9 +803,9 @@ export default function MiValePage() {
             
             <div className="p-6 overflow-y-auto flex-1 space-y-4 no-scrollbar pb-20">
               {MENU_ANTOJITOS.map((categoria, i) => (
-                <div key={i} className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] anim-fade-up" style={{animationDelay: `${i * 50}ms`}}>
+                <div key={i} className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] anim-fade-up hover:border-amber-200 transition-colors group" style={{animationDelay: `${i * 50}ms`}}>
                   <div className="flex items-center gap-3 mb-4 border-b border-slate-50 pb-3">
-                    <span className="text-2xl bg-slate-50 w-10 h-10 flex items-center justify-center rounded-xl border border-slate-100">{categoria.icono}</span>
+                    <span className="text-2xl bg-slate-50 w-10 h-10 flex items-center justify-center rounded-xl border border-slate-100 group-hover:bg-amber-50 group-hover:border-amber-100 transition-colors">{categoria.icono}</span>
                     <h3 className="text-[#1A2744] font-black text-xs uppercase tracking-wider">{categoria.categoria}</h3>
                   </div>
                   <ul className="space-y-3">
