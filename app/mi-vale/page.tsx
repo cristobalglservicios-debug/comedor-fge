@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -77,7 +77,7 @@ export default function MiValePage() {
 
       const debeCambiar = localStorage.getItem('debe_cambiar_password_fge') === 'true';
       
-      // Priorizamos búsqueda por email ya que es único y más seguro
+      // Sincronización por Email
       const { data } = await supabase
         .from('perfiles')
         .select('*')
@@ -273,8 +273,7 @@ export default function MiValePage() {
   };
 
   const hoyCorto = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"})).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const folioGenerado = `FGE-${empleado?.dependencia?.substring(0,3).toUpperCase() || 'EMP'}-00${empleado?.id || '1'}`;
-
+  
   const menusParaMostrar = menusFuturos.filter(m => m.fecha === fechaActiva);
   const reservasDelDia = misReservas.filter(r => r.menu_comedor?.fecha === fechaActiva);
 
@@ -336,17 +335,30 @@ export default function MiValePage() {
             <p className="text-[#C9A84C] text-[9px] font-bold tracking-widest truncate uppercase">Fiscalía General</p>
           </div>
         </div>
+        
         <div className="flex items-center gap-2">
-          {/* BOTÓN SECRETO PARA DEVELOPER */}
+          {/* ACCESO DIRECCIÓN PARA ADMINS */}
+          {(empleado?.rol === 'admin' || empleado?.rol === 'dev') && (
+            <button 
+              onClick={() => router.push('/admin')} 
+              className="bg-indigo-500/20 text-indigo-300 p-2 rounded-xl hover:bg-indigo-500 hover:text-white transition-all border border-indigo-500/30"
+              title="Panel Administración"
+            >
+              <ShieldCheck size={18} />
+            </button>
+          )}
+
+          {/* ACCESO SECRETO PARA DEV */}
           {empleado?.rol === 'dev' && (
             <button 
               onClick={() => router.push('/dev-panel')} 
-              className="bg-amber-500/20 text-amber-400 p-2 rounded-xl hover:bg-amber-500 hover:text-white transition-all border border-amber-500/30 shadow-lg anim-latido"
+              className="bg-amber-500/20 text-amber-400 p-2 rounded-xl hover:bg-amber-500 hover:text-white transition-all border border-amber-500/30 anim-latido"
               title="Panel Developer"
             >
               <Terminal size={18} />
             </button>
           )}
+
           <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all">
             <LogOut size={18} />
           </button>
