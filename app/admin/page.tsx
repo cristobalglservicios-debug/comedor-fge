@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
-import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText, ShieldCheck, RefreshCw, ChefHat, UtensilsCrossed, Users, Ticket, Building2, Terminal } from 'lucide-react';
+import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText, ShieldCheck, RefreshCw, ChefHat, UtensilsCrossed, Users, Ticket, Building2, Terminal, CheckCircle2, Layers, CalendarPlus, Minus, Plus, History, ClipboardList, X, KeyRound, AlertOctagon } from 'lucide-react';
 import { crearUsuarioAdmin, eliminarUsuarioAdmin, actualizarPasswordAdmin, registrarLog } from './actions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
