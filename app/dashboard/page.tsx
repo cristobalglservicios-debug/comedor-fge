@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Loader2, Lock, Mail, ArrowRight } from 'lucide-react';
+import { Loader2, Lock, Mail, ArrowRight, ChefHat, UtensilsCrossed } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,41 +73,36 @@ export default function LoginScreen() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden">
       
-      {/* Fondo decorativo sutil */}
-      <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-[#1A2744]/5 to-transparent -z-10"></div>
+      {/* BACKGROUND DECORATION */}
+      <div className="absolute top-0 left-0 w-full h-[40vh] bg-gradient-to-b from-[#1A2744] to-[#F8FAFC] -z-10"></div>
+      <div className="absolute top-[-20%] right-[-10%] w-[60vh] h-[60vh] bg-amber-500/10 rounded-full blur-[100px] -z-10"></div>
       
-      <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-8 duration-700">
+      <div className="w-full max-w-md flex flex-col items-center z-10">
         
-        {/* LOGO OFICIAL FGE (Igual que en la portada) */}
-        <div className="mb-8 flex justify-center">
-          <div className="bg-white w-32 h-32 rounded-full flex items-center justify-center shadow-[0_20px_40px_-12px_rgba(0,0,0,0.1)] border border-slate-50 p-2 overflow-hidden">
-            <img 
-              src="/logo-fge.png" 
-              alt="Fiscalía General del Estado de Yucatán"
-              className="w-full h-full object-contain rounded-full"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = "https://fge.yucatan.gob.mx/images/logo-fge-header.png";
-              }}
-            />
-          </div>
+        {/* LOGO DINÁMICO (PREMIUM) */}
+        <div className="mb-6 group anim-scale-in" style={{animationDelay: '100ms'}}>
+            <div className="relative w-24 h-24 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-[2rem] rotate-3 flex items-center justify-center shadow-2xl transition-transform duration-500 group-hover:rotate-6 border border-slate-700/50">
+              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 rounded-[2.5rem]"></div>
+              <UtensilsCrossed className="absolute text-white/10 w-12 h-12 -rotate-3" strokeWidth={1} />
+              <ChefHat className="relative text-amber-400 -rotate-3 drop-shadow-lg" size={40} strokeWidth={1.5} />
+            </div>
         </div>
 
         {/* Textos Institucionales */}
-        <div className="text-center mb-10">
-          <h1 className="text-2xl font-black text-[#1A2744] tracking-tight uppercase">Acceso al Sistema</h1>
-          <p className="text-[#C9A84C] text-sm font-bold tracking-widest uppercase mt-2">Administración Fiscalía</p>
+        <div className="text-center mb-8 anim-fade-up" style={{animationDelay: '200ms'}}>
+          <h1 className="text-2xl font-black text-white tracking-tight uppercase drop-shadow-sm">Acceso al Sistema</h1>
+          <p className="text-amber-400 text-xs font-bold tracking-widest uppercase mt-1">Comedor Fiscalía</p>
         </div>
 
         {/* Tarjeta del Formulario */}
-        <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100">
+        <div className="w-full bg-white/90 backdrop-blur-xl p-8 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white anim-fade-up" style={{animationDelay: '300ms'}}>
           <form onSubmit={handleLogin} className="space-y-6">
             
             {/* Input Correo */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2">Correo Institucional</label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-[#1A2744] transition-colors">
+            <div className="space-y-2 group">
+              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2 group-focus-within:text-[#1A2744] transition-colors">Correo Institucional</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-amber-500 transition-colors">
                   <Mail size={18} />
                 </div>
                 <input
@@ -115,17 +110,17 @@ export default function LoginScreen() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-800 font-medium focus:bg-white focus:border-[#C9A84C] focus:ring-4 focus:ring-[#C9A84C]/10 outline-none transition-all"
+                  className="w-full pl-11 pr-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-[#1A2744] font-bold focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all placeholder:font-normal placeholder:text-slate-300"
                   placeholder="ejemplo@fge.gob.mx"
                 />
               </div>
             </div>
 
             {/* Input Contraseña */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2">Contraseña</label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-[#1A2744] transition-colors">
+            <div className="space-y-2 group">
+              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2 group-focus-within:text-[#1A2744] transition-colors">Contraseña</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-amber-500 transition-colors">
                   <Lock size={18} />
                 </div>
                 <input
@@ -133,7 +128,7 @@ export default function LoginScreen() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-800 font-medium focus:bg-white focus:border-[#C9A84C] focus:ring-4 focus:ring-[#C9A84C]/10 outline-none transition-all"
+                  className="w-full pl-11 pr-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-[#1A2744] font-bold focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all placeholder:font-normal placeholder:text-slate-300 tracking-widest"
                   placeholder="••••••••"
                 />
               </div>
@@ -141,8 +136,8 @@ export default function LoginScreen() {
 
             {/* Mensaje de Error */}
             {error && (
-              <div className="bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl text-xs font-bold text-center animate-in shake">
-                {error}
+              <div className="bg-red-50 border border-red-200 text-red-500 p-4 rounded-2xl text-[11px] uppercase tracking-wider font-black text-center animate-in shake flex items-center justify-center gap-2">
+                <Lock size={14}/> {error}
               </div>
             )}
 
@@ -150,22 +145,57 @@ export default function LoginScreen() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-4 bg-[#1A2744] hover:bg-[#25365d] active:scale-[0.98] text-white py-4 px-6 rounded-2xl font-bold uppercase tracking-widest text-[11px] transition-all flex justify-center items-center gap-3 shadow-lg shadow-blue-900/20 disabled:opacity-70 disabled:active:scale-100"
+              className="relative w-full mt-4 bg-[#1A2744] hover:bg-[#25365d] active:scale-[0.98] text-white py-5 px-6 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex justify-center items-center gap-3 shadow-xl shadow-[#1A2744]/20 disabled:opacity-70 disabled:active:scale-100 overflow-hidden group/btn"
             >
-              {loading ? (
-                <><Loader2 className="animate-spin" size={16} /> Verificando Identidad...</>
-              ) : (
-                <>Iniciar Sesión <ArrowRight size={16} /></>
-              )}
+              <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover/btn:animate-shimmer"></div>
+              
+              <span className="relative z-10 flex items-center gap-2">
+                  {loading ? (
+                    <><Loader2 className="animate-spin text-amber-400" size={16} /> Verificando Identidad...</>
+                  ) : (
+                    <>Iniciar Sesión <ArrowRight className="text-amber-400" size={16} /></>
+                  )}
+              </span>
             </button>
           </form>
         </div>
 
         {/* Footer */}
-        <p className="text-center text-[9px] font-black tracking-[0.4em] text-slate-300 uppercase mt-12">
-          Fiscalía General del Estado de Yucatán
+        <p className="text-center text-[9px] font-black tracking-[0.5em] text-slate-400/60 uppercase mt-12 anim-fade-up" style={{animationDelay: '400ms'}}>
+          FGE Yucatán • App Interna
         </p>
       </div>
+
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes shimmer {
+          100% { transform: translateX(100%); }
+        }
+        .anim-fade-up {
+          opacity: 0;
+          animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .anim-scale-in {
+          opacity: 0;
+          animation: scaleIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .shake {
+          animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+          10%, 90% { transform: translate3d(-1px, 0, 0); }
+          20%, 80% { transform: translate3d(2px, 0, 0); }
+          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+          40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+      `}} />
     </div>
   );
 }
