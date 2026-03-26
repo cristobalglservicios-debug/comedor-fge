@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Loader2, ChevronRight, ShieldCheck } from 'lucide-react';
+import { ChevronRight, ShieldCheck } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,9 +41,9 @@ export default function Home() {
     setLoading(true); // Mostrar carga mientras consultamos el rol real
 
     try {
-      const email = session.user.email?.toLowerCase() || '';
+      const email = session.user.email?.toLowerCase().trim() || '';
       
-      // CONSULTA DE ROL REAL EN BASE DE DATOS
+      // CONSULTA DE ROL REAL EN BASE DE DATOS (Ignora el texto del correo)
       const { data: perfil } = await supabase
         .from('perfiles')
         .select('rol')
@@ -52,7 +52,7 @@ export default function Home() {
 
       const rol = perfil?.rol || 'empleado';
 
-      // REDIRECCIÓN INTELIGENTE SEGÚN ROL
+      // REDIRECCIÓN ESTRICTA POR ROL
       if (rol === 'dev') {
         router.push('/dev-panel');
       } else if (rol === 'admin') {
@@ -64,7 +64,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Error en redirección:", error);
-      router.push('/mi-vale'); // Fallback a perfil de empleado
+      router.push('/mi-vale'); // Fallback de seguridad
     }
   };
 
@@ -111,7 +111,7 @@ export default function Home() {
           </p>
         </div>
 
-        {/* BOTÓN DE ACCIÓN REFINADO CON LOGICA DE ROLES */}
+        {/* BOTÓN DE ACCIÓN REFINADO CON LÓGICA DE ROLES ESTRICTA */}
         <button 
           onClick={handleStart}
           className="group mt-16 w-full bg-[#1A2744] text-white p-5 rounded-full font-bold flex items-center justify-between shadow-2xl shadow-blue-900/40 active:scale-[0.96] transition-all hover:bg-[#25365d]"
