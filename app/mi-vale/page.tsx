@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -77,11 +77,11 @@ export default function MiValePage() {
 
       const debeCambiar = localStorage.getItem('debe_cambiar_password_fge') === 'true';
       
-      const emailPrefijo = session.user.email.split('@')[0].replace(/\./g, ' ');
+      // Priorizamos búsqueda por email ya que es único y más seguro
       const { data } = await supabase
         .from('perfiles')
         .select('*')
-        .ilike('nombre_completo', `%${emailPrefijo}%`)
+        .eq('email', session.user.email)
         .maybeSingle();
 
       if (data) {
@@ -336,9 +336,21 @@ export default function MiValePage() {
             <p className="text-[#C9A84C] text-[9px] font-bold tracking-widest truncate uppercase">Fiscalía General</p>
           </div>
         </div>
-        <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all">
-          <LogOut size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* BOTÓN SECRETO PARA DEVELOPER */}
+          {empleado?.rol === 'dev' && (
+            <button 
+              onClick={() => router.push('/dev-panel')} 
+              className="bg-amber-500/20 text-amber-400 p-2 rounded-xl hover:bg-amber-500 hover:text-white transition-all border border-amber-500/30 shadow-lg anim-latido"
+              title="Panel Developer"
+            >
+              <Terminal size={18} />
+            </button>
+          )}
+          <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all">
+            <LogOut size={18} />
+          </button>
+        </div>
       </nav>
 
       <div className="max-w-md mx-auto px-4 mt-6">
@@ -567,11 +579,11 @@ export default function MiValePage() {
                             <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar snap-x">
                                {almuerzos.filter(m => m.porciones_totales >= 9000).map((m, i) => (
                                  <div key={m.id} className="snap-start min-w-[220px] bg-gradient-to-br from-[#1A2744] to-[#111A2E] p-5 rounded-3xl flex flex-col justify-between border border-[#C9A84C]/30 shadow-2xl transform hover:scale-105 transition-all">
-                                    <div>
+                                   <div>
                                        <span className="text-[#C9A84C] text-[8px] font-black uppercase tracking-widest flex items-center gap-1 mb-2"><Star size={10} className="fill-[#C9A84C]"/> Menú Fijo</span>
                                        <h3 className="text-white font-black text-sm uppercase leading-tight mb-2">{m.platillo}</h3>
-                                    </div>
-                                    <div className="mt-2 flex items-end justify-between gap-2">
+                                   </div>
+                                   <div className="mt-2 flex items-end justify-between gap-2">
                                        <div className="flex flex-col">
                                          <span className="text-emerald-400 text-[10px] font-black uppercase flex items-center gap-1"><Check size={12}/> Siempre</span>
                                          <span className="text-emerald-400 text-[10px] font-black uppercase">Disponible</span>
@@ -579,7 +591,7 @@ export default function MiValePage() {
                                        <button onClick={() => apartarComida(m)} disabled={cargandoApartado} className="bg-[#C9A84C] hover:bg-white text-[#1A2744] px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md active:scale-95 transition-all flex items-center gap-1">
                                          {cargandoApartado ? <Loader2 className="anim-girar" size={12}/> : 'Apartar'}
                                        </button>
-                                    </div>
+                                   </div>
                                  </div>
                                ))}
                             </div>
