@@ -282,8 +282,8 @@ export default function MiValePage() {
 
   const TarjetaPlatillo = ({ m, index }: { m: any, index: number }) => (
     <div 
-      className="anim-cascada bg-white p-5 rounded-3xl flex justify-between items-center shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 transform hover:scale-[1.02] active:scale-[0.98] transition-all"
-      style={{ animationDelay: `${index * 120}ms` }}
+      className="anim-cascada bg-white p-5 rounded-3xl flex justify-between items-center shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 transform hover:scale-[1.02] active:scale-[0.98] transition-all mb-3"
+      style={{ animationDelay: `${index * 100}ms` }}
     >
       <div className="flex-1 pr-4">
         <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1">{m.platillo}</h3>
@@ -534,10 +534,10 @@ export default function MiValePage() {
                           </div>
                         )}
 
-                        {/* CLÁSICOS FGE (Stock >= 9000) EN CARRUSEL HORIZONTAL */}
+                        {/* CLÁSICOS DEL COMEDOR (Stock >= 9000) EN CARRUSEL HORIZONTAL */}
                         {almuerzos.filter(m => m.porciones_totales >= 9000).length > 0 && (
                           <div>
-                            <h4 className="text-white/60 text-[9px] uppercase tracking-widest font-bold mb-3 flex items-center gap-1"><Star size={12}/> Clásicos FGE</h4>
+                            <h4 className="text-white/60 text-[9px] uppercase tracking-widest font-bold mb-3 flex items-center gap-1"><Star size={12}/> Clásicos del comedor</h4>
                             <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar snap-x">
                                {almuerzos.filter(m => m.porciones_totales >= 9000).map((m, i) => (
                                  <div key={m.id} className="snap-start min-w-[220px] bg-gradient-to-br from-[#1A2744] to-[#111A2E] p-5 rounded-3xl flex flex-col justify-between border border-[#C9A84C]/30 shadow-2xl transform hover:scale-105 transition-all">
@@ -626,7 +626,7 @@ export default function MiValePage() {
             <div className="bg-white rounded-[2rem] overflow-hidden shadow-2xl w-full border border-slate-100">
               <div className="bg-[#1A2744] p-6 text-center border-b-2 border-dashed border-slate-200 relative">
                 <p className="text-[#C9A84C] text-[10px] uppercase font-bold tracking-[0.2em] mb-1">Fiscalía General del Estado</p>
-                <h2 className="text-white text-xl font-black uppercase tracking-wider">Vale Digital</h2>
+                <h2 className="text-white text-xl font-black uppercase tracking-wider italic">Vale Digital</h2>
                 <div className="absolute -bottom-3 -left-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
                 <div className="absolute -bottom-3 -right-3 w-6 h-6 bg-[#F0F3F6] rounded-full"></div>
               </div>
