@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus, Layers, AlertOctagon, KeyRound, ShieldCheck } from 'lucide-react';
+import { LogOut, Loader2, FileSpreadsheet, FileText, Scan, History, ClipboardList, Camera, Search, Utensils, CheckCircle2, CalendarPlus, Trash2, ChefHat, Plus, Minus, Layers, AlertOctagon, KeyRound, ShieldCheck, UtensilsCrossed } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -157,7 +157,7 @@ export default function PantallaCajero() {
     const rawInput = (codigoDirecto || inputLectura).trim().toUpperCase(); if (!rawInput) return;
 
     if (!rawInput.includes('|')) {
-      setMensaje({ tipo: 'error', texto: 'ERROR: ENTRADA MANUAL BLOQUEADA. SELECCIONE EL NOMBRE E INGRESE EL FOLIO DE SEGURIDAD.' });
+      setMensaje({ tipo: 'error', texto: 'ENTRADA MANUAL BLOQUEADA. SELECCIONE EL NOMBRE E INGRESE EL FOLIO.' });
       setInputLectura(''); return;
     }
 
@@ -200,7 +200,7 @@ export default function PantallaCajero() {
       const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.estado === 'APARTADO');
       if (reservaExistente) await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', reservaExistente.id);
 
-      setMensaje({ tipo: 'exito', texto: cantidad > 1 ? `CANJE MÚLTIPLE OK (${cantidad})` : '¡VALE CANJEADO!', empleado, cantidad, hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) });
+      setMensaje({ tipo: 'exito', texto: cantidad > 1 ? `CANJE MÚLTIPLE OK (${cantidad})` : '¡VALE CANJEADO EXITOSAMENTE!', empleado, cantidad, hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) });
       await cargarDatosDia(); await cargarDatosGlobales();
       setModalManual(false);
     }
@@ -218,7 +218,6 @@ export default function PantallaCajero() {
     extraerLineas(textosPlan.almuerzo, 'ALMUERZO', porcionesPlan.almuerzo); 
     extraerLineas(textosPlan.cena, 'CENA', porcionesPlan.cena);
 
-    // INYECCIÓN DE CLÁSICOS (SOLO EN ALMUERZO CON STOCK 9999)
     if (textosPlan.almuerzo.trim().length > 0) {
       platillosAInsertar.push(
         { fecha: fechaPlan, tipo_comida: 'ALMUERZO', platillo: 'PECHUGA A LA PLANCHA', descripcion: '', porciones_totales: 9999, porciones_disponibles: 9999 },
@@ -283,157 +282,314 @@ export default function PantallaCajero() {
     doc.text("KARLA XACUR TAMAYO", 152, finalY + 10, { align: "center" }); doc.save(`Corte_Cajero_${tipo}.pdf`);
   };
 
-  if (loadingAcceso) return <div className="min-h-screen bg-[#F0F3F6] flex items-center justify-center"><Loader2 className="animate-spin text-[#1A2744]" size={40} /></div>;
+  if (loadingAcceso) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1A2744]/5 to-transparent z-0"></div>
+        <div className="relative z-10 flex flex-col items-center animate-pulse-slow">
+          <div className="relative flex items-center justify-center mb-6">
+            <div className="absolute inset-0 bg-amber-500/20 rounded-full blur-xl animate-pulse"></div>
+            <div className="w-16 h-16 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-[1.5rem] rotate-3 flex items-center justify-center shadow-2xl">
+              <ChefHat className="text-amber-400 -rotate-3" size={28} strokeWidth={1.5} />
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-[#1A2744]">
+            <Loader2 className="animate-spin text-amber-500" size={16} />
+            <p className="text-[10px] font-black tracking-[0.3em] uppercase">Autenticando Cajero...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   const reservasPendientes = reservasHoy.filter(r => r.estado === 'APARTADO');
   const reservasCapturadas = reservasHoy.filter(r => r.estado === 'CAPTURADO');
 
   return (
-    <div className="min-h-screen bg-[#F0F3F6] font-sans pb-10">
-      <nav className="bg-[#1A2744] text-white p-4 shadow-xl flex justify-between items-center px-4 md:px-8 relative z-50">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans pb-10 relative">
+      
+      {/* DECORACIÓN FONDO GLOBAL */}
+      <div className="fixed top-0 left-0 w-full h-[30vh] bg-gradient-to-b from-[#1A2744] to-[#F8FAFC] -z-10"></div>
+      <div className="fixed top-[-10%] right-[-5%] w-[40vh] h-[40vh] bg-amber-500/10 rounded-full blur-[80px] pointer-events-none z-0"></div>
+
+      <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 p-4 sticky top-0 z-50 shadow-sm flex justify-between items-center px-4 md:px-8">
         <div className="flex items-center gap-4">
-          <div className="bg-white p-1 rounded-full w-10 h-10 flex items-center justify-center shrink-0">
-            <img src="/logo-fge.png" alt="FGE" className="w-full h-full object-contain rounded-full" />
+          <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0 group hover:rotate-6 transition-transform duration-300">
+            <UtensilsCrossed className="absolute text-white/10 w-6 h-6 -rotate-3" strokeWidth={1.5} />
+            <ChefHat className="relative text-amber-400 -rotate-3 group-hover:scale-110 transition-transform duration-300" size={20} strokeWidth={1.5} />
           </div>
           <div>
-            <h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight">Punto de Canje</h1>
-            <p className="text-[#C9A84C] text-[9px] md:text-xs font-bold tracking-widest uppercase">Fiscalía General</p>
+            <h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight text-[#1A2744]">Punto de Canje</h1>
+            <p className="text-amber-500 text-[9px] md:text-xs font-black tracking-[0.2em] uppercase">Comedor Fiscalía</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {(miRol === 'admin' || miRol === 'dev') && (
             <button 
               onClick={() => router.push('/admin')} 
-              className="bg-white/10 p-2 rounded-xl hover:bg-indigo-500 transition-all border border-white/5"
+              className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl active:bg-indigo-100 transition-all border border-indigo-100 active:scale-95"
               title="Ir a Administración"
             >
               <ShieldCheck size={18} />
             </button>
           )}
-          <button onClick={handleLogout} className="bg-white/10 p-2 rounded-xl hover:bg-red-500 transition-all border border-white/5"><LogOut size={18} /></button>
+          <button onClick={handleLogout} className="bg-red-50 text-red-600 p-2.5 rounded-xl active:bg-red-100 transition-all border border-red-100 active:scale-95"><LogOut size={18} /></button>
         </div>
       </nav>
 
-      <div className="w-full max-w-4xl mx-auto px-4 mt-6">
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center"><h2 className="text-4xl font-black text-[#6366F1]">{stats.canjeadosHoy}</h2><p className="text-slate-400 text-xs font-medium mt-1 uppercase tracking-tighter">Canjeados hoy</p></div>
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center"><h2 className="text-4xl font-black text-emerald-500">{stats.transacciones}</h2><p className="text-slate-400 text-xs font-medium mt-1 uppercase tracking-tighter">Sincronizados</p></div>
+      <div className="w-full max-w-5xl mx-auto px-4 mt-8 relative z-10">
+        
+        {/* STATS HEADERS */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 anim-fade-up" style={{animationDelay: '100ms'}}>
+          <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-transform">
+            <h2 className="text-4xl font-black text-[#1A2744] drop-shadow-sm">{stats.canjeadosHoy}</h2>
+            <p className="text-amber-500 text-[9px] font-black mt-1 uppercase tracking-[0.2em]">Canjeados Hoy</p>
+          </div>
+          <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-transform">
+            <h2 className="text-4xl font-black text-emerald-500 drop-shadow-sm">{stats.transacciones}</h2>
+            <p className="text-slate-400 text-[9px] font-black mt-1 uppercase tracking-[0.2em]">Sincronizados</p>
+          </div>
+          <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-transform md:col-span-2 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="bg-blue-500 text-white p-4 rounded-2xl shadow-lg shadow-blue-500/30"><ChefHat size={28} /></div>
+              <div>
+                <h2 className="text-3xl font-black text-[#1A2744] leading-none">{reservasPendientes.length}</h2>
+                <p className="text-blue-500 text-[9px] font-black uppercase tracking-[0.2em] mt-1">Pedidos por entregar</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-2xl sm:rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
-          <div className="flex bg-slate-50/50 p-2 gap-2 overflow-x-auto">
-            {[{ id: 'escanear', label: 'Escanear', icon: <Scan size={18}/> }, { id: 'menu', label: 'Pedidos Live', icon: <Utensils size={18}/> }, { id: 'cocina', label: 'Monitor Cocina', icon: <ChefHat size={18}/> }, { id: 'historial', label: 'Historial', icon: <History size={18}/> }, { id: 'reportes', label: 'Reportes', icon: <ClipboardList size={18}/> }].map((t) => (
-              <button key={t.id} onClick={() => { setActiveTab(t.id as Tab); if(t.id === 'escanear') setTimeout(() => inputRef.current?.focus(), 100); }} className={`flex-1 min-w-[100px] py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? 'bg-[#6366F1] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
-                {t.icon} {t.label} {t.id === 'menu' && reservasPendientes.length > 0 && (<span className="bg-red-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-[9px] animate-pulse absolute top-2 right-2 md:static">{reservasPendientes.length}</span>)}
+        <div className="bg-white/90 backdrop-blur-xl rounded-2xl sm:rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white overflow-hidden anim-fade-up" style={{animationDelay: '200ms'}}>
+          
+          {/* TABS STYLING PREMIUM */}
+          <div className="flex p-3 gap-2 overflow-x-auto bg-slate-50/50 border-b border-slate-100 no-scrollbar">
+            {[
+              { id: 'escanear', label: 'Escanear QR', icon: <Scan size={16}/> }, 
+              { id: 'menu', label: 'Pedidos Live', icon: <Utensils size={16}/> }, 
+              { id: 'cocina', label: 'Monitor Cocina', icon: <ChefHat size={16}/> }, 
+              { id: 'historial', label: 'Historial', icon: <History size={16}/> }, 
+              { id: 'reportes', label: 'Reportes', icon: <ClipboardList size={16}/> }
+            ].map((t) => (
+              <button 
+                key={t.id} 
+                onClick={() => { setActiveTab(t.id as Tab); if(t.id === 'escanear') setTimeout(() => inputRef.current?.focus(), 100); }} 
+                className={`flex-1 min-w-[130px] py-3.5 px-4 rounded-[1.2rem] font-black text-[10px] uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden ${activeTab === t.id ? 'bg-[#1A2744] text-amber-400 shadow-xl shadow-[#1A2744]/20 scale-100' : 'bg-transparent text-slate-500 hover:bg-slate-100 active:scale-95'}`}
+              >
+                {t.icon} <span className="mt-0.5">{t.label}</span>
+                {t.id === 'menu' && reservasPendientes.length > 0 && (
+                  <span className="absolute top-2 right-2 bg-red-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-[8px] animate-pulse shadow-sm">{reservasPendientes.length}</span>
+                )}
               </button>
             ))}
           </div>
 
-          <div className="p-8">
+          <div className="p-6 sm:p-10 min-h-[500px]">
+            
             {activeTab === 'escanear' && (
-              <div className="p-0 animate-fade-in">
-                <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-4">Captura de Vale</h3>
-                <button type="button" onClick={() => setUsarCamara(!usarCamara)} className={`w-full mb-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-sm transition-all flex justify-center items-center gap-3 ${usarCamara ? 'bg-red-50 text-white' : 'bg-slate-100 text-[#1A2744] hover:bg-slate-200 border-2 border-slate-200'}`}><Camera size={20}/> {usarCamara ? 'Cerrar Cámara' : 'Abrir Cámara del Celular'}</button>
-                {usarCamara && (<div className="mb-8 p-4 border-2 border-dashed border-[#6366F1]/40 rounded-3xl bg-slate-50 animate-fade-in"><div id="reader" className="w-full max-w-sm mx-auto overflow-hidden rounded-xl"></div></div>)}
-                <form onSubmit={procesarEscaneo} className="flex flex-col gap-4 relative">
-                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 relative">
-                    <div className="flex-1 relative">
-                      <input ref={inputRef} type="text" value={inputLectura} onChange={manejarInput} className="w-full p-4 pl-12 border-2 border-[#6366F1]/40 rounded-2xl text-lg font-bold outline-none focus:border-[#6366F1] transition-colors uppercase tracking-widest" placeholder="Nombre o Código..." autoFocus />
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex flex-col items-center mb-8 text-center">
+                  <div className="bg-amber-50 text-amber-500 p-3 rounded-2xl mb-3 shadow-sm border border-amber-100"><QrCode size={24}/></div>
+                  <h3 className="text-[#1A2744] font-black text-lg sm:text-xl uppercase tracking-tight">Captura de Vale</h3>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Escanea el QR del empleado</p>
+                </div>
+                
+                <button type="button" onClick={() => setUsarCamara(!usarCamara)} className={`w-full max-w-md mx-auto mb-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-[0_8px_20px_rgba(0,0,0,0.05)] transition-all flex justify-center items-center gap-3 active:scale-95 ${usarCamara ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-white text-[#1A2744] hover:bg-slate-50 border-2 border-slate-100'}`}><Camera size={18}/> {usarCamara ? 'Cerrar Lente' : 'Activar Cámara Trasera'}</button>
+                
+                {usarCamara && (
+                  <div className="mb-10 p-4 border-4 border-dashed border-[#1A2744]/20 rounded-[2rem] bg-slate-50 animate-in zoom-in duration-300 max-w-md mx-auto relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-b from-[#1A2744]/5 to-transparent pointer-events-none"></div>
+                    <div id="reader" className="w-full overflow-hidden rounded-2xl shadow-inner"></div>
+                  </div>
+                )}
+                
+                <form onSubmit={procesarEscaneo} className="flex flex-col gap-4 relative max-w-2xl mx-auto">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 relative">
+                    <div className="flex-1 relative group">
+                      <input ref={inputRef} type="text" value={inputLectura} onChange={manejarInput} className="w-full p-5 pl-14 bg-slate-50 border-2 border-slate-200 rounded-2xl text-lg font-black outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all uppercase tracking-widest text-[#1A2744] placeholder:font-normal placeholder:text-slate-300" placeholder="NOMBRE O CÓDIGO MANUAL..." autoFocus />
+                      <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={22} />
+                      
                       {sugerencias.length > 0 && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100">
+                        <div className="absolute top-[calc(100%+0.5rem)] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-50 animate-in fade-in duration-200">
                           {sugerencias.map((s, i) => (
-                            <div key={i} onClick={() => seleccionarSugerencia(s)} className="p-4 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors">
-                              <div><p className="font-black text-sm text-[#1A2744] uppercase">{s.nombre_completo}</p><p className="text-[10px] font-bold text-slate-400 uppercase">{s.dependencia}</p></div>
-                              <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Validar Folio</span>
+                            <div key={i} onClick={() => seleccionarSugerencia(s)} className="p-4 hover:bg-amber-50 cursor-pointer flex justify-between items-center transition-colors group/item">
+                              <div>
+                                <p className="font-black text-sm text-[#1A2744] uppercase group-hover/item:text-amber-600 transition-colors">{s.nombre_completo}</p>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{s.dependencia}</p>
+                              </div>
+                              <span className="bg-white text-[#1A2744] border border-slate-200 shadow-sm px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest group-hover/item:border-amber-200 group-hover/item:bg-amber-100 transition-colors">Cobrar</span>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
-                    <button type="submit" disabled={cargando} className="bg-[#6366F1] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all shrink-0">{cargando ? <Loader2 className="animate-spin" size={20} /> : 'Validar'}</button>
+                    <button type="submit" disabled={cargando} className="bg-[#1A2744] hover:bg-[#25365d] active:scale-95 text-white px-8 py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 transition-all shrink-0 flex items-center justify-center min-w-[140px] text-[10px]">
+                      {cargando ? <Loader2 className="animate-spin text-amber-400" size={20} /> : 'Procesar'}
+                    </button>
                   </div>
                 </form>
                 
+                {/* ESTADOS DE RESPUESTA PREMIUM */}
                 {mensaje.tipo === 'exito' && (
-                  <div className="bg-emerald-50 border-2 border-emerald-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in relative overflow-hidden mt-6">
+                  <div className="max-w-2xl mx-auto bg-gradient-to-b from-emerald-50 to-white border border-emerald-200 rounded-[2rem] p-8 flex flex-col items-center text-center animate-in zoom-in-95 duration-500 relative overflow-hidden mt-10 shadow-[0_20px_40px_rgba(16,185,129,0.15)]">
+                    <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none"></div>
+                    
                     {mensaje.cantidad && mensaje.cantidad > 1 && (
-                      <div className="absolute top-4 right-4 bg-emerald-500 text-white px-4 py-2 rounded-2xl font-black text-xs shadow-lg flex items-center gap-2 animate-bounce">
+                      <div className="absolute top-6 right-6 bg-emerald-500 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-emerald-500/30 flex items-center gap-2 animate-bounce">
                         <Layers size={14}/> {mensaje.cantidad} RACIONES
                       </div>
                     )}
-                    <div className="bg-emerald-500 text-white p-3 rounded-full mb-4 shadow-lg"><CheckCircle2 size={32}/></div>
-                    <h2 className="text-xl sm:text-2xl font-black text-[#1A2744] uppercase mb-1">{mensaje.texto}</h2>
-                    <p className="text-slate-700 font-bold text-lg">{mensaje.empleado.nombre_completo}</p>
-                    <p className="text-slate-400 text-xs font-bold uppercase mt-1">{mensaje.empleado.dependencia} — {mensaje.hora}</p>
+                    <div className="bg-emerald-500 text-white p-4 rounded-[1.5rem] mb-6 shadow-[0_0_20px_rgba(16,185,129,0.4)] relative">
+                      <CheckCircle2 size={40}/>
+                      <div className="absolute inset-0 rounded-[1.5rem] border-4 border-emerald-400/30 animate-ping"></div>
+                    </div>
+                    <h2 className="text-2xl font-black text-emerald-950 uppercase mb-2 tracking-tight">{mensaje.texto}</h2>
+                    <div className="bg-white px-6 py-4 rounded-2xl border border-emerald-100 shadow-sm w-full max-w-sm mt-2">
+                      <p className="text-[#1A2744] font-black text-lg uppercase leading-tight mb-1">{mensaje.empleado.nombre_completo}</p>
+                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">{mensaje.empleado.dependencia}</p>
+                    </div>
+                    <p className="text-emerald-600/60 text-[9px] font-black uppercase tracking-[0.3em] mt-6 flex items-center gap-1.5"><Clock size={12}/> Autorizado: {mensaje.hora}</p>
                   </div>
                 )}
                 {mensaje.tipo === 'quemado' && (
-                  <div className="bg-red-50 border-2 border-red-500/20 rounded-3xl p-8 flex flex-col items-center text-center animate-fade-in mt-6">
-                    <AlertOctagon size={48} className="text-red-500 mb-4" />
-                    <h2 className="text-xl sm:text-2xl font-black text-red-800 uppercase mb-2">VALE REPETIDO</h2>
-                    <p className="text-red-600 font-bold text-xs uppercase px-8 leading-relaxed text-center">{mensaje.texto}</p>
+                  <div className="max-w-xl mx-auto bg-red-50 border-2 border-red-500/20 rounded-[2rem] p-10 flex flex-col items-center text-center animate-in shake mt-10 shadow-2xl shadow-red-500/10 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
+                    <div className="bg-red-100 p-4 rounded-full mb-6">
+                      <AlertOctagon size={56} className="text-red-500 drop-shadow-md" />
+                    </div>
+                    <h2 className="text-3xl font-black text-red-950 uppercase mb-3 tracking-tighter">FRAUDE DETECTADO</h2>
+                    <p className="text-red-600 font-bold text-[11px] uppercase tracking-widest leading-relaxed max-w-sm bg-white p-4 rounded-xl border border-red-100 shadow-sm">{mensaje.texto}</p>
                   </div>
                 )}
-                {mensaje.tipo === 'error' && (<div className="bg-red-50 border-2 border-red-200 rounded-3xl p-6 text-red-600 font-black text-center animate-fade-in uppercase mt-6">❌ {mensaje.texto}</div>)}
+                {mensaje.tipo === 'error' && (
+                  <div className="max-w-xl mx-auto bg-slate-800 border-2 border-slate-700 rounded-2xl p-6 text-white font-black text-[11px] tracking-widest text-center animate-in fade-in uppercase mt-8 flex items-center justify-center gap-3 shadow-xl">
+                    <X className="text-red-400" size={18}/> {mensaje.texto}
+                  </div>
+                )}
               </div>
             )}
 
             {activeTab === 'menu' && (
-              <div className="animate-fade-in">
-                <h3 className="text-[#1A2744] font-bold text-sm sm:text-base mb-6 border-b pb-4">Dashboard Live: Pedidos y Menú (HOY)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="animate-in fade-in duration-500">
+                <div className="flex items-center gap-3 mb-8 border-b border-slate-100 pb-4">
+                  <div className="bg-amber-50 p-2.5 rounded-xl text-amber-500"><Utensils size={20}/></div>
                   <div>
-                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 shadow-sm">
-                      <div className="flex justify-between items-center mb-4"><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><CalendarPlus size={14}/> Carga Rápida (Copiar y Pegar)</h4></div>
-                      <div className="flex flex-col gap-3">
-                        <input type="date" value={fechaPlan} onChange={e => setFechaPlan(e.target.value)} className="p-3 rounded-xl border border-slate-200 text-sm font-bold uppercase outline-none focus:border-[#6366F1] w-full" />
-                        <div><div className="flex justify-between items-center mb-1"><label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Desayunos</label><div className="flex items-center gap-1"><span className="text-[9px] font-bold text-slate-400">P/D:</span><input type="number" min="1" value={porcionesPlan.desayuno} onChange={e => setPorcionesPlan({...porcionesPlan, desayuno: parseInt(e.target.value)||0})} className="w-12 p-1 text-xs text-center border border-slate-200 rounded-md focus:border-[#6366F1] outline-none" /></div></div><textarea rows={2} placeholder="Ej: Huevo a la Mexicana..." value={textosPlan.desayuno} onChange={e => setTextosPlan({...textosPlan, desayuno: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 text-xs uppercase outline-none focus:border-[#6366F1] resize-none" /></div>
-                        <div><div className="flex justify-between items-center mb-1"><label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Almuerzos</label><div className="flex items-center gap-1"><span className="text-[9px] font-bold text-slate-400">P/D:</span><input type="number" min="1" value={porcionesPlan.almuerzo} onChange={e => setPorcionesPlan({...porcionesPlan, almuerzo: parseInt(e.target.value)||0})} className="w-12 p-1 text-xs text-center border border-slate-200 rounded-md focus:border-[#6366F1] outline-none" /></div></div><textarea rows={3} placeholder="Ej: Mondongo Andaluza..." value={textosPlan.almuerzo} onChange={e => setTextosPlan({...textosPlan, almuerzo: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 text-xs uppercase outline-none focus:border-[#6366F1] resize-none" /></div>
-                        <div><div className="flex justify-between items-center mb-1"><label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Cenas</label><div className="flex items-center gap-1"><span className="text-[9px] font-bold text-slate-400">P/D:</span><input type="number" min="1" value={porcionesPlan.cena} onChange={e => setPorcionesPlan({...porcionesPlan, cena: parseInt(e.target.value)||0})} className="w-12 p-1 text-xs text-center border border-slate-200 rounded-md focus:border-[#6366F1] outline-none" /></div></div><textarea rows={2} placeholder="Ej: Sopa Fria..." value={textosPlan.cena} onChange={e => setTextosPlan({...textosPlan, cena: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 text-xs uppercase outline-none focus:border-[#6366F1] resize-none" /></div>
-                        <button onClick={procesarPlanificador} disabled={cargando} className="w-full bg-[#1A2744] hover:bg-slate-800 text-white p-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all shadow-md mt-2">{cargando ? <Loader2 className="animate-spin" size={16}/> : 'Publicar Día'}</button>
+                    <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Dashboard Live</h3>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Control de Pedidos y Stock (Hoy)</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                  <div className="flex flex-col h-full">
+                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-8">
+                      <div className="flex justify-between items-center mb-6">
+                        <h4 className="text-[10px] font-black text-[#1A2744] uppercase tracking-[0.2em] flex items-center gap-2"><CalendarPlus size={16} className="text-amber-500"/> Carga Rápida</h4>
+                      </div>
+                      <div className="flex flex-col gap-4">
+                        <input type="date" value={fechaPlan} onChange={e => setFechaPlan(e.target.value)} className="p-4 rounded-xl border border-slate-200 text-sm font-black text-[#1A2744] uppercase outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 w-full transition-all" />
+                        
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center mb-2">
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Desayunos</label>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black text-slate-400 uppercase">Stock:</span>
+                              <input type="number" min="1" value={porcionesPlan.desayuno} onChange={e => setPorcionesPlan({...porcionesPlan, desayuno: parseInt(e.target.value)||0})} className="w-14 p-1.5 text-xs font-black text-[#1A2744] text-center border border-slate-200 rounded-lg focus:border-amber-400 outline-none" />
+                            </div>
+                          </div>
+                          <textarea rows={2} placeholder="Ej: Huevo a la Mexicana..." value={textosPlan.desayuno} onChange={e => setTextosPlan({...textosPlan, desayuno: e.target.value})} className="w-full p-3 rounded-lg border border-slate-200 text-xs font-bold uppercase outline-none focus:border-amber-400 resize-none placeholder:font-normal" />
+                        </div>
+
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center mb-2">
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Almuerzos</label>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black text-slate-400 uppercase">Stock:</span>
+                              <input type="number" min="1" value={porcionesPlan.almuerzo} onChange={e => setPorcionesPlan({...porcionesPlan, almuerzo: parseInt(e.target.value)||0})} className="w-14 p-1.5 text-xs font-black text-[#1A2744] text-center border border-slate-200 rounded-lg focus:border-amber-400 outline-none" />
+                            </div>
+                          </div>
+                          <textarea rows={3} placeholder="Ej: Mondongo Andaluza..." value={textosPlan.almuerzo} onChange={e => setTextosPlan({...textosPlan, almuerzo: e.target.value})} className="w-full p-3 rounded-lg border border-slate-200 text-xs font-bold uppercase outline-none focus:border-amber-400 resize-none placeholder:font-normal" />
+                        </div>
+
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center mb-2">
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cenas</label>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black text-slate-400 uppercase">Stock:</span>
+                              <input type="number" min="1" value={porcionesPlan.cena} onChange={e => setPorcionesPlan({...porcionesPlan, cena: parseInt(e.target.value)||0})} className="w-14 p-1.5 text-xs font-black text-[#1A2744] text-center border border-slate-200 rounded-lg focus:border-amber-400 outline-none" />
+                            </div>
+                          </div>
+                          <textarea rows={2} placeholder="Ej: Sopa Fria..." value={textosPlan.cena} onChange={e => setTextosPlan({...textosPlan, cena: e.target.value})} className="w-full p-3 rounded-lg border border-slate-200 text-xs font-bold uppercase outline-none focus:border-amber-400 resize-none placeholder:font-normal" />
+                        </div>
+
+                        <button onClick={procesarPlanificador} disabled={cargando} className="w-full bg-[#1A2744] hover:bg-[#25365d] active:scale-95 text-white p-5 rounded-xl font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-xl shadow-[#1A2744]/20 mt-2">
+                          {cargando ? <Loader2 className="animate-spin text-amber-400" size={16}/> : 'Publicar Menú del Día'}
+                        </button>
                       </div>
                     </div>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos Activos (Hoy)</h4>
+
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 ml-2">Stock Activo (Hoy)</h4>
                     <div className="space-y-3">
                       {todosMenus.filter(m => m.fecha === hoyReal).map((m, i) => (
-                        <div key={i} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center">
-                          <div className="flex-1 pr-2"><span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-wider">{m.tipo_comida}</span><p className="font-black text-[#1A2744] text-xs mt-1 uppercase leading-tight">{m.platillo}</p></div>
-                          <div className="flex items-center gap-1 mx-2 shrink-0 border border-slate-100 rounded-xl p-1 bg-slate-50"><button onClick={() => ajustarPorciones(m.id, m.porciones_disponibles, m.porciones_totales, -1)} className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Minus size={14}/></button><div className="w-6 text-center"><p className="text-sm font-black text-[#6366F1]">{m.porciones_disponibles}</p></div><button onClick={() => ajustarPorciones(m.id, m.porciones_disponibles, m.porciones_totales, 1)} className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"><Plus size={14}/></button></div>
-                          <button onClick={() => eliminarPlatillo(m.id, m.platillo)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-1" title="Eliminar Platillo"><Trash2 size={16} /></button>
+                        <div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center group hover:border-amber-200 transition-colors">
+                          <div className="flex-1 pr-2">
+                            <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-1 rounded-md uppercase tracking-[0.2em]">{m.tipo_comida}</span>
+                            <p className="font-black text-[#1A2744] text-xs mt-2 uppercase leading-tight">{m.platillo}</p>
+                          </div>
+                          <div className="flex items-center gap-1 mx-2 shrink-0 border border-slate-100 rounded-xl p-1 bg-slate-50">
+                            <button onClick={() => ajustarPorciones(m.id, m.porciones_disponibles, m.porciones_totales, -1)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Minus size={14}/></button>
+                            <div className="w-8 text-center"><p className="text-sm font-black text-[#1A2744]">{m.porciones_disponibles >= 9000 ? '∞' : m.porciones_disponibles}</p></div>
+                            <button onClick={() => ajustarPorciones(m.id, m.porciones_disponibles, m.porciones_totales, 1)} className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"><Plus size={14}/></button>
+                          </div>
+                          <button onClick={() => eliminarPlatillo(m.id, m.platillo)} className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors ml-1 active:scale-90" title="Eliminar Platillo"><Trash2 size={18} /></button>
                         </div>
                       ))}
+                      {todosMenus.filter(m => m.fecha === hoyReal).length === 0 && (
+                        <div className="p-6 border-2 border-dashed border-slate-200 rounded-2xl text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">Stock Vacío</div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex flex-col h-full">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div> Pendientes de Entregar (Hoy)</h4>
-                    <div className="space-y-3 flex-1 overflow-y-auto pr-2 min-h-[250px] mb-6">
+                  <div className="flex flex-col h-full bg-slate-50 p-6 rounded-[2rem] border border-slate-100 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl"></div>
+                    
+                    <h4 className="text-[10px] font-black text-[#1A2744] uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.6)]"></div> 
+                      Fila de Entregas
+                    </h4>
+                    
+                    <div className="space-y-4 flex-1 overflow-y-auto pr-2 min-h-[300px] mb-8 relative z-10 no-scrollbar">
                       {reservasPendientes.map((r, i) => (
-                        <div key={i} className="bg-blue-50 p-4 rounded-2xl border-2 border-blue-400 shadow-md flex justify-between items-center animate-in fade-in slide-in-from-left-4">
-                          <div className="flex-1 pr-2">
-                            <p className="font-black text-[#1A2744] text-xs uppercase truncate">{r.nombre_empleado}</p>
-                            <p className="text-[10px] font-black text-blue-700 uppercase mt-1">🍽 {r.menu_comedor?.platillo}</p>
+                        <div key={i} className="bg-white p-5 rounded-2xl border border-blue-100 shadow-[0_10px_20px_rgba(59,130,246,0.05)] flex justify-between items-center animate-in fade-in slide-in-from-right-4">
+                          <div className="flex-1 pr-4">
+                            <p className="font-black text-[#1A2744] text-xs uppercase truncate leading-tight mb-1">{r.nombre_empleado}</p>
+                            <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1.5"><Utensils size={10}/> {r.menu_comedor?.platillo}</p>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => marcarComoCapturado(r.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-md active:scale-95 transition-all">Entregado</button>
-                            <button onClick={() => cancelarReservaCajero(r.id, r.menu_id, r.nombre_empleado)} className="bg-red-50 hover:bg-red-500 text-red-600 hover:text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider shadow-sm active:scale-95 transition-all border border-red-200 hover:border-red-500" title="Cancelar y regresar porción al menú">Cancelar</button>
+                          <div className="flex flex-col items-end gap-2 shrink-0">
+                            <button onClick={() => marcarComoCapturado(r.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-blue-600/30 active:scale-95 transition-all w-full flex items-center justify-center gap-1">Entregar <Check size={12}/></button>
+                            <button onClick={() => cancelarReservaCajero(r.id, r.menu_id, r.nombre_empleado)} className="text-slate-400 hover:text-red-500 text-[9px] font-black uppercase tracking-widest px-2 active:scale-95 transition-colors">Cancelar</button>
                           </div>
                         </div>
                       ))}
-                      {reservasPendientes.length === 0 && (<div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl p-6"><CheckCircle2 size={32} className="mb-2 opacity-50"/><p className="text-xs font-bold uppercase tracking-widest">Todo entregado</p></div>)}
+                      {reservasPendientes.length === 0 && (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-300 py-10">
+                          <div className="bg-white p-4 rounded-full mb-4 shadow-sm border border-slate-100"><CheckCircle2 size={32} className="text-emerald-400"/></div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em]">Fila Limpia</p>
+                        </div>
+                      )}
                     </div>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Platillos ya entregados</h4>
-                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 opacity-60">
+                    
+                    <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 pt-6 border-t border-slate-200">Historial Entregas (Hoy)</h4>
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 relative z-10 no-scrollbar">
                       {reservasCapturadas.map((r, i) => (
-                        <div key={i} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex justify-between items-center">
-                          <div className="flex-1 min-w-0">
-                              <p className="font-bold text-[#1A2744] text-[10px] uppercase truncate">{r.nombre_empleado}</p>
-                              <p className="text-[9px] font-bold text-slate-500 uppercase truncate">{r.menu_comedor?.platillo}</p>
+                        <div key={i} className="bg-white p-3.5 rounded-xl border border-slate-100 flex justify-between items-center opacity-70 hover:opacity-100 transition-opacity">
+                          <div className="flex-1 min-w-0 pr-2">
+                              <p className="font-bold text-[#1A2744] text-[9px] uppercase truncate">{r.nombre_empleado}</p>
+                              <p className="text-[8px] font-black text-slate-400 uppercase truncate mt-0.5">{r.menu_comedor?.platillo}</p>
                           </div>
-                          <div className="flex items-center gap-2">
-                              <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">Entregado</span>
-                              <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                          <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 uppercase tracking-widest">OK</span>
+                              <CheckCircle2 size={14} className="text-emerald-500" />
                           </div>
                         </div>
                       ))}
@@ -444,61 +600,122 @@ export default function PantallaCajero() {
             )}
 
             {activeTab === 'cocina' && (
-              <div className="p-8 animate-fade-in">
-                <div className="flex justify-between items-center mb-6 border-b pb-4">
-                  <h3 className="text-[#1A2744] font-bold text-sm sm:text-base">Monitor Cocina</h3>
-                  <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
-                    <CalendarPlus size={16} className="text-[#6366F1]" />
-                    <input type="date" value={fechaMonitor} onChange={(e) => setFechaMonitor(e.target.value)} className="text-xs font-bold text-[#1A2744] uppercase outline-none bg-transparent" min={hoyReal} />
+              <div className="animate-in fade-in duration-500">
+                <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-500"><ChefHat size={20}/></div>
+                    <div>
+                      <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Monitor Pantalla</h3>
+                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Vista para el área de cocina</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl shadow-inner border border-slate-200">
+                    <CalendarPlus size={16} className="text-indigo-500 ml-1" />
+                    <input type="date" value={fechaMonitor} onChange={(e) => setFechaMonitor(e.target.value)} className="text-[10px] font-black text-[#1A2744] uppercase tracking-widest outline-none bg-transparent cursor-pointer" min={hoyReal} />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                   {menuMonitor.map((m) => {
                     const apartados = reservasMonitor.filter((r) => r.menu_id === m.id && r.estado === 'APARTADO');
                     const entregados = reservasMonitor.filter((r) => r.menu_id === m.id && r.estado === 'CAPTURADO');
                     return (
-                      <div key={m.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col hover:shadow-md transition-shadow">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{m.tipo_comida}</span>
-                        <h4 className="text-[#1A2744] font-black text-lg uppercase leading-tight mb-6">{m.platillo}</h4>
-                        <div className="grid grid-cols-2 gap-2 mb-4">
-                          <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 text-center">
-                              <p className="text-2xl font-black text-blue-600">{apartados.length}</p>
-                              <p className="text-[8px] font-bold text-blue-400 uppercase">Por Entregar</p>
+                      <div key={m.id} className="bg-white/80 backdrop-blur-md p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.05)] border border-slate-100 flex flex-col hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-slate-100 to-transparent rounded-bl-full opacity-50"></div>
+                        <span className="inline-block bg-slate-100 text-slate-500 px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-[0.3em] mb-4 w-max">{m.tipo_comida}</span>
+                        <h4 className="text-[#1A2744] font-black text-xl uppercase leading-tight mb-8 relative z-10">{m.platillo}</h4>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
+                          <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 text-center shadow-sm">
+                              <p className="text-3xl font-black text-blue-600">{apartados.length}</p>
+                              <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest mt-1">Fuego</p>
                           </div>
-                          <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100 text-center">
-                              <p className="text-2xl font-black text-emerald-600">{entregados.length}</p>
-                              <p className="text-[8px] font-bold text-emerald-400 uppercase">Entregados</p>
+                          <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 text-center shadow-sm">
+                              <p className="text-3xl font-black text-emerald-600">{entregados.length}</p>
+                              <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mt-1">Salieron</p>
                           </div>
                         </div>
-                        <div className="text-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                          {/* SI EL STOCK ES 9999, MOSTRAMOS ∞ PARA QUE COCINA SEPA QUE ES UN GUISO FIJO */}
-                          <p className="text-2xl font-black text-slate-600">{m.porciones_disponibles >= 9000 ? '∞' : m.porciones_disponibles}</p>
-                          <p className="text-[8px] font-bold text-slate-400 uppercase">Stock Libre</p>
+                        
+                        <div className="text-center bg-[#1A2744] p-4 rounded-2xl relative z-10 shadow-lg mt-auto">
+                          <p className="text-3xl font-black text-amber-400">{m.porciones_disponibles >= 9000 ? '∞' : m.porciones_disponibles}</p>
+                          <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.3em] mt-1">Stock Libre</p>
                         </div>
                       </div>
                     );
                   })}
-                  {menuMonitor.length === 0 && (<div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl"><ChefHat size={40} className="mb-4 opacity-50" /><p className="text-xs font-bold uppercase tracking-widest">Sin menú para esta fecha</p></div>)}
+                  {menuMonitor.length === 0 && (
+                    <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-[3rem] border border-slate-100">
+                      <div className="bg-white p-5 rounded-[2rem] shadow-sm mb-4"><ChefHat size={40} className="text-slate-300" /></div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.3em]">Sin menú programado</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {activeTab === 'historial' && (
-              <div className="p-8 animate-fade-in">
-                <h3 className="text-slate-400 font-black text-[10px] uppercase tracking-widest mb-6 border-b pb-4">Canjes realizados hoy</h3>
-                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                  {historial.map((h, i) => (<div key={i} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100"><div><p className="font-black text-xs text-[#1A2744] uppercase">{h.nombre_empleado}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{h.dependencia}</p></div><p className="text-[10px] font-black text-[#6366F1]">{new Date(h.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</p></div>))}
+              <div className="animate-in fade-in duration-500 max-w-4xl mx-auto">
+                <div className="flex items-center gap-3 mb-8 border-b border-slate-100 pb-4">
+                  <div className="bg-slate-100 p-2.5 rounded-xl text-slate-500"><History size={20}/></div>
+                  <div>
+                    <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Registro de Entradas</h3>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Todos los canjes del día ({historial.length})</p>
+                  </div>
+                </div>
+                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-4 no-scrollbar">
+                  {historial.map((h, i) => (
+                    <div key={i} className="flex justify-between items-center p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-200 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 font-black text-xs border border-slate-100">{i+1}</div>
+                        <div>
+                          <p className="font-black text-sm text-[#1A2744] uppercase">{h.nombre_empleado}</p>
+                          <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1">{h.dependencia}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-[#6366F1] uppercase">{new Date(h.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</p>
+                        <span className="inline-block mt-1 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100 text-[8px] font-black uppercase tracking-widest">Validado</span>
+                      </div>
+                    </div>
+                  ))}
+                  {historial.length === 0 && (
+                    <div className="py-20 text-center bg-slate-50 rounded-[2rem] border border-slate-100">
+                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">No hay registros hoy</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {activeTab === 'reportes' && (
-              <div className="p-8 animate-fade-in">
-                <h3 className="text-slate-400 font-black text-[10px] uppercase tracking-widest mb-8">Auditoría y Cierres</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <button onClick={exportarExcel} className="flex flex-col items-center justify-center p-8 bg-emerald-50 border-2 border-emerald-100 rounded-3xl text-emerald-600 gap-2 hover:bg-emerald-100 transition-all"><FileSpreadsheet size={32}/><span className="font-black text-[10px] uppercase">Excel</span></button>
-                  <button onClick={() => generarPDF('diario')} className="flex flex-col items-center justify-center p-8 bg-blue-50 border-2 border-blue-100 rounded-3xl text-blue-600 gap-2 hover:bg-blue-100 transition-all"><FileText size={32}/><span className="font-black text-[10px] uppercase">PDF Diario</span></button>
-                  <button onClick={() => generarPDF('semanal')} className="flex flex-col items-center justify-center p-8 bg-amber-50 border-2 border-amber-100 rounded-3xl text-amber-600 gap-2 hover:bg-amber-100 transition-all"><FileText size={32}/><span className="font-black text-[10px] uppercase">PDF Semanal</span></button>
+              <div className="animate-in fade-in duration-500 max-w-4xl mx-auto">
+                <div className="flex items-center gap-3 mb-10 border-b border-slate-100 pb-4">
+                  <div className="bg-emerald-50 p-2.5 rounded-xl text-emerald-500"><ClipboardList size={20}/></div>
+                  <div>
+                    <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Cortes y Auditoría</h3>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Generación de documentación oficial</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <button onClick={exportarExcel} className="group flex flex-col items-center justify-center p-10 bg-white border border-slate-100 rounded-[2.5rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(16,185,129,0.1)] hover:border-emerald-200 transition-all duration-300">
+                    <div className="bg-emerald-50 text-emerald-500 p-5 rounded-[1.5rem] mb-6 group-hover:scale-110 transition-transform duration-300"><FileSpreadsheet size={40} strokeWidth={1.5}/></div>
+                    <span className="font-black text-[#1A2744] text-xs uppercase tracking-widest mb-1">Data Excel</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Base en crudo</span>
+                  </button>
+                  
+                  <button onClick={() => generarPDF('diario')} className="group flex flex-col items-center justify-center p-10 bg-[#1A2744] border border-[#2A3F6D] rounded-[2.5rem] shadow-[0_10px_30px_rgba(26,39,68,0.2)] hover:shadow-[0_20px_40px_rgba(26,39,68,0.4)] hover:bg-[#2A3F6D] transition-all duration-300 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="bg-blue-500/20 text-blue-400 p-5 rounded-[1.5rem] mb-6 group-hover:scale-110 transition-transform duration-300 border border-blue-500/30 relative z-10"><FileText size={40} strokeWidth={1.5}/></div>
+                    <span className="font-black text-white text-xs uppercase tracking-widest mb-1 relative z-10">Corte Diario</span>
+                    <span className="text-[9px] text-blue-300/70 font-bold uppercase tracking-widest relative z-10">PDF Oficial</span>
+                  </button>
+
+                  <button onClick={() => generarPDF('semanal')} className="group flex flex-col items-center justify-center p-10 bg-white border border-slate-100 rounded-[2.5rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(251,191,36,0.1)] hover:border-amber-200 transition-all duration-300">
+                    <div className="bg-amber-50 text-amber-500 p-5 rounded-[1.5rem] mb-6 group-hover:scale-110 transition-transform duration-300"><FileText size={40} strokeWidth={1.5}/></div>
+                    <span className="font-black text-[#1A2744] text-xs uppercase tracking-widest mb-1">Concentrado</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Semanal PDF</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -508,44 +725,58 @@ export default function PantallaCajero() {
 
       {/* MODAL DE SEGURIDAD PARA CANJE MANUAL */}
       {modalManual && empleadoSeleccionado && (
-        <div className="fixed inset-0 bg-[#1A2744]/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="bg-[#1A2744] p-8 text-center border-b-2 border-dashed border-slate-100">
-                <div className="w-16 h-16 bg-amber-50 text-[#C9A84C] rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner"><KeyRound size={32}/></div>
-                <h2 className="text-xl font-black text-white uppercase mb-1">Validación Manual</h2>
-                <p className="text-[#C9A84C] text-[10px] font-bold uppercase tracking-widest italic">El scanner falló o Mica de privacidad detectada</p>
+        <div className="fixed inset-0 bg-[#1A2744]/95 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] w-full max-w-md overflow-hidden shadow-2xl shadow-black/50 border border-white/10 animate-in zoom-in-95 duration-300 relative">
+            
+            <div className="bg-gradient-to-b from-slate-50 to-white p-10 text-center relative border-b border-slate-100">
+                <button onClick={()=>setModalManual(false)} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 bg-white p-2 rounded-full shadow-sm border border-slate-100 transition-colors"><X size={16}/></button>
+                <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-[2rem] rotate-3 flex items-center justify-center mx-auto mb-6 shadow-sm border border-amber-100"><KeyRound size={36} className="-rotate-3"/></div>
+                <h2 className="text-2xl font-black text-[#1A2744] uppercase mb-2 tracking-tight">Anulación Manual</h2>
+                <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] bg-slate-100 inline-block px-3 py-1 rounded-md">Protocolo de Emergencia</p>
             </div>
-            <div className="p-8">
-                <div className="bg-slate-50 p-4 rounded-2xl mb-6 text-center border border-slate-100">
-                    <p className="text-slate-400 text-[10px] font-black uppercase mb-1">Empleado Seleccionado</p>
-                    <p className="text-[#1A2744] font-black text-lg uppercase leading-tight">{empleadoSeleccionado.nombre_completo}</p>
+
+            <div className="p-10">
+                <div className="bg-slate-50/80 p-5 rounded-2xl mb-8 text-center border border-slate-100">
+                    <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mb-2">Identidad Seleccionada</p>
+                    <p className="text-[#1A2744] font-black text-xl uppercase leading-tight">{empleadoSeleccionado.nombre_completo}</p>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="grid grid-cols-2 gap-5 mb-8">
                     <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">Raciones</label>
-                        <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
-                           <button onClick={()=>setCantidadManual(Math.max(1, cantidadManual-1))} className="p-3 hover:bg-slate-200 transition-colors"><Minus size={14}/></button>
-                           <span className="flex-1 text-center font-black text-slate-700">{cantidadManual}</span>
-                           <button onClick={()=>setCantidadManual(Math.min(empleadoSeleccionado.tickets_restantes, cantidadManual+1))} className="p-3 hover:bg-slate-200 transition-colors"><Plus size={14}/></button>
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 block ml-1">Raciones a cobrar</label>
+                        <div className="flex items-center bg-slate-50 rounded-2xl border border-slate-200 shadow-sm p-1">
+                           <button onClick={()=>setCantidadManual(Math.max(1, cantidadManual-1))} className="p-3 hover:bg-white rounded-xl text-slate-400 hover:text-[#1A2744] hover:shadow-sm transition-all"><Minus size={16}/></button>
+                           <span className="flex-1 text-center font-black text-xl text-[#1A2744]">{cantidadManual}</span>
+                           <button onClick={()=>setCantidadManual(Math.min(empleadoSeleccionado.tickets_restantes, cantidadManual+1))} className="p-3 hover:bg-white rounded-xl text-slate-400 hover:text-[#1A2744] hover:shadow-sm transition-all"><Plus size={16}/></button>
                         </div>
                     </div>
                     <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">Folio Seguridad</label>
-                        <input type="text" maxLength={9} value={folioManual} onChange={(e)=>setFolioManual(e.target.value.toUpperCase())} className="w-full p-2.5 bg-white border-2 border-[#C9A84C]/40 rounded-xl text-center font-black text-[#1A2744] outline-none focus:border-[#C9A84C] uppercase tracking-[0.2em]" placeholder="ID VALE" />
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 block ml-1">Token Empleado</label>
+                        <input type="text" maxLength={9} value={folioManual} onChange={(e)=>setFolioManual(e.target.value.toUpperCase())} className="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl text-center font-black text-xl text-[#1A2744] outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 uppercase tracking-[0.2em] transition-all shadow-sm placeholder:text-slate-300 placeholder:text-sm" placeholder="ID" />
                     </div>
                 </div>
 
-                <div className="flex gap-3">
-                    <button onClick={()=>setModalManual(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
-                    <button onClick={()=>ejecutarCanjeFinal(empleadoSeleccionado.nombre_completo, cantidadManual, folioManual)} disabled={cargando || folioManual.length < 4} className="flex-[2] bg-[#1A2744] text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-30">Procesar Canje</button>
+                <div className="flex gap-4">
+                    <button onClick={()=>ejecutarCanjeFinal(empleadoSeleccionado.nombre_completo, cantidadManual, folioManual)} disabled={cargando || folioManual.length < 4} className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 hover:bg-[#25365d]">
+                      {cargando ? <Loader2 className="animate-spin text-amber-400" size={18}/> : <><ShieldCheck size={16} className="text-amber-400"/> Ejecutar Descuento</>}
+                    </button>
                 </div>
             </div>
           </div>
         </div>
       )}
 
-      <style dangerouslySetInnerHTML={{__html: `@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }`}} />
+      <style dangerouslySetInnerHTML={{__html: `
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+          10%, 90% { transform: translate3d(-1px, 0, 0); }
+          20%, 80% { transform: translate3d(2px, 0, 0); }
+          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+          40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+      `}} />
     </div>
   );
 }
