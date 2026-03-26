@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { Loader2, Lock, Mail, ArrowRight, ChefHat, UtensilsCrossed } from 'lucide-react';
@@ -16,6 +16,18 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  // Estados para el efecto Parallax
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    // Calculamos el centro de la pantalla al montar
+    setMousePos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+  }, []);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    setMousePos({ x: e.clientX, y: e.clientY });
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,21 +82,34 @@ export default function LoginScreen() {
     }
   };
 
+  // Cálculos para el Parallax (movimiento inverso y suave)
+  const parallaxX = (mousePos.x - (typeof window !== 'undefined' ? window.innerWidth / 2 : 0)) * -0.05;
+  const parallaxY = (mousePos.y - (typeof window !== 'undefined' ? window.innerHeight / 2 : 0)) * -0.05;
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden">
+    <div 
+      className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden"
+      onMouseMove={handleMouseMove}
+    >
       
-      {/* BACKGROUND DECORATION */}
-      <div className="absolute top-0 left-0 w-full h-[40vh] bg-gradient-to-b from-[#1A2744] to-[#F8FAFC] -z-10"></div>
-      <div className="absolute top-[-20%] right-[-10%] w-[60vh] h-[60vh] bg-amber-500/10 rounded-full blur-[100px] -z-10"></div>
-      
+      {/* BACKGROUND DECORATION CON PARALLAX */}
+      <div className="absolute top-0 left-0 w-full h-[40vh] bg-gradient-to-b from-[#1A2744] to-[#F8FAFC] -z-10 transition-transform duration-1000 ease-out"
+           style={{ transform: `translate(${parallaxX * 0.5}px, ${parallaxY * 0.5}px)` }}></div>
+           
+      <div className="absolute top-[-20%] right-[-10%] w-[60vh] h-[60vh] bg-amber-500/10 rounded-full blur-[100px] -z-10 transition-transform duration-1000 ease-out"
+           style={{ transform: `translate(${parallaxX}px, ${parallaxY}px)` }}></div>
+           
+      <div className="absolute bottom-[-10%] left-[-10%] w-[40vh] h-[40vh] bg-blue-500/5 rounded-full blur-[80px] -z-10 transition-transform duration-1000 ease-out"
+           style={{ transform: `translate(${parallaxX * -1.5}px, ${parallaxY * -1.5}px)` }}></div>
+
       <div className="w-full max-w-md flex flex-col items-center z-10">
         
-        {/* LOGO DINÁMICO (PREMIUM) */}
+        {/* LOGO DINÁMICO (PREMIUM + FLOAT) */}
         <div className="mb-6 group anim-scale-in" style={{animationDelay: '100ms'}}>
-            <div className="relative w-24 h-24 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-[2rem] rotate-3 flex items-center justify-center shadow-2xl transition-transform duration-500 group-hover:rotate-6 border border-slate-700/50">
+            <div className="relative w-24 h-24 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-[2rem] rotate-3 flex items-center justify-center shadow-2xl transition-all duration-500 hover:rotate-6 border border-slate-700/50 animate-float cursor-default">
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 rounded-[2.5rem]"></div>
-              <UtensilsCrossed className="absolute text-white/10 w-12 h-12 -rotate-3" strokeWidth={1} />
-              <ChefHat className="relative text-amber-400 -rotate-3 drop-shadow-lg" size={40} strokeWidth={1.5} />
+              <UtensilsCrossed className="absolute text-white/10 w-12 h-12 -rotate-3 transition-transform duration-500 group-hover:scale-110" strokeWidth={1} />
+              <ChefHat className="relative text-amber-400 -rotate-3 drop-shadow-[0_0_15px_rgba(251,191,36,0.4)] transition-transform duration-500 group-hover:scale-110" size={40} strokeWidth={1.5} />
             </div>
         </div>
 
@@ -95,40 +120,42 @@ export default function LoginScreen() {
         </div>
 
         {/* Tarjeta del Formulario */}
-        <div className="w-full bg-white/90 backdrop-blur-xl p-8 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white anim-fade-up" style={{animationDelay: '300ms'}}>
+        <div className="w-full bg-white/90 backdrop-blur-xl p-8 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white anim-fade-up transition-transform duration-500 hover:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)]" style={{animationDelay: '300ms'}}>
           <form onSubmit={handleLogin} className="space-y-6">
             
             {/* Input Correo */}
-            <div className="space-y-2 group">
-              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2 group-focus-within:text-[#1A2744] transition-colors">Correo Institucional</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-amber-500 transition-colors">
-                  <Mail size={18} />
+            <div className="space-y-2 group/input">
+              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2 group-focus-within/input:text-[#1A2744] transition-colors duration-300">Correo Institucional</label>
+              <div className="relative overflow-hidden rounded-2xl">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within/input:text-amber-500 transition-all duration-500 group-focus-within/input:scale-110 z-10">
+                  <Mail size={18} className="transition-transform duration-300 group-focus-within/input:-rotate-6" />
                 </div>
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-transparent opacity-0 group-focus-within/input:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-[#1A2744] font-bold focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all placeholder:font-normal placeholder:text-slate-300"
+                  className="w-full pl-11 pr-4 py-4 bg-slate-50/80 border border-slate-200 rounded-2xl text-[#1A2744] font-bold focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all duration-300 placeholder:font-normal placeholder:text-slate-300 relative z-0"
                   placeholder="ejemplo@fge.gob.mx"
                 />
               </div>
             </div>
 
             {/* Input Contraseña */}
-            <div className="space-y-2 group">
-              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2 group-focus-within:text-[#1A2744] transition-colors">Contraseña</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-amber-500 transition-colors">
-                  <Lock size={18} />
+            <div className="space-y-2 group/input">
+              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2 group-focus-within/input:text-[#1A2744] transition-colors duration-300">Contraseña</label>
+              <div className="relative overflow-hidden rounded-2xl">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within/input:text-amber-500 transition-all duration-500 group-focus-within/input:scale-110 z-10">
+                  <Lock size={18} className="transition-transform duration-300 group-focus-within/input:rotate-6" />
                 </div>
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-transparent opacity-0 group-focus-within/input:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-[#1A2744] font-bold focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all placeholder:font-normal placeholder:text-slate-300 tracking-widest"
+                  className="w-full pl-11 pr-4 py-4 bg-slate-50/80 border border-slate-200 rounded-2xl text-[#1A2744] font-bold focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all duration-300 placeholder:font-normal placeholder:text-slate-300 tracking-widest relative z-0"
                   placeholder="••••••••"
                 />
               </div>
@@ -136,8 +163,8 @@ export default function LoginScreen() {
 
             {/* Mensaje de Error */}
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-500 p-4 rounded-2xl text-[11px] uppercase tracking-wider font-black text-center animate-in shake flex items-center justify-center gap-2">
-                <Lock size={14}/> {error}
+              <div className="bg-red-50 border border-red-200 text-red-500 p-4 rounded-2xl text-[11px] uppercase tracking-wider font-black text-center animate-in shake flex items-center justify-center gap-2 shadow-inner">
+                <Lock size={14} className="animate-pulse"/> {error}
               </div>
             )}
 
@@ -153,7 +180,7 @@ export default function LoginScreen() {
                   {loading ? (
                     <><Loader2 className="animate-spin text-amber-400" size={16} /> Verificando Identidad...</>
                   ) : (
-                    <>Iniciar Sesión <ArrowRight className="text-amber-400" size={16} /></>
+                    <>Iniciar Sesión <ArrowRight className="text-amber-400 transition-transform group-hover/btn:translate-x-1" size={16} /></>
                   )}
               </span>
             </button>
@@ -178,6 +205,10 @@ export default function LoginScreen() {
         @keyframes shimmer {
           100% { transform: translateX(100%); }
         }
+        @keyframes float {
+          0%, 100% { transform: translateY(0) rotate(3deg); }
+          50% { transform: translateY(-8px) rotate(4deg); }
+        }
         .anim-fade-up {
           opacity: 0;
           animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -185,6 +216,9 @@ export default function LoginScreen() {
         .anim-scale-in {
           opacity: 0;
           animation: scaleIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-float {
+          animation: float 4s ease-in-out infinite;
         }
         .shake {
           animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
