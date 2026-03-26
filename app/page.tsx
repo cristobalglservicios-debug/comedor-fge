@@ -32,21 +32,39 @@ export default function Home() {
     checkSession();
   }, []);
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!session) {
       router.push('/dashboard'); 
       return;
     }
 
-    // Ruteo DIRECTO SEGÚN EL CORREO
-    const email = session.user.email?.toLowerCase() || '';
-    
-    if (email.includes('admin')) {
-      router.push('/admin');
-    } else if (email.includes('comedor')) {
-      router.push('/cajero');
-    } else {
-      router.push('/mi-vale');
+    setLoading(true); // Mostrar carga mientras consultamos el rol real
+
+    try {
+      const email = session.user.email?.toLowerCase() || '';
+      
+      // CONSULTA DE ROL REAL EN BASE DE DATOS
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('rol')
+        .eq('email', email)
+        .maybeSingle();
+
+      const rol = perfil?.rol || 'empleado';
+
+      // REDIRECCIÓN INTELIGENTE SEGÚN ROL
+      if (rol === 'dev') {
+        router.push('/dev-panel');
+      } else if (rol === 'admin') {
+        router.push('/admin');
+      } else if (rol === 'cajero') {
+        router.push('/cajero');
+      } else {
+        router.push('/mi-vale');
+      }
+    } catch (error) {
+      console.error("Error en redirección:", error);
+      router.push('/mi-vale'); // Fallback a perfil de empleado
     }
   };
 
@@ -75,7 +93,7 @@ export default function Home() {
               className="w-full h-full object-contain rounded-full"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
-                target.src = "https://fge.yucatan.gob.mx/images/logo-fge-header.png"; // Imagen de respaldo si falla local
+                target.src = "https://fge.yucatan.gob.mx/images/logo-fge-header.png"; 
               }}
             />
           </div>
@@ -88,13 +106,12 @@ export default function Home() {
           </h1>
           <div className="h-[3px] w-12 bg-[#C9A84C] mx-auto rounded-full"></div>
           
-          {/* TEXTO DE BIENVENIDA SIMPLIFICADO */}
           <p className="text-slate-500 text-sm font-bold pt-1">
             Bienvenido
           </p>
         </div>
 
-        {/* BOTÓN DE ACCIÓN REFINADO */}
+        {/* BOTÓN DE ACCIÓN REFINADO CON LOGICA DE ROLES */}
         <button 
           onClick={handleStart}
           className="group mt-16 w-full bg-[#1A2744] text-white p-5 rounded-full font-bold flex items-center justify-between shadow-2xl shadow-blue-900/40 active:scale-[0.96] transition-all hover:bg-[#25365d]"
