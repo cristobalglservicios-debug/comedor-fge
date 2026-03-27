@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck, UtensilsCrossed } from 'lucide-react';
+// Se agregó MessageCircle para el icono de WhatsApp
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck, UtensilsCrossed, MessageCircle } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -285,8 +286,8 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  const idCortoEmpleado = empleado?.email ? empleado.email.split('@')[0].toUpperCase() : 'EMP';
-  const valorQR = `${idCortoEmpleado}|${cantidadACanjear}|${tokenTimestamp}|${tokenSeguridad}`;
+  // Lógica original de lectura para cajero
+  const valorQR = empleado?.nombre_completo || 'EMP';
 
   if (estadoVista === 'cargando') {
     return (
@@ -775,9 +776,22 @@ export default function MiValePage() {
 
       </div>
 
+      {/* BOTÓN FLOTANTE DE SOPORTE WHATSAPP */}
+      {empleado && estadoVista !== 'animando' && estadoVista !== 'cargando' && (
+        <a
+          href={`https://wa.me/529991190990?text=${encodeURIComponent(`Hola Soporte, soy ${empleado.nombre_completo} (${empleado.dependencia}). Necesito ayuda con la app Comedor FGE:`)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed bottom-6 right-6 z-[100] bg-[#25D366] text-white px-4 py-3.5 rounded-[1.5rem] shadow-[0_8px_30px_rgba(37,211,102,0.3)] hover:shadow-[0_15px_40px_rgba(37,211,102,0.4)] active:scale-90 hover:-translate-y-1 transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-widest"
+        >
+          <MessageCircle size={20} />
+          <span className="mt-0.5">Soporte</span>
+        </a>
+      )}
+
       {/* MODAL BOTTOM SHEET: MENÚ DE ANTOJITOS */}
       {mostrarMenuFijo && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#1A2744]/90 backdrop-blur-sm anim-fade-up">
+        <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-[#1A2744]/90 backdrop-blur-sm anim-fade-up">
           <div className="bg-[#F8FAFC] w-full max-w-md h-[85vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2.5rem] rounded-t-[2.5rem] overflow-hidden flex flex-col shadow-2xl relative">
             <div className="bg-white p-6 pb-4 shrink-0 border-b border-slate-100 relative z-10 rounded-t-[2.5rem] sm:rounded-t-[2rem]">
               <button 
