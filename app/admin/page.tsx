@@ -732,13 +732,13 @@ export default function AdminDashboard() {
                   <h3 className="text-xs font-black text-[#1A2744] uppercase tracking-widest mb-6 flex items-center gap-2"><PieChart size={18} className="text-blue-500"/> Acumulado Mensual (Límite: 5,500)</h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Consumidos</p>
-                        <p className="text-3xl font-black text-[#1A2744]">{totalCanjeadosMes}</p>
-                    </div>
                     <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
-                        <p className="text-emerald-600/70 text-[10px] font-black uppercase tracking-widest mb-1">Ahorro (No Canjeados)</p>
-                        <p className="text-3xl font-black text-emerald-600">{totalSobrantesMes}</p>
+                        <p className="text-emerald-600/70 text-[10px] font-black uppercase tracking-widest mb-1">Total Consumidos</p>
+                        <p className="text-3xl font-black text-emerald-600">{totalCanjeadosMes}</p>
+                    </div>
+                    <div className="bg-red-50 p-5 rounded-2xl border border-red-100">
+                        <p className="text-red-600/70 text-[10px] font-black uppercase tracking-widest mb-1">No Canjeados</p>
+                        <p className="text-3xl font-black text-red-600">{totalSobrantesMes}</p>
                     </div>
                     <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100">
                         <p className="text-amber-600/70 text-[10px] font-black uppercase tracking-widest mb-1">Margen Restante</p>
