@@ -26,6 +26,7 @@ const getHoyMerida = () => {
 export default function PantallaCajero() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('escanear');
+  const [inputLectura, setInputLectura] = useState('');
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error' | 'quemado' | null, texto: string, empleado?: any, hora?: string, cantidad?: number }>({ tipo: null, texto: '' });
   const [stats, setStats] = useState({ canjeadosHoy: 0, transacciones: 0 });
   const [historial, setHistorial] = useState<any[]>([]);
@@ -129,11 +130,10 @@ export default function PantallaCajero() {
     }
   };
 
-  // DESVINCULADO DEL STATE PARA VELOCIDAD MÁXIMA
   const manejarInput = () => {
     if (!inputRef.current) return;
     const val = inputRef.current.value.toUpperCase();
-    if (val.length >= 3 && !val.includes('|')) { 
+    if (val.length >= 3 && !val.includes('|') && !val.includes(']')) { 
         const resultados = directorio.filter(p => p.nombre_completo.includes(val)).slice(0, 5); 
         setSugerencias(resultados); 
     } else { 
@@ -158,17 +158,16 @@ export default function PantallaCajero() {
   const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
     
-    // EXTRACCIÓN DIRECTA DEL DOM (Evita asfixiar a React con la velocidad del lector)
+    // Leemos el valor exacto que inyectó el lector láser en la caja de texto
     const valorDOM = codigoDirecto || inputRef.current?.value || '';
     let rawInput = valorDOM.trim().toUpperCase(); 
     
     if (!rawInput) return;
 
-    // CORRECCIÓN DE SÍMBOLOS BASURA
-    rawInput = rawInput.replace(/[<>}Ñ~¿'¡!,\.\-\\]/g, '|');
+    // LA MAGIA: Si el escáner escribe ']' en lugar de '|', lo reemplazamos inmediatamente
+    rawInput = rawInput.replace(/\]/g, '|');
 
     if (!rawInput.includes('|')) {
-      // MODO DIAGNÓSTICO: Imprime exactamente lo que el lector escupió
       setMensaje({ tipo: 'error', texto: `CÓDIGO INCOMPLETO. LEYÓ: "${rawInput}"` });
       if (inputRef.current) inputRef.current.value = '';
       setSugerencias([]);
@@ -434,7 +433,6 @@ export default function PantallaCajero() {
                 <form onSubmit={procesarEscaneo} className="flex flex-col gap-4 relative max-w-2xl mx-auto">
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 relative">
                     <div className="flex-1 relative group">
-                      {/* CAMBIO VITAL: Eliminado value={inputLectura} para evitar asfixiar a React */}
                       <input ref={inputRef} type="text" onChange={manejarInput} defaultValue="" className="w-full p-5 pl-14 bg-slate-50 border-2 border-slate-200 rounded-2xl text-lg font-black outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all uppercase tracking-widest text-[#1A2744] placeholder:font-normal placeholder:text-slate-300" placeholder="NOMBRE O CÓDIGO MANUAL..." autoFocus />
                       <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={22} />
                       
@@ -458,7 +456,6 @@ export default function PantallaCajero() {
                   </div>
                 </form>
                 
-                {/* ESTADOS DE RESPUESTA PREMIUM */}
                 {mensaje.tipo === 'exito' && (
                   <div className="max-w-2xl mx-auto bg-gradient-to-b from-emerald-50 to-white border border-emerald-200 rounded-[2rem] p-8 flex flex-col items-center text-center animate-in zoom-in-95 duration-500 relative overflow-hidden mt-10 shadow-[0_20px_40px_rgba(16,185,129,0.15)]">
                     <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -492,7 +489,7 @@ export default function PantallaCajero() {
                 )}
                 {mensaje.tipo === 'error' && (
                   <div className="max-w-xl mx-auto bg-slate-800 border-2 border-slate-700 rounded-2xl p-6 text-white font-black text-[11px] tracking-widest text-center animate-in fade-in uppercase mt-8 flex flex-col items-center justify-center gap-2 shadow-xl">
-                    <div className="flex items-center gap-2 text-red-400 mb-1"><X size={18}/> ERROR DE LECTURA</div>
+                    <div className="flex items-center gap-2 text-red-400 mb-1"><X size={18}/> LECTURA RECHAZADA</div>
                     <p className="text-slate-300 break-all">{mensaje.texto}</p>
                   </div>
                 )}

@@ -238,7 +238,7 @@ export default function MiValePage() {
       return;
     }
 
-    const uid = Math.random().toString(36).substring(2, 9).toUpperCase();
+    const uid = Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 100);
     setTokenSeguridad(uid);
     setTokenTimestamp(Date.now());
 
@@ -285,8 +285,8 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // REGRESAMOS EL PAYLOAD EXACTO DEL PRINCIPIO PARA QUE FUNCIONE PERFECTO
-  const valorQR = `${empleado?.nombre_completo}|${cantidadACanjear}|${tokenTimestamp}|${tokenSeguridad}`;
+  const idCortoEmpleado = empleado?.email ? empleado.email.split('@')[0].toUpperCase() : 'EMP';
+  const valorQR = `${idCortoEmpleado}|${cantidadACanjear}|${tokenTimestamp}|${tokenSeguridad}`;
 
   if (estadoVista === 'cargando') {
     return (
@@ -730,19 +730,20 @@ export default function MiValePage() {
 
                 <div className="w-full bg-slate-50 py-6 px-2 rounded-[2rem] flex flex-col items-center mb-8 border border-slate-100 relative overflow-hidden">
                    
-                  {/* QUITAR CAJAS RESTRICTIVAS Y PONER WIDTH 1.5 PARA QUE EL LASER LO LEA PERFECTO */}
-                  <div className="relative z-10 w-full flex justify-center bg-white py-4 mb-4">
-                    <Barcode 
-                      value={valorQR} 
-                      format="CODE128"
-                      width={1.5}
-                      height={80}
-                      displayValue={true}
-                      fontSize={12}
-                      background="#ffffff"
-                      lineColor="#000000"
-                      margin={0}
-                    />
+                  <div className="relative z-10 w-full flex justify-center bg-white py-4 mb-4" style={{ touchAction: 'pan-x' }}>
+                    <div style={{ minWidth: 'max-content' }}>
+                      <Barcode 
+                        value={valorQR} 
+                        format="CODE128"
+                        width={1.5}
+                        height={80}
+                        displayValue={true}
+                        fontSize={14}
+                        background="#ffffff"
+                        lineColor="#000000"
+                        margin={10}
+                      />
+                    </div>
                   </div>
                   
                   <div className="relative z-10 bg-amber-400 text-[#1A2744] px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-amber-400/30 flex items-center gap-2">
