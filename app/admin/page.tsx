@@ -4,8 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
-// AQUÍ ESTÁ LA CORRECCIÓN: Agregué CheckCircle2 a los imports
-import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText, ShieldCheck, RefreshCw, ChefHat, UtensilsCrossed, Users, Ticket, Building2, Terminal, CheckCircle2, Layers, CalendarPlus, Minus, Plus, History, ClipboardList, X, KeyRound, AlertOctagon } from 'lucide-react';
+import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText, ShieldCheck, RefreshCw, ChefHat, UtensilsCrossed, Users, Ticket, Building2, Terminal, CheckCircle2, Layers, CalendarPlus, Minus, Plus, History, ClipboardList, X, KeyRound, AlertOctagon, PieChart } from 'lucide-react';
 import { crearUsuarioAdmin, eliminarUsuarioAdmin, actualizarPasswordAdmin, registrarLog } from './actions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -47,6 +46,7 @@ export default function AdminDashboard() {
   const [empleados, setEmpleados] = useState<any[]>([]);
   const [auditoriaLogs, setAuditoriaLogs] = useState<any[]>([]);
   const [cuotasProgramadas, setCuotasProgramadas] = useState<any[]>([]);
+  const [cierres, setCierres] = useState<any[]>([]);
   const [filtroNombre, setFiltroNombre] = useState('');
   const [stats, setStats] = useState({ total: 0, canjeados: 0, disponibles: 0, dependencias: 0 });
   const [cargando, setCargando] = useState(false);
@@ -127,6 +127,9 @@ export default function AdminDashboard() {
 
     const { data: dataProg } = await supabase.from('cuotas_programadas').select('*');
     if (dataProg) setCuotasProgramadas(dataProg);
+
+    const { data: dataCierres } = await supabase.from('cierres_semanales').select('*').order('fecha_cierre', { ascending: false });
+    if (dataCierres) setCierres(dataCierres);
   };
 
   const generarEmail = (nombreCompleto: string) => {
@@ -405,13 +408,30 @@ export default function AdminDashboard() {
   };
 
   const reiniciarSemana = async () => {
-    if (!confirm("🔵 ¿Reiniciar vales para la nueva semana? Esto pondrá los contadores en 0 pero conservará a los empleados.")) return;
+    if (!confirm("🔵 ¿CERRAR SEMANA? Esto guardará el reporte de sobrantes y pondrá los contadores en 0 para cargar la nueva nómina.")) return;
     setCargando(true);
+
+    // 1. Snapshot de datos actuales
+    const { data: empCierre } = await supabase.from('perfiles').select('tickets_canjeado, tickets_restantes').neq('id', '00000000-0000-0000-0000-000000000000');
+    let c_semana = 0; let s_semana = 0;
+    if (empCierre) {
+      empCierre.forEach(e => { c_semana += (e.tickets_canjeado || 0); s_semana += (e.tickets_restantes || 0); });
+    }
+
+    // 2. Guardar Cierre
+    await supabase.from('cierres_semanales').insert({
+      admin_email: userEmail || 'Sistema',
+      vales_canjeados: c_semana,
+      vales_sobrantes: s_semana,
+      vales_asignados_total: c_semana + s_semana
+    });
+
+    // 3. Reset
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
-    await registrarLog(userEmail || 'Sistema', 'REINICIO_SEMANA', 'Reinició los contadores y vació la bitácora para la nueva semana');
+    await registrarLog(userEmail || 'Sistema', 'REINICIO_SEMANA', `Cierre semanal. Sobraron: ${s_semana} | Canjeados: ${c_semana}`);
     
-    alert("✅ Sistema listo para cargar el nuevo Excel de la semana.");
+    alert("✅ Cierre exitoso y contadores en 0. Sistema listo para cargar el nuevo Excel de la semana.");
     cargarDatosGenerales(); setCargando(false);
   };
 
@@ -447,6 +467,23 @@ export default function AdminDashboard() {
     acc[dep].disponibles += (emp.tickets_restantes || 0);
     return acc;
   }, {} as any)).map(([nombre, vals]: [string, any]) => ({ nombre, ...vals })).sort((a, b) => b.asignados - a.asignados);
+
+  // --- CÁLCULOS DE CONTROL MENSUAL ---
+  const mesActual = new Date().getMonth();
+  const anioActual = new Date().getFullYear();
+  let canjeadosMesHistorial = 0;
+  let sobrantesMesHistorial = 0;
+
+  cierres.forEach(c => {
+    const d = new Date(c.fecha_cierre);
+    if(d.getMonth() === mesActual && d.getFullYear() === anioActual) {
+       canjeadosMesHistorial += c.vales_canjeados;
+       sobrantesMesHistorial += c.vales_sobrantes;
+    }
+  });
+
+  const totalCanjeadosMes = canjeadosMesHistorial + stats.canjeados;
+  const totalSobrantesMes = sobrantesMesHistorial + stats.disponibles;
 
   if (loadingAcceso) {
     return (
@@ -509,12 +546,12 @@ export default function AdminDashboard() {
           <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
             <div className="absolute -right-6 -top-6 text-slate-50 opacity-50 group-hover:scale-110 transition-transform"><Ticket size={100} /></div>
             <h2 className="text-4xl font-black text-[#1A2744] relative z-10">{stats.total}</h2>
-            <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Vales Asignados</p>
+            <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Asignados (Activos)</p>
           </div>
           <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
             <div className="absolute -right-6 -top-6 text-emerald-50 opacity-50 group-hover:scale-110 transition-transform"><CheckCircle2 size={100} /></div>
             <h2 className="text-4xl font-black text-emerald-500 relative z-10">{stats.canjeados}</h2>
-            <p className="text-emerald-600/60 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Vales Canjeados</p>
+            <p className="text-emerald-600/60 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Canjeados (Esta Semana)</p>
           </div>
           <div className="bg-[#1A2744] p-6 rounded-[2rem] shadow-xl shadow-[#1A2744]/20 border border-[#2A3F6D] flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
             <div className="absolute inset-0 bg-gradient-to-br from-amber-400/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -556,7 +593,7 @@ export default function AdminDashboard() {
                   <div className="bg-blue-50 p-2.5 rounded-xl text-blue-500"><Building2 size={20}/></div>
                   <div>
                     <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Desglose por Dependencia</h3>
-                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Control de cuotas asignadas</p>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Control de cuotas asignadas (Esta Semana)</p>
                   </div>
                 </div>
 
@@ -676,16 +713,45 @@ export default function AdminDashboard() {
 
             {activeTab === 'reportes' && (
               <div className="animate-in fade-in duration-500">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 border-b border-slate-100 pb-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-6 border-b border-slate-100 pb-6">
                   <div>
                     <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Reportes y Auditoría</h3>
                     <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Control y Cierres de Bitácora</p>
                   </div>
                   <div className="flex flex-wrap gap-3">
-                    <button onClick={reiniciarSemana} className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 transition-all border border-blue-200 active:scale-95"><RefreshCw size={16}/> Nueva Semana</button>
+                    <button onClick={reiniciarSemana} className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 transition-all border border-blue-200 active:scale-95"><RefreshCw size={16}/> Cierre de Semana</button>
                     {isSuperAdmin && (
                       <button onClick={limpiarHistorialPruebas} className="bg-red-50 hover:bg-red-100 text-red-500 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 transition-all border border-red-200 active:scale-95"><Trash2 size={16}/> Purgar Todo</button>
                     )}
+                  </div>
+                </div>
+
+                {/* DASHBOARD CONTROL MENSUAL */}
+                <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 mb-8 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-blue-50 rounded-full blur-3xl -z-10"></div>
+                  <h3 className="text-xs font-black text-[#1A2744] uppercase tracking-widest mb-6 flex items-center gap-2"><PieChart size={18} className="text-blue-500"/> Acumulado Mensual (Límite: 5,500)</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Consumidos</p>
+                        <p className="text-3xl font-black text-[#1A2744]">{totalCanjeadosMes}</p>
+                    </div>
+                    <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
+                        <p className="text-emerald-600/70 text-[10px] font-black uppercase tracking-widest mb-1">Ahorro (No Canjeados)</p>
+                        <p className="text-3xl font-black text-emerald-600">{totalSobrantesMes}</p>
+                    </div>
+                    <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100">
+                        <p className="text-amber-600/70 text-[10px] font-black uppercase tracking-widest mb-1">Margen Restante</p>
+                        <p className="text-3xl font-black text-amber-500">{Math.max(0, 5500 - totalCanjeadosMes)}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 bg-slate-100 h-3 rounded-full overflow-hidden flex shadow-inner">
+                    <div style={{width: `${Math.min(100, (totalCanjeadosMes / 5500) * 100)}%`}} className="bg-blue-500 h-full transition-all duration-1000"></div>
+                  </div>
+                  <div className="flex justify-between mt-2 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                    <span>0</span>
+                    <span className={totalCanjeadosMes > 5000 ? "text-red-500" : ""}>Límite 5,500</span>
                   </div>
                 </div>
 
@@ -713,7 +779,7 @@ export default function AdminDashboard() {
                 <div className="bg-white border border-slate-100 rounded-[2rem] shadow-sm overflow-hidden">
                   <div className="p-6 border-b border-slate-50 flex items-center gap-3">
                     <History size={18} className="text-slate-400" />
-                    <h4 className="text-xs font-black text-[#1A2744] uppercase tracking-widest">Pre-visualización de Canjes (Bitácora)</h4>
+                    <h4 className="text-xs font-black text-[#1A2744] uppercase tracking-widest">Pre-visualización de Canjes (Bitácora en vivo)</h4>
                   </div>
                   <div className="overflow-x-auto max-h-[300px] no-scrollbar">
                     <table className="w-full text-left">
