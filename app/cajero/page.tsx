@@ -26,7 +26,6 @@ const getHoyMerida = () => {
 export default function PantallaCajero() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('escanear');
-  const [inputLectura, setInputLectura] = useState('');
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error' | 'quemado' | null, texto: string, empleado?: any, hora?: string, cantidad?: number }>({ tipo: null, texto: '' });
   const [stats, setStats] = useState({ canjeadosHoy: 0, transacciones: 0 });
   const [historial, setHistorial] = useState<any[]>([]);
@@ -98,7 +97,7 @@ export default function PantallaCajero() {
       try {
         await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, (decodedText: string) => {
           if (escaneando) return; escaneando = true;
-          html5QrCode.stop().then(() => { html5QrCode.clear(); setUsarCamara(false); setInputLectura(decodedText); procesarEscaneo(null, decodedText); }).catch(console.error);
+          html5QrCode.stop().then(() => { html5QrCode.clear(); setUsarCamara(false); procesarEscaneo(null, decodedText); }).catch(console.error);
         }, undefined);
       } catch (err) { console.error("Error al iniciar cámara:", err); setUsarCamara(false); }
     }; initScanner();
@@ -130,14 +129,20 @@ export default function PantallaCajero() {
     }
   };
 
-  const manejarInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.toUpperCase(); setInputLectura(val);
-    if (val.length >= 3) { const resultados = directorio.filter(p => p.nombre_completo.includes(val)).slice(0, 5); setSugerencias(resultados); } else { setSugerencias([]); }
+  // DESVINCULADO DEL STATE PARA VELOCIDAD MÁXIMA
+  const manejarInput = () => {
+    if (!inputRef.current) return;
+    const val = inputRef.current.value.toUpperCase();
+    if (val.length >= 3 && !val.includes('|')) { 
+        const resultados = directorio.filter(p => p.nombre_completo.includes(val)).slice(0, 5); 
+        setSugerencias(resultados); 
+    } else { 
+        setSugerencias([]); 
+    }
   };
   
   const seleccionarSugerencia = (emp: any) => { 
     setSugerencias([]); 
-    setInputLectura('');
     if (inputRef.current) inputRef.current.value = '';
     setEmpleadoSeleccionado(emp);
     setCantidadManual(1);
@@ -153,36 +158,27 @@ export default function PantallaCajero() {
   const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
     
-    // LECTURA DIRECTA DEL DOM PARA VENCER LA VELOCIDAD DEL LECTOR FÍSICO
-    const valorDOM = inputRef.current?.value || '';
-    const rawInput = (codigoDirecto || valorDOM || inputLectura).trim().toUpperCase(); 
+    // EXTRACCIÓN DIRECTA DEL DOM (Evita asfixiar a React con la velocidad del lector)
+    const valorDOM = codigoDirecto || inputRef.current?.value || '';
+    let rawInput = valorDOM.trim().toUpperCase(); 
     
     if (!rawInput) return;
 
+    // CORRECCIÓN DE SÍMBOLOS BASURA
+    rawInput = rawInput.replace(/[<>}Ñ~¿'¡!,\.\-\\]/g, '|');
+
     if (!rawInput.includes('|')) {
-      setMensaje({ tipo: 'error', texto: 'ENTRADA MANUAL BLOQUEADA. SELECCIONE EL NOMBRE E INGRESE EL FOLIO.' });
-      setInputLectura(''); 
+      // MODO DIAGNÓSTICO: Imprime exactamente lo que el lector escupió
+      setMensaje({ tipo: 'error', texto: `CÓDIGO INCOMPLETO. LEYÓ: "${rawInput}"` });
       if (inputRef.current) inputRef.current.value = '';
+      setSugerencias([]);
       return;
     }
 
     const partes = rawInput.split('|');
-    let identificador = partes[0];
-    let cantidadACanjear = 1;
-    let valeUID = '';
-
-    if (partes.length >= 4) {
-      cantidadACanjear = parseInt(partes[1]) || 1;
-      valeUID = partes[3] || '';
-    } else if (partes.length === 3) {
-      cantidadACanjear = parseInt(partes[1]) || 1;
-      valeUID = partes[2] || '';
-    } else {
-      setMensaje({ tipo: 'error', texto: 'FORMATO DE CÓDIGO INVÁLIDO.' });
-      setInputLectura(''); 
-      if (inputRef.current) inputRef.current.value = '';
-      return;
-    }
+    const identificador = partes[0];
+    const cantidadACanjear = parseInt(partes[1]) || 1;
+    const valeUID = partes[3] || partes[2] || '';
 
     ejecutarCanjeFinal(identificador, cantidadACanjear, valeUID);
   };
@@ -199,8 +195,8 @@ export default function PantallaCajero() {
     if (yaCobrado) {
       setMensaje({ tipo: 'quemado', texto: '¡FRAUDE DETECTADO! ESTE VALE YA FUE COBRADO ANTERIORMENTE.' });
       setCargando(false); setFolioManual(''); setModalManual(false); 
-      setInputLectura(''); if (inputRef.current) inputRef.current.value = '';
-      return;
+      if (inputRef.current) inputRef.current.value = '';
+      setSugerencias([]); return;
     }
 
     let empleado = null;
@@ -234,7 +230,7 @@ export default function PantallaCajero() {
     }
     
     setCargando(false); 
-    setInputLectura(''); 
+    setSugerencias([]);
     if (inputRef.current) {
         inputRef.current.value = '';
         inputRef.current.focus();
@@ -438,7 +434,8 @@ export default function PantallaCajero() {
                 <form onSubmit={procesarEscaneo} className="flex flex-col gap-4 relative max-w-2xl mx-auto">
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 relative">
                     <div className="flex-1 relative group">
-                      <input ref={inputRef} type="text" value={inputLectura} onChange={manejarInput} className="w-full p-5 pl-14 bg-slate-50 border-2 border-slate-200 rounded-2xl text-lg font-black outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all uppercase tracking-widest text-[#1A2744] placeholder:font-normal placeholder:text-slate-300" placeholder="NOMBRE O CÓDIGO MANUAL..." autoFocus />
+                      {/* CAMBIO VITAL: Eliminado value={inputLectura} para evitar asfixiar a React */}
+                      <input ref={inputRef} type="text" onChange={manejarInput} defaultValue="" className="w-full p-5 pl-14 bg-slate-50 border-2 border-slate-200 rounded-2xl text-lg font-black outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all uppercase tracking-widest text-[#1A2744] placeholder:font-normal placeholder:text-slate-300" placeholder="NOMBRE O CÓDIGO MANUAL..." autoFocus />
                       <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={22} />
                       
                       {sugerencias.length > 0 && (
@@ -461,6 +458,7 @@ export default function PantallaCajero() {
                   </div>
                 </form>
                 
+                {/* ESTADOS DE RESPUESTA PREMIUM */}
                 {mensaje.tipo === 'exito' && (
                   <div className="max-w-2xl mx-auto bg-gradient-to-b from-emerald-50 to-white border border-emerald-200 rounded-[2rem] p-8 flex flex-col items-center text-center animate-in zoom-in-95 duration-500 relative overflow-hidden mt-10 shadow-[0_20px_40px_rgba(16,185,129,0.15)]">
                     <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -493,8 +491,9 @@ export default function PantallaCajero() {
                   </div>
                 )}
                 {mensaje.tipo === 'error' && (
-                  <div className="max-w-xl mx-auto bg-slate-800 border-2 border-slate-700 rounded-2xl p-6 text-white font-black text-[11px] tracking-widest text-center animate-in fade-in uppercase mt-8 flex items-center justify-center gap-3 shadow-xl">
-                    <X className="text-red-400" size={18}/> {mensaje.texto}
+                  <div className="max-w-xl mx-auto bg-slate-800 border-2 border-slate-700 rounded-2xl p-6 text-white font-black text-[11px] tracking-widest text-center animate-in fade-in uppercase mt-8 flex flex-col items-center justify-center gap-2 shadow-xl">
+                    <div className="flex items-center gap-2 text-red-400 mb-1"><X size={18}/> ERROR DE LECTURA</div>
+                    <p className="text-slate-300 break-all">{mensaje.texto}</p>
                   </div>
                 )}
               </div>
