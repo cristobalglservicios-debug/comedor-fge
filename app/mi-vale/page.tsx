@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-// Se agregó MessageCircle para el icono de WhatsApp
 import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck, UtensilsCrossed, MessageCircle } from 'lucide-react';
 import Barcode from 'react-barcode';
 
@@ -289,6 +288,7 @@ export default function MiValePage() {
   // Lógica original de lectura para cajero
   const valorQR = empleado?.nombre_completo || 'EMP';
 
+  // AQUÍ ESTÁ EL CULPABLE SOLUCIONADO: Al entrar a este if, la pantalla corta la ejecución.
   if (estadoVista === 'cargando') {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center relative overflow-hidden">
@@ -777,7 +777,7 @@ export default function MiValePage() {
       </div>
 
       {/* BOTÓN FLOTANTE DE SOPORTE WHATSAPP */}
-      {empleado && estadoVista !== 'animando' && estadoVista !== 'cargando' && (
+      {empleado && estadoVista !== 'animando' && (
         <a
           href={`https://wa.me/529991190990?text=${encodeURIComponent(`Hola Soporte, soy ${empleado.nombre_completo} (${empleado.dependencia}). Necesito ayuda con la app Comedor FGE:`)}`}
           target="_blank"
