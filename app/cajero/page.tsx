@@ -46,7 +46,6 @@ export default function PantallaCajero() {
   const [textosPlan, setTextosPlan] = useState({ desayuno: '', almuerzo: '', cena: '' });
   const [porcionesPlan, setPorcionesPlan] = useState({ desayuno: 20, almuerzo: 30, cena: 20 });
 
-  // ESTADOS PARA CANJE MANUAL DE EMERGENCIA
   const [modalManual, setModalManual] = useState(false);
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<any>(null);
   const [folioManual, setFolioManual] = useState('');
@@ -61,7 +60,6 @@ export default function PantallaCajero() {
       
       const email = session.user.email?.toLowerCase() || '';
 
-      // BLINDAJE POR ROL: Consultamos directamente la tabla perfiles
       const { data: perfil } = await supabase
         .from('perfiles')
         .select('rol')
@@ -71,7 +69,6 @@ export default function PantallaCajero() {
       const rol = perfil?.rol || 'empleado';
       setMiRol(rol);
 
-      // Solo permitimos Cajero, Admin o Dev
       if (rol !== 'cajero' && rol !== 'admin' && rol !== 'dev') {
         router.push('/');
         return;
@@ -141,6 +138,7 @@ export default function PantallaCajero() {
   const seleccionarSugerencia = (emp: any) => { 
     setSugerencias([]); 
     setInputLectura('');
+    if (inputRef.current) inputRef.current.value = '';
     setEmpleadoSeleccionado(emp);
     setCantidadManual(1);
     setFolioManual('');
@@ -154,23 +152,37 @@ export default function PantallaCajero() {
 
   const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
-    let rawInput = (codigoDirecto || inputLectura).trim().toUpperCase(); 
+    
+    // LECTURA DIRECTA DEL DOM PARA VENCER LA VELOCIDAD DEL LECTOR FÍSICO
+    const valorDOM = inputRef.current?.value || '';
+    const rawInput = (codigoDirecto || valorDOM || inputLectura).trim().toUpperCase(); 
+    
     if (!rawInput) return;
-
-    // --- CORRECCIÓN MAGICA PARA LECTOR DESCONFIGURADO ---
-    // Cambia cualquier símbolo raro que meta el escáner por el palito | correcto
-    rawInput = rawInput.replace(/[<>}Ñ~¿'¡!,\.\-]/g, '|');
 
     if (!rawInput.includes('|')) {
       setMensaje({ tipo: 'error', texto: 'ENTRADA MANUAL BLOQUEADA. SELECCIONE EL NOMBRE E INGRESE EL FOLIO.' });
-      setInputLectura(''); return;
+      setInputLectura(''); 
+      if (inputRef.current) inputRef.current.value = '';
+      return;
     }
 
     const partes = rawInput.split('|');
-    const identificador = partes[0];
-    // Soportamos el código original de 4 partes (con timestamp en la posición 2)
-    const cantidadACanjear = parseInt(partes[1]) || 1;
-    const valeUID = partes[3] || partes[2] || '';
+    let identificador = partes[0];
+    let cantidadACanjear = 1;
+    let valeUID = '';
+
+    if (partes.length >= 4) {
+      cantidadACanjear = parseInt(partes[1]) || 1;
+      valeUID = partes[3] || '';
+    } else if (partes.length === 3) {
+      cantidadACanjear = parseInt(partes[1]) || 1;
+      valeUID = partes[2] || '';
+    } else {
+      setMensaje({ tipo: 'error', texto: 'FORMATO DE CÓDIGO INVÁLIDO.' });
+      setInputLectura(''); 
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
 
     ejecutarCanjeFinal(identificador, cantidadACanjear, valeUID);
   };
@@ -186,17 +198,17 @@ export default function PantallaCajero() {
     const { data: yaCobrado } = await supabase.from('vales_quemados').select('id').eq('id', uid).maybeSingle();
     if (yaCobrado) {
       setMensaje({ tipo: 'quemado', texto: '¡FRAUDE DETECTADO! ESTE VALE YA FUE COBRADO ANTERIORMENTE.' });
-      setCargando(false); setFolioManual(''); setModalManual(false); return;
+      setCargando(false); setFolioManual(''); setModalManual(false); 
+      setInputLectura(''); if (inputRef.current) inputRef.current.value = '';
+      return;
     }
 
-    // BÚSQUEDA ROBUSTA (Nombre o Email)
     let empleado = null;
     const { data: empNombre } = await supabase.from('perfiles').select('*').eq('nombre_completo', identificador).maybeSingle();
     
     if (empNombre) {
         empleado = empNombre;
     } else {
-        // Si no lo encuentra por nombre, busca por email_corto
         const { data: empEmail } = await supabase.from('perfiles').select('*').ilike('email', `${identificador.toLowerCase()}@%`).maybeSingle();
         empleado = empEmail;
     }
@@ -220,7 +232,13 @@ export default function PantallaCajero() {
       await cargarDatosDia(); await cargarDatosGlobales();
       setModalManual(false);
     }
-    setCargando(false); setInputLectura(''); if (inputRef.current) inputRef.current.focus();
+    
+    setCargando(false); 
+    setInputLectura(''); 
+    if (inputRef.current) {
+        inputRef.current.value = '';
+        inputRef.current.focus();
+    }
   };
 
   const procesarPlanificador = async () => {
@@ -324,7 +342,6 @@ export default function PantallaCajero() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-10 relative">
       
-      {/* DECORACIÓN FONDO GLOBAL */}
       <div className="fixed top-0 left-0 w-full h-[30vh] bg-gradient-to-b from-[#1A2744] to-[#F8FAFC] -z-10"></div>
       <div className="fixed top-[-10%] right-[-5%] w-[40vh] h-[40vh] bg-amber-500/10 rounded-full blur-[80px] pointer-events-none z-0"></div>
 
@@ -355,7 +372,6 @@ export default function PantallaCajero() {
 
       <div className="w-full max-w-5xl mx-auto px-4 mt-8 relative z-10">
         
-        {/* STATS HEADERS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 anim-fade-up" style={{animationDelay: '100ms'}}>
           <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-transform">
             <h2 className="text-4xl font-black text-[#1A2744] drop-shadow-sm">{stats.canjeadosHoy}</h2>
@@ -379,7 +395,6 @@ export default function PantallaCajero() {
 
         <div className="bg-white/90 backdrop-blur-xl rounded-2xl sm:rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white overflow-hidden anim-fade-up" style={{animationDelay: '200ms'}}>
           
-          {/* TABS STYLING PREMIUM */}
           <div className="flex p-3 gap-2 overflow-x-auto bg-slate-50/50 border-b border-slate-100 no-scrollbar">
             {[
               { id: 'escanear', label: 'Escanear QR', icon: <Scan size={16}/> }, 
@@ -446,7 +461,6 @@ export default function PantallaCajero() {
                   </div>
                 </form>
                 
-                {/* ESTADOS DE RESPUESTA PREMIUM */}
                 {mensaje.tipo === 'exito' && (
                   <div className="max-w-2xl mx-auto bg-gradient-to-b from-emerald-50 to-white border border-emerald-200 rounded-[2rem] p-8 flex flex-col items-center text-center animate-in zoom-in-95 duration-500 relative overflow-hidden mt-10 shadow-[0_20px_40px_rgba(16,185,129,0.15)]">
                     <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none"></div>
