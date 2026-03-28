@@ -273,7 +273,7 @@ export default function DevPanelPage() {
                       </td>
                       <td className="px-6 py-4 text-slate-400 uppercase">{p.dependencia}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border ${p.rol === 'admin' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : p.rol === 'cajero' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : p.rol === 'dev' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                        <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border ${p.rol === 'admin' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : p.rol === 'cajero' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : p.rol === 'dev' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : p.rol === 'socio' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
                           {p.rol || 'empleado'}
                         </span>
                       </td>
@@ -286,6 +286,7 @@ export default function DevPanelPage() {
                           <option value="empleado">Empleado</option>
                           <option value="cajero">Cajero</option>
                           <option value="admin">Administrador</option>
+                          <option value="socio">Socio / Gerencia</option>
                           <option value="dev">Dev_Root</option>
                         </select>
                       </td>
@@ -389,6 +390,7 @@ export default function DevPanelPage() {
                     <option value="empleado">Empleado</option>
                     <option value="cajero">Cajero</option>
                     <option value="admin">Administrador</option>
+                    <option value="socio">Socio / Gerencia</option>
                     <option value="dev">Dev_Root</option>
                   </select>
                 </div>
