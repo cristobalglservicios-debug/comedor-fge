@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign } from 'lucide-react';
+import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings } from 'lucide-react';
 import { crearUsuarioGlobal } from '../admin/actions'; 
 
 const supabase = createClient(
@@ -190,8 +190,8 @@ export default function DevPanelPage() {
     <div className="min-h-screen bg-[#0F172A] font-mono text-slate-300 pb-10">
       
       <nav className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-50 shadow-2xl">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3 w-full md:w-auto">
             <div className="bg-emerald-500/20 p-2 rounded-lg border border-emerald-500/50">
               <Terminal className="text-emerald-400" size={20} />
             </div>
@@ -200,20 +200,31 @@ export default function DevPanelPage() {
               <p className="text-[9px] text-slate-500 tracking-[0.3em] uppercase">Control Maestro FGE</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            {cargandoAccion && <Loader2 className="animate-spin text-emerald-500" size={18} />}
-            <button onClick={() => router.push('/socios')} className="flex items-center gap-2 bg-purple-900/40 hover:bg-purple-800 border border-purple-500/50 px-4 py-2 rounded-lg text-xs font-bold transition-all text-purple-400">
-              <DollarSign size={14} /> Portal Socios
+          
+          <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
+            {cargandoAccion && <Loader2 className="animate-spin text-emerald-500 mr-2 shrink-0" size={18} />}
+            
+            <button onClick={() => router.push('/cajero')} className="flex items-center gap-2 bg-blue-900/40 hover:bg-blue-800 border border-blue-500/50 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all text-blue-400 whitespace-nowrap shrink-0">
+              <ScanLine size={14} /> Escáner
             </button>
-            <button onClick={() => router.push('/mi-vale')} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-2 rounded-lg text-xs font-bold transition-all">
-              <LogOut size={14} /> Salir
+            
+            <button onClick={() => router.push('/admin')} className="flex items-center gap-2 bg-amber-900/40 hover:bg-amber-800 border border-amber-500/50 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all text-amber-400 whitespace-nowrap shrink-0">
+              <Settings size={14} /> Admin
+            </button>
+            
+            <button onClick={() => router.push('/socios')} className="flex items-center gap-2 bg-purple-900/40 hover:bg-purple-800 border border-purple-500/50 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all text-purple-400 whitespace-nowrap shrink-0">
+              <DollarSign size={14} /> Socios
+            </button>
+            
+            <button onClick={() => router.push('/mi-vale')} className="flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-700 w-8 h-8 rounded-lg transition-all shrink-0">
+              <LogOut size={14} className="text-slate-400" />
             </button>
           </div>
         </div>
       </nav>
 
       {mensaje && (
-        <div className={`fixed top-20 right-4 z-[100] p-4 rounded-xl shadow-2xl border flex items-center gap-3 animate-fade-in ${mensaje.tipo === 'exito' ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-400' : 'bg-red-950/90 border-red-500/50 text-red-400'}`}>
+        <div className={`fixed top-24 md:top-20 right-4 z-[100] p-4 rounded-xl shadow-2xl border flex items-center gap-3 animate-fade-in ${mensaje.tipo === 'exito' ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-400' : 'bg-red-950/90 border-red-500/50 text-red-400'}`}>
           {mensaje.tipo === 'exito' ? <CheckCircle2 size={18}/> : <AlertTriangle size={18}/>}
           <p className="text-xs font-bold uppercase tracking-wide">{mensaje.texto}</p>
         </div>
