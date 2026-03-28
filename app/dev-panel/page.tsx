@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings, Ticket } from 'lucide-react';
+import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings, Ticket, ClipboardList } from 'lucide-react';
 import { crearUsuarioGlobal } from '../admin/actions'; 
 
 const supabase = createClient(
@@ -220,6 +220,10 @@ export default function DevPanelPage() {
             <button onClick={() => router.push('/admin')} className="flex items-center gap-2 bg-amber-900/40 hover:bg-amber-800 border border-amber-500/50 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all text-amber-400 whitespace-nowrap shrink-0">
               <Settings size={14} /> Admin
             </button>
+
+            <button onClick={() => router.push('/gerencia')} className="flex items-center gap-2 bg-pink-900/40 hover:bg-pink-800 border border-pink-500/50 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all text-pink-400 whitespace-nowrap shrink-0">
+              <ClipboardList size={14} /> Gerencia
+            </button>
             
             <button onClick={() => router.push('/socios')} className="flex items-center gap-2 bg-purple-900/40 hover:bg-purple-800 border border-purple-500/50 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all text-purple-400 whitespace-nowrap shrink-0">
               <DollarSign size={14} /> Socios
@@ -296,7 +300,7 @@ export default function DevPanelPage() {
                       </td>
                       <td className="px-6 py-4 text-slate-400 uppercase">{p.dependencia}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border ${p.rol === 'admin' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : p.rol === 'cajero' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : p.rol === 'dev' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : p.rol === 'socio' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                        <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border ${p.rol === 'admin' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : p.rol === 'cajero' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : p.rol === 'dev' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : p.rol === 'socio' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : p.rol === 'gerente' ? 'bg-pink-500/10 text-pink-400 border-pink-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
                           {p.rol || 'empleado'}
                         </span>
                       </td>
@@ -309,7 +313,8 @@ export default function DevPanelPage() {
                           <option value="empleado">Empleado</option>
                           <option value="cajero">Cajero</option>
                           <option value="admin">Administrador</option>
-                          <option value="socio">Socio / Gerencia</option>
+                          <option value="gerente">Gerente Operativo</option>
+                          <option value="socio">Socio Inversor</option>
                           <option value="dev">Dev_Root</option>
                         </select>
                       </td>
@@ -413,7 +418,8 @@ export default function DevPanelPage() {
                     <option value="empleado">Empleado</option>
                     <option value="cajero">Cajero</option>
                     <option value="admin">Administrador</option>
-                    <option value="socio">Socio / Gerencia</option>
+                    <option value="gerente">Gerente Operativo</option>
+                    <option value="socio">Socio Inversor</option>
                     <option value="dev">Dev_Root</option>
                   </select>
                 </div>

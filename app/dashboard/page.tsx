@@ -74,6 +74,8 @@ export default function LoginScreen() {
           router.push('/cajero');
         } else if (rol === 'socio') {
           router.push('/socios');
+        } else if (rol === 'gerente') {
+          router.push('/gerencia');
         } else {
           router.push('/mi-vale');
         }
