@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings } from 'lucide-react';
+import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings, Ticket } from 'lucide-react';
 import { crearUsuarioGlobal } from '../admin/actions'; 
 
 const supabase = createClient(
@@ -89,6 +89,11 @@ export default function DevPanelPage() {
   const mostrarMensaje = (texto: string, tipo: 'exito' | 'error') => {
     setMensaje({ texto, tipo });
     setTimeout(() => setMensaje(null), 4000);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
   };
 
   // --- ACCIÓN: CREAR USUARIO GLOBAL (AUTH + DB) ---
@@ -204,6 +209,10 @@ export default function DevPanelPage() {
           <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
             {cargandoAccion && <Loader2 className="animate-spin text-emerald-500 mr-2 shrink-0" size={18} />}
             
+            <button onClick={() => router.push('/mi-vale')} className="flex items-center gap-2 bg-emerald-900/40 hover:bg-emerald-800 border border-emerald-500/50 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all text-emerald-400 whitespace-nowrap shrink-0">
+              <Ticket size={14} /> Empleado
+            </button>
+
             <button onClick={() => router.push('/cajero')} className="flex items-center gap-2 bg-blue-900/40 hover:bg-blue-800 border border-blue-500/50 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all text-blue-400 whitespace-nowrap shrink-0">
               <ScanLine size={14} /> Escáner
             </button>
@@ -216,8 +225,8 @@ export default function DevPanelPage() {
               <DollarSign size={14} /> Socios
             </button>
             
-            <button onClick={() => router.push('/mi-vale')} className="flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-700 w-8 h-8 rounded-lg transition-all shrink-0">
-              <LogOut size={14} className="text-slate-400" />
+            <button onClick={handleLogout} className="flex items-center justify-center bg-slate-800 hover:bg-slate-700 border border-slate-700 w-8 h-8 rounded-lg transition-all shrink-0">
+              <LogOut size={14} className="text-slate-400 hover:text-red-400 transition-colors" />
             </button>
           </div>
         </div>
