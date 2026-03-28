@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck } from 'lucide-react';
+import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign } from 'lucide-react';
 import { crearUsuarioGlobal } from '../admin/actions'; 
 
 const supabase = createClient(
@@ -202,6 +202,9 @@ export default function DevPanelPage() {
           </div>
           <div className="flex items-center gap-4">
             {cargandoAccion && <Loader2 className="animate-spin text-emerald-500" size={18} />}
+            <button onClick={() => router.push('/socios')} className="flex items-center gap-2 bg-purple-900/40 hover:bg-purple-800 border border-purple-500/50 px-4 py-2 rounded-lg text-xs font-bold transition-all text-purple-400">
+              <DollarSign size={14} /> Portal Socios
+            </button>
             <button onClick={() => router.push('/mi-vale')} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-2 rounded-lg text-xs font-bold transition-all">
               <LogOut size={14} /> Salir
             </button>
