@@ -133,20 +133,18 @@ export default function AdminDashboard() {
   };
 
   const generarEmail = (nombreCompleto: string) => {
-    // Limpieza agresiva de caracteres especiales y espacios múltiples
     const limpio = nombreCompleto
       .toLowerCase()
       .trim()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, " "); // Convierte espacios dobles en simples
+      .replace(/\s+/g, " ");
       
     const partes = limpio.split(" ");
     
     let nombre = partes[0] || "";
     let apellido = "";
 
-    // Extraer Apellido Paterno (penúltima palabra) o el único apellido si solo hay 2 palabras
     if (partes.length >= 3) {
       apellido = partes[partes.length - 2]; 
     } else if (partes.length === 2) {
@@ -416,14 +414,12 @@ export default function AdminDashboard() {
     if (!confirm("🔵 ¿CERRAR SEMANA? Esto guardará el reporte de sobrantes y pondrá los contadores en 0 para cargar la nueva nómina.")) return;
     setCargando(true);
 
-    // 1. Snapshot de datos actuales
     const { data: empCierre } = await supabase.from('perfiles').select('tickets_canjeado, tickets_restantes').neq('id', '00000000-0000-0000-0000-000000000000');
     let c_semana = 0; let s_semana = 0;
     if (empCierre) {
       empCierre.forEach(e => { c_semana += (e.tickets_canjeado || 0); s_semana += (e.tickets_restantes || 0); });
     }
 
-    // 2. Guardar Cierre
     await supabase.from('cierres_semanales').insert({
       admin_email: userEmail || 'Sistema',
       vales_canjeados: c_semana,
@@ -431,7 +427,6 @@ export default function AdminDashboard() {
       vales_asignados_total: c_semana + s_semana
     });
 
-    // 3. Reset
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
     await registrarLog(userEmail || 'Sistema', 'REINICIO_SEMANA', `Cierre semanal. Sobraron: ${s_semana} | Canjeados: ${c_semana}`);
@@ -441,11 +436,12 @@ export default function AdminDashboard() {
   };
 
   const limpiarHistorialPruebas = async () => {
-    if (!confirm("⚠️ ¿BORRAR TODO EL SISTEMA? Se eliminarán empleados y bitácora.")) return;
+    if (!confirm("⚠️ ¿BORRAR TODO EL SISTEMA? Se eliminarán empleados y bitácora. (Tus cuentas administrativas se mantendrán a salvo)")) return;
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('perfiles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await registrarLog(userEmail || 'Sistema', 'LIMPIEZA_TOTAL', 'Eliminó toda la base de datos (Empleados y Bitácora)');
+    // CORRECCIÓN VITAL: Solo borra a los de rol empleado, no toca a los dev ni admins.
+    await supabase.from('perfiles').delete().eq('rol', 'empleado');
+    await registrarLog(userEmail || 'Sistema', 'LIMPIEZA_TOTAL', 'Eliminó la base de datos de empleados (Mantuvo Admins a salvo)');
     
     cargarDatosGenerales(); setCargando(false);
   };
@@ -473,7 +469,6 @@ export default function AdminDashboard() {
     return acc;
   }, {} as any)).map(([nombre, vals]: [string, any]) => ({ nombre, ...vals })).sort((a, b) => b.asignados - a.asignados);
 
-  // --- CÁLCULOS DE CONTROL MENSUAL ---
   const mesActual = new Date().getMonth();
   const anioActual = new Date().getFullYear();
   let canjeadosMesHistorial = 0;
