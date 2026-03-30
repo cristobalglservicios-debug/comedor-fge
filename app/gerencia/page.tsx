@@ -3,32 +3,37 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft, Wallet, Users, ShoppingCart, Plus, CheckCircle2, AlertTriangle, Calendar, DollarSign, FileText, Tag, User } from 'lucide-react';
+import { Loader2, ArrowLeft, Wallet, Users, ShoppingCart, Plus, CheckCircle2, AlertTriangle, Calendar, DollarSign, FileText, Tag, User, MapPin, Clock, UserCheck, ShieldCheck, KeyRound } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Tab = 'nomina' | 'gastos' | 'ventas';
+type Tab = 'gastos' | 'ventas' | 'personal' | 'asistencia';
 
 export default function GerenciaDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>('gastos');
+  const [activeTab, setActiveTab] = useState<Tab>('asistencia');
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [cargandoForm, setCargandoForm] = useState(false);
   const [mensaje, setMensaje] = useState<{ texto: string, tipo: 'exito' | 'error' } | null>(null);
   const [userEmail, setUserEmail] = useState<string>('');
 
-  // Listas de datos recientes
-  const [nominaReciente, setNominaReciente] = useState<any[]>([]);
+  // Listas de datos
   const [gastosRecientes, setGastosRecientes] = useState<any[]>([]);
   const [ventasRecientes, setVentasRecientes] = useState<any[]>([]);
+  const [empleados, setEmpleados] = useState<any[]>([]);
+  const [asistenciasHoy, setAsistenciasHoy] = useState<any[]>([]);
 
   // Estados de los Formularios
-  const [formNomina, setFormNomina] = useState({ fecha_inicio: '', fecha_fin: '', nombre_empleado: '', sueldo_base: '', bonos: '0', descuentos: '0' });
   const [formGastos, setFormGastos] = useState({ fecha_gasto: '', categoria: 'Insumos Cocina', proveedor: '', concepto: '', monto: '', tipo_comprobante: 'Ticket' });
   const [formVentas, setFormVentas] = useState({ fecha_venta: '', categoria: 'Tienda (Refrescos/Botanas)', monto_vendido: '' });
+  
+  // Nuevo: Formulario de Personal
+  const [formPersonal, setFormPersonal] = useState({ nombre_completo: '', puesto: 'Cocinero', sueldo_diario: '', bono_semanal: '300', hora_entrada: '07:00', minutos_tolerancia: '15', pin_acceso: '' });
+  // Nuevo: Formulario Asistencia Manual (Contingencia)
+  const [formAsistencia, setFormAsistencia] = useState({ empleado_id: '', estatus: 'OK (Manual)' });
 
   useEffect(() => {
     validarAcceso();
@@ -43,8 +48,7 @@ export default function GerenciaDashboard() {
     const { data: perfil } = await supabase.from('perfiles').select('rol').eq('email', email).maybeSingle();
     const rol = perfil?.rol || 'empleado';
 
-    // Acceso para socios, gerencia (si usan rol socio) y devs
-    if (rol !== 'dev' && rol !== 'socio' && rol !== 'admin') {
+    if (rol !== 'dev' && rol !== 'socio' && rol !== 'gerente' && rol !== 'admin') {
       router.push('/dashboard');
       return;
     }
@@ -53,23 +57,28 @@ export default function GerenciaDashboard() {
     setLoadingAcceso(false);
     cargarDatosGenerales();
     
-    // Auto-completar fechas por defecto a hoy
-    const hoy = new Date().toISOString().split('T')[0];
-    setFormNomina(prev => ({ ...prev, fecha_inicio: hoy, fecha_fin: hoy }));
+    const hoy = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
     setFormGastos(prev => ({ ...prev, fecha_gasto: hoy }));
     setFormVentas(prev => ({ ...prev, fecha_venta: hoy }));
   };
 
   const cargarDatosGenerales = async () => {
-    const [reqNomina, reqGastos, reqVentas] = await Promise.all([
-      supabase.from('finanzas_nomina').select('*').order('created_at', { ascending: false }).limit(10),
+    const hoy = new Date().toLocaleDateString('en-CA');
+
+    const [reqGastos, reqVentas, reqEmpleados, reqAsistencia] = await Promise.all([
       supabase.from('finanzas_gastos').select('*').order('created_at', { ascending: false }).limit(10),
-      supabase.from('finanzas_ventas_extra').select('*').order('created_at', { ascending: false }).limit(10)
+      supabase.from('finanzas_ventas_extra').select('*').order('created_at', { ascending: false }).limit(10),
+      supabase.from('cat_empleados').select('*').order('nombre_completo', { ascending: true }),
+      supabase.from('asistencia_diaria').select('*, cat_empleados(nombre_completo, puesto)').eq('fecha', hoy).order('hora_registro', { ascending: false })
     ]);
 
-    if (reqNomina.data) setNominaReciente(reqNomina.data);
     if (reqGastos.data) setGastosRecientes(reqGastos.data);
     if (reqVentas.data) setVentasRecientes(reqVentas.data);
+    if (reqEmpleados.data) {
+        setEmpleados(reqEmpleados.data);
+        if(reqEmpleados.data.length > 0) setFormAsistencia(prev => ({ ...prev, empleado_id: reqEmpleados.data[0].id }));
+    }
+    if (reqAsistencia.data) setAsistenciasHoy(reqAsistencia.data);
   };
 
   const mostrarMensaje = (texto: string, tipo: 'exito' | 'error') => {
@@ -81,7 +90,12 @@ export default function GerenciaDashboard() {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(cantidad || 0);
   };
 
-  // --- SUBMITS DE FORMULARIOS ---
+  const generarPIN = () => {
+    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+    setFormPersonal(prev => ({...prev, pin_acceso: pin}));
+  };
+
+  // --- SUBMITS ---
 
   const submitGasto = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,28 +119,6 @@ export default function GerenciaDashboard() {
     setCargandoForm(false);
   };
 
-  const submitNomina = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCargandoForm(true);
-    const { error } = await supabase.from('finanzas_nomina').insert([{
-      fecha_inicio: formNomina.fecha_inicio,
-      fecha_fin: formNomina.fecha_fin,
-      nombre_empleado: formNomina.nombre_empleado.toUpperCase(),
-      sueldo_base: parseFloat(formNomina.sueldo_base),
-      bonos: parseFloat(formNomina.bonos || '0'),
-      descuentos: parseFloat(formNomina.descuentos || '0'),
-      registrado_por: userEmail
-    }]);
-
-    if (error) { mostrarMensaje(error.message, 'error'); } 
-    else {
-      mostrarMensaje('Nómina registrada con éxito', 'exito');
-      setFormNomina(prev => ({ ...prev, nombre_empleado: '', sueldo_base: '', bonos: '0', descuentos: '0' }));
-      cargarDatosGenerales();
-    }
-    setCargandoForm(false);
-  };
-
   const submitVenta = async (e: React.FormEvent) => {
     e.preventDefault();
     setCargandoForm(true);
@@ -141,6 +133,56 @@ export default function GerenciaDashboard() {
     else {
       mostrarMensaje('Venta registrada con éxito', 'exito');
       setFormVentas(prev => ({ ...prev, monto_vendido: '' }));
+      cargarDatosGenerales();
+    }
+    setCargandoForm(false);
+  };
+
+  const submitPersonal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if(!formPersonal.pin_acceso) { mostrarMensaje('Genera un PIN de acceso', 'error'); return; }
+    setCargandoForm(true);
+    
+    const { error } = await supabase.from('cat_empleados').insert([{
+      nombre_completo: formPersonal.nombre_completo.toUpperCase(),
+      puesto: formPersonal.puesto.toUpperCase(),
+      sueldo_diario: parseFloat(formPersonal.sueldo_diario),
+      bono_semanal: parseFloat(formPersonal.bono_semanal),
+      hora_entrada: formPersonal.hora_entrada + ':00',
+      minutos_tolerancia: parseInt(formPersonal.minutos_tolerancia),
+      pin_acceso: formPersonal.pin_acceso,
+      registrado_por: userEmail
+    }]);
+
+    if (error) { mostrarMensaje(error.message, 'error'); } 
+    else {
+      mostrarMensaje('Empleado registrado con éxito', 'exito');
+      setFormPersonal({ nombre_completo: '', puesto: 'Cocinero', sueldo_diario: '', bono_semanal: '300', hora_entrada: '07:00', minutos_tolerancia: '15', pin_acceso: '' });
+      cargarDatosGenerales();
+    }
+    setCargandoForm(false);
+  };
+
+  const submitAsistenciaManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCargandoForm(true);
+    const hoy = new Date().toLocaleDateString('en-CA');
+    const horaAct = new Date().toLocaleTimeString('en-GB'); // HH:MM:SS
+    
+    const { error } = await supabase.from('asistencia_diaria').insert([{
+      empleado_id: formAsistencia.empleado_id,
+      fecha: hoy,
+      hora_registro: horaAct,
+      estatus: formAsistencia.estatus,
+      registrado_desde_ip: 'EXCEPCION_MANUAL',
+      coordenadas_gps: 'Autorizado por Gerencia'
+    }]);
+
+    if (error) { 
+        if(error.code === '23505') mostrarMensaje('El empleado ya tiene registro hoy', 'error');
+        else mostrarMensaje(error.message, 'error'); 
+    } else {
+      mostrarMensaje('Asistencia manual registrada', 'exito');
       cargarDatosGenerales();
     }
     setCargandoForm(false);
@@ -190,11 +232,14 @@ export default function GerenciaDashboard() {
         
         {/* TABS DE NAVEGACIÓN */}
         <div className="flex bg-white rounded-2xl p-1.5 mb-8 shadow-sm border border-slate-200 overflow-x-auto no-scrollbar">
+          <button onClick={() => setActiveTab('asistencia')} className={`flex-1 min-w-[150px] py-3.5 rounded-xl text-[11px] font-black uppercase flex items-center justify-center gap-2 transition-all ${activeTab === 'asistencia' ? 'bg-[#1A2744] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <Clock size={16}/> Monitor Asistencia
+          </button>
+          <button onClick={() => setActiveTab('personal')} className={`flex-1 min-w-[150px] py-3.5 rounded-xl text-[11px] font-black uppercase flex items-center justify-center gap-2 transition-all ${activeTab === 'personal' ? 'bg-[#1A2744] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <Users size={16}/> Catálogo Personal
+          </button>
           <button onClick={() => setActiveTab('gastos')} className={`flex-1 min-w-[150px] py-3.5 rounded-xl text-[11px] font-black uppercase flex items-center justify-center gap-2 transition-all ${activeTab === 'gastos' ? 'bg-[#1A2744] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
             <ShoppingCart size={16}/> Compras y Gastos
-          </button>
-          <button onClick={() => setActiveTab('nomina')} className={`flex-1 min-w-[150px] py-3.5 rounded-xl text-[11px] font-black uppercase flex items-center justify-center gap-2 transition-all ${activeTab === 'nomina' ? 'bg-[#1A2744] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-            <Users size={16}/> Nómina Semanal
           </button>
           <button onClick={() => setActiveTab('ventas')} className={`flex-1 min-w-[150px] py-3.5 rounded-xl text-[11px] font-black uppercase flex items-center justify-center gap-2 transition-all ${activeTab === 'ventas' ? 'bg-[#1A2744] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
             <DollarSign size={16}/> Ventas Tienda
@@ -207,140 +252,159 @@ export default function GerenciaDashboard() {
           <div className="lg:col-span-5">
             <div className="bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 sticky top-28">
               
+              {/* === FORMULARIO ASISTENCIA MANUAL === */}
+              {activeTab === 'asistencia' && (
+                <form onSubmit={submitAsistenciaManual} className="space-y-5">
+                  <div className="mb-6 border-b border-slate-100 pb-4">
+                    <h2 className="text-lg font-black text-[#1A2744] flex items-center gap-2"><ShieldCheck className="text-blue-500"/> Registro Excepcional</h2>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-1">Si el empleado no tiene celular o datos</p>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Seleccionar Empleado</label>
+                    <select required className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-blue-500 outline-none uppercase" value={formAsistencia.empleado_id} onChange={e => setFormAsistencia({...formAsistencia, empleado_id: e.target.value})}>
+                      {empleados.map(emp => <option key={emp.id} value={emp.id}>{emp.nombre_completo} - {emp.puesto}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Motivo de Registro</label>
+                    <select required className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-blue-500 outline-none uppercase" value={formAsistencia.estatus} onChange={e => setFormAsistencia({...formAsistencia, estatus: e.target.value})}>
+                      <option value="OK (Manual)">Asistencia Manual (Sin Celular)</option>
+                      <option value="FALTA (Manual)">Reportar Falta Injustificada</option>
+                      <option value="ENF (Manual)">Enfermedad / Incapacidad</option>
+                      <option value="DESCANSO">Día de Descanso Oficial</option>
+                    </select>
+                  </div>
+
+                  <button disabled={cargandoForm || empleados.length === 0} type="submit" className="w-full bg-[#1A2744] hover:bg-[#2A3F6D] text-white p-4 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 mt-6 transition-all active:scale-[0.98] shadow-lg">
+                    {cargandoForm ? <Loader2 className="animate-spin" size={16}/> : <><UserCheck size={16}/> Autorizar Asistencia</>}
+                  </button>
+                </form>
+              )}
+
+              {/* === FORMULARIO PERSONAL === */}
+              {activeTab === 'personal' && (
+                <form onSubmit={submitPersonal} className="space-y-4">
+                  <div className="mb-4 border-b border-slate-100 pb-4">
+                    <h2 className="text-lg font-black text-[#1A2744] flex items-center gap-2"><Users className="text-amber-500"/> Alta de Personal</h2>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-1">Genera su PIN para el GPS</p>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Nombre Completo</label>
+                    <input required type="text" placeholder="Ej: JUAN PÉREZ LOPEZ" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-amber-500 outline-none uppercase" value={formPersonal.nombre_completo} onChange={e => setFormPersonal({...formPersonal, nombre_completo: e.target.value})} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Puesto</label>
+                      <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-amber-500 outline-none uppercase" value={formPersonal.puesto} onChange={e => setFormPersonal({...formPersonal, puesto: e.target.value})}>
+                        <option>Gerente</option><option>Chef</option><option>Cocinero</option><option>Cajera</option><option>Auxiliar</option><option>Lavaloza</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Sueldo Diario ($)</label>
+                      <input required type="number" step="0.01" min="0" placeholder="400.00" className="w-full bg-amber-50/50 border border-amber-100 p-3 rounded-xl text-xs font-black focus:border-amber-500 outline-none text-amber-700" value={formPersonal.sueldo_diario} onChange={e => setFormPersonal({...formPersonal, sueldo_diario: e.target.value})} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Hora Entrada</label>
+                      <input required type="time" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-amber-500 outline-none" value={formPersonal.hora_entrada} onChange={e => setFormPersonal({...formPersonal, hora_entrada: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Tolerancia (Min)</label>
+                      <input required type="number" min="0" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-amber-500 outline-none" value={formPersonal.minutos_tolerancia} onChange={e => setFormPersonal({...formPersonal, minutos_tolerancia: e.target.value})} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 items-end">
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Bono Semanal ($)</label>
+                      <input required type="number" step="0.01" min="0" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-amber-500 outline-none text-slate-700" value={formPersonal.bono_semanal} onChange={e => setFormPersonal({...formPersonal, bono_semanal: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">PIN Celular</label>
+                      <div className="flex gap-2">
+                        <input readOnly type="text" placeholder="----" className="w-full bg-slate-800 text-white border-none p-3 rounded-xl text-center text-sm font-black tracking-widest" value={formPersonal.pin_acceso} />
+                        <button type="button" onClick={generarPIN} className="bg-amber-100 text-amber-600 p-3 rounded-xl hover:bg-amber-200 transition-colors"><KeyRound size={18}/></button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button disabled={cargandoForm} type="submit" className="w-full bg-[#1A2744] hover:bg-[#2A3F6D] text-white p-4 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 mt-4 transition-all active:scale-[0.98] shadow-lg">
+                    {cargandoForm ? <Loader2 className="animate-spin" size={16}/> : <><UserPlus size={16}/> Registrar Empleado</>}
+                  </button>
+                </form>
+              )}
+
               {/* === FORMULARIO GASTOS === */}
               {activeTab === 'gastos' && (
                 <form onSubmit={submitGasto} className="space-y-5">
                   <div className="mb-6 border-b border-slate-100 pb-4">
                     <h2 className="text-lg font-black text-[#1A2744] flex items-center gap-2"><ShoppingCart className="text-indigo-500"/> Registro de Gasto</h2>
-                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-1">Proveedores y Servicios</p>
                   </div>
-
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Fecha</label>
-                      <input required type="date" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-indigo-500 outline-none" value={formGastos.fecha_gasto} onChange={e => setFormGastos({...formGastos, fecha_gasto: e.target.value})} />
+                      <input required type="date" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold outline-none" value={formGastos.fecha_gasto} onChange={e => setFormGastos({...formGastos, fecha_gasto: e.target.value})} />
                     </div>
                     <div>
                       <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Categoría</label>
-                      <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-indigo-500 outline-none" value={formGastos.categoria} onChange={e => setFormGastos({...formGastos, categoria: e.target.value})}>
+                      <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold outline-none" value={formGastos.categoria} onChange={e => setFormGastos({...formGastos, categoria: e.target.value})}>
                         <option>Insumos Cocina</option><option>Panadería</option><option>Bebidas</option><option>Botanas y Galletas</option><option>Desechables</option><option>Limpieza / Químicos</option><option>Mantenimiento</option><option>Gas</option><option>Otros</option>
                       </select>
                     </div>
                   </div>
-
                   <div>
                     <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Proveedor</label>
-                    <div className="relative"><User size={14} className="absolute left-3 top-3.5 text-slate-400"/><input required type="text" placeholder="Ej: VE CENTRAL / SANTOS LUGO" className="w-full bg-slate-50 border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold focus:border-indigo-500 outline-none uppercase" value={formGastos.proveedor} onChange={e => setFormGastos({...formGastos, proveedor: e.target.value})} /></div>
+                    <input required type="text" placeholder="Ej: VE CENTRAL" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold outline-none uppercase" value={formGastos.proveedor} onChange={e => setFormGastos({...formGastos, proveedor: e.target.value})} />
                   </div>
-
                   <div>
-                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Concepto / Descripción</label>
-                    <div className="relative"><Tag size={14} className="absolute left-3 top-3.5 text-slate-400"/><input required type="text" placeholder="Ej: FRUTAS Y VERDURAS SEMANA 1" className="w-full bg-slate-50 border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold focus:border-indigo-500 outline-none uppercase" value={formGastos.concepto} onChange={e => setFormGastos({...formGastos, concepto: e.target.value})} /></div>
+                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Concepto</label>
+                    <input required type="text" placeholder="Ej: FRUTAS SEMANA 1" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold outline-none uppercase" value={formGastos.concepto} onChange={e => setFormGastos({...formGastos, concepto: e.target.value})} />
                   </div>
-
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Monto Total ($)</label>
-                      <div className="relative"><DollarSign size={14} className="absolute left-3 top-3.5 text-indigo-500"/><input required type="number" step="0.01" min="0" placeholder="0.00" className="w-full bg-indigo-50/50 border border-indigo-100 p-3 pl-9 rounded-xl text-xs font-black focus:border-indigo-500 outline-none text-indigo-700" value={formGastos.monto} onChange={e => setFormGastos({...formGastos, monto: e.target.value})} /></div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Monto ($)</label>
+                      <input required type="number" step="0.01" min="0" placeholder="0.00" className="w-full bg-indigo-50/50 border border-indigo-100 p-3 rounded-xl text-xs font-black outline-none text-indigo-700" value={formGastos.monto} onChange={e => setFormGastos({...formGastos, monto: e.target.value})} />
                     </div>
                     <div>
                       <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Comprobante</label>
-                      <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-indigo-500 outline-none" value={formGastos.tipo_comprobante} onChange={e => setFormGastos({...formGastos, tipo_comprobante: e.target.value})}>
+                      <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold outline-none" value={formGastos.tipo_comprobante} onChange={e => setFormGastos({...formGastos, tipo_comprobante: e.target.value})}>
                         <option>Ticket</option><option>Factura</option><option>Nota Remisión</option><option>Sin Comprobante</option>
                       </select>
                     </div>
                   </div>
-
-                  <button disabled={cargandoForm} type="submit" className="w-full bg-[#1A2744] hover:bg-[#2A3F6D] text-white p-4 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 mt-4 transition-all active:scale-[0.98] shadow-lg">
+                  <button disabled={cargandoForm} type="submit" className="w-full bg-[#1A2744] hover:bg-[#2A3F6D] text-white p-4 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg">
                     {cargandoForm ? <Loader2 className="animate-spin" size={16}/> : <><Plus size={16}/> Guardar Gasto</>}
                   </button>
                 </form>
               )}
 
-              {/* === FORMULARIO NÓMINA === */}
-              {activeTab === 'nomina' && (
-                <form onSubmit={submitNomina} className="space-y-5">
-                  <div className="mb-6 border-b border-slate-100 pb-4">
-                    <h2 className="text-lg font-black text-[#1A2744] flex items-center gap-2"><Users className="text-amber-500"/> Registro de Nómina</h2>
-                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-1">Pago a Personal Operativo</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Semana Inicio</label>
-                      <input required type="date" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-amber-500 outline-none" value={formNomina.fecha_inicio} onChange={e => setFormNomina({...formNomina, fecha_inicio: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Semana Fin</label>
-                      <input required type="date" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-amber-500 outline-none" value={formNomina.fecha_fin} onChange={e => setFormNomina({...formNomina, fecha_fin: e.target.value})} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Nombre del Empleado</label>
-                    <div className="relative"><User size={14} className="absolute left-3 top-3.5 text-slate-400"/><input required type="text" placeholder="Apellidos y Nombres" className="w-full bg-slate-50 border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold focus:border-amber-500 outline-none uppercase" value={formNomina.nombre_empleado} onChange={e => setFormNomina({...formNomina, nombre_empleado: e.target.value})} /></div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Sueldo Base ($)</label>
-                      <div className="relative"><DollarSign size={14} className="absolute left-3 top-3.5 text-amber-500"/><input required type="number" step="0.01" min="0" placeholder="0.00" className="w-full bg-amber-50/50 border border-amber-100 p-3 pl-9 rounded-xl text-xs font-black focus:border-amber-500 outline-none text-amber-700" value={formNomina.sueldo_base} onChange={e => setFormNomina({...formNomina, sueldo_base: e.target.value})} /></div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Bonos Extra (+)</label>
-                      <input type="number" step="0.01" min="0" placeholder="0.00" className="w-full bg-emerald-50/50 border border-emerald-100 p-3 rounded-xl text-xs font-bold focus:border-emerald-500 outline-none text-emerald-600" value={formNomina.bonos} onChange={e => setFormNomina({...formNomina, bonos: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Faltas/Deducciones (-)</label>
-                      <input type="number" step="0.01" min="0" placeholder="0.00" className="w-full bg-red-50/50 border border-red-100 p-3 rounded-xl text-xs font-bold focus:border-red-500 outline-none text-red-600" value={formNomina.descuentos} onChange={e => setFormNomina({...formNomina, descuentos: e.target.value})} />
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center mt-2">
-                     <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Pago Neto Final:</span>
-                     <span className="text-lg font-black text-[#1A2744]">
-                        {formatearMoneda((parseFloat(formNomina.sueldo_base||'0') + parseFloat(formNomina.bonos||'0') - parseFloat(formNomina.descuentos||'0')))}
-                     </span>
-                  </div>
-
-                  <button disabled={cargandoForm} type="submit" className="w-full bg-[#1A2744] hover:bg-[#2A3F6D] text-white p-4 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 mt-4 transition-all active:scale-[0.98] shadow-lg">
-                    {cargandoForm ? <Loader2 className="animate-spin" size={16}/> : <><Plus size={16}/> Registrar Pago</>}
-                  </button>
-                </form>
-              )}
-
-              {/* === FORMULARIO VENTAS TIENDA === */}
+              {/* === FORMULARIO VENTAS === */}
               {activeTab === 'ventas' && (
                 <form onSubmit={submitVenta} className="space-y-5">
                   <div className="mb-6 border-b border-slate-100 pb-4">
                     <h2 className="text-lg font-black text-[#1A2744] flex items-center gap-2"><DollarSign className="text-emerald-500"/> Ventas Extra</h2>
-                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-1">Registro de Indicadores / Mostrador</p>
                   </div>
-
                   <div>
-                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Fecha de la Venta</label>
-                    <div className="relative"><Calendar size={14} className="absolute left-3 top-3.5 text-slate-400"/><input required type="date" className="w-full bg-slate-50 border border-slate-200 p-3 pl-9 rounded-xl text-xs font-bold focus:border-emerald-500 outline-none" value={formVentas.fecha_venta} onChange={e => setFormVentas({...formVentas, fecha_venta: e.target.value})} /></div>
+                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Fecha</label>
+                    <input required type="date" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold outline-none" value={formVentas.fecha_venta} onChange={e => setFormVentas({...formVentas, fecha_venta: e.target.value})} />
                   </div>
-
                   <div>
-                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Categoría de Venta</label>
-                    <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold focus:border-emerald-500 outline-none" value={formVentas.categoria} onChange={e => setFormVentas({...formVentas, categoria: e.target.value})}>
-                      <option>Tienda (Refrescos/Botanas)</option>
-                      <option>Desayunos Mostrador</option>
-                      <option>Almuerzos Mostrador</option>
-                      <option>Cenas Mostrador</option>
+                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Categoría</label>
+                    <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold outline-none" value={formVentas.categoria} onChange={e => setFormVentas({...formVentas, categoria: e.target.value})}>
+                      <option>Tienda (Refrescos/Botanas)</option><option>Desayunos Mostrador</option><option>Almuerzos Mostrador</option><option>Cenas Mostrador</option>
                     </select>
                   </div>
-
                   <div>
-                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Monto Total Ingresado ($)</label>
-                    <div className="relative"><DollarSign size={14} className="absolute left-3 top-3.5 text-emerald-500"/><input required type="number" step="0.01" min="0" placeholder="0.00" className="w-full bg-emerald-50/50 border border-emerald-100 p-3 pl-9 rounded-xl text-xs font-black focus:border-emerald-500 outline-none text-emerald-700" value={formVentas.monto_vendido} onChange={e => setFormVentas({...formVentas, monto_vendido: e.target.value})} /></div>
+                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 block">Monto Ingresado ($)</label>
+                    <input required type="number" step="0.01" min="0" placeholder="0.00" className="w-full bg-emerald-50/50 border border-emerald-100 p-3 rounded-xl text-xs font-black outline-none text-emerald-700" value={formVentas.monto_vendido} onChange={e => setFormVentas({...formVentas, monto_vendido: e.target.value})} />
                   </div>
-
-                  <button disabled={cargandoForm} type="submit" className="w-full bg-[#1A2744] hover:bg-[#2A3F6D] text-white p-4 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 mt-6 transition-all active:scale-[0.98] shadow-lg">
+                  <button disabled={cargandoForm} type="submit" className="w-full bg-[#1A2744] hover:bg-[#2A3F6D] text-white p-4 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg">
                     {cargandoForm ? <Loader2 className="animate-spin" size={16}/> : <><Plus size={16}/> Declarar Venta</>}
                   </button>
                 </form>
@@ -356,13 +420,69 @@ export default function GerenciaDashboard() {
               <div className="mb-6 flex items-center gap-2 border-b border-slate-100 pb-4">
                  <FileText className="text-slate-400" size={20} />
                  <div>
-                    <h3 className="text-sm font-black text-[#1A2744] uppercase tracking-widest">Registros Recientes</h3>
-                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Últimos movimientos cargados</p>
+                    <h3 className="text-sm font-black text-[#1A2744] uppercase tracking-widest">Auditoría en Tiempo Real</h3>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Registros de {new Date().toLocaleDateString('es-MX')}</p>
                  </div>
               </div>
 
               <div className="overflow-x-auto flex-1 no-scrollbar">
                 
+                {/* LISTA ASISTENCIA */}
+                {activeTab === 'asistencia' && (
+                  <table className="w-full text-left whitespace-nowrap">
+                    <thead className="text-[9px] uppercase font-black text-slate-400 tracking-widest border-b border-slate-100">
+                      <tr><th className="pb-3 pr-4">Empleado</th><th className="pb-3 pr-4">Hora</th><th className="pb-3 pr-4">IP / GPS</th><th className="pb-3 text-right">Estatus</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {asistenciasHoy.length === 0 && <tr><td colSpan={4} className="py-8 text-center text-[10px] font-bold text-slate-400 uppercase">Sin registros de entrada hoy</td></tr>}
+                      {asistenciasHoy.map(a => (
+                        <tr key={a.id} className="hover:bg-slate-50/50">
+                          <td className="py-4 pr-4">
+                            <p className="text-[11px] font-black text-[#1A2744] uppercase">{a.cat_empleados?.nombre_completo}</p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase">{a.cat_empleados?.puesto}</p>
+                          </td>
+                          <td className="py-4 pr-4 text-[11px] font-black text-slate-500">{a.hora_registro.substring(0,5)}</td>
+                          <td className="py-4 pr-4 text-[9px] font-bold text-slate-400">{a.registrado_desde_ip === 'EXCEPCION_MANUAL' ? 'Gerencia' : 'App GPS'}</td>
+                          <td className="py-4 text-right">
+                             <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest ${a.estatus.includes('OK') ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+                                {a.estatus}
+                             </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                {/* LISTA PERSONAL */}
+                {activeTab === 'personal' && (
+                  <table className="w-full text-left whitespace-nowrap">
+                    <thead className="text-[9px] uppercase font-black text-slate-400 tracking-widest border-b border-slate-100">
+                      <tr><th className="pb-3 pr-4">Empleado</th><th className="pb-3 pr-4">Sueldo / Bono</th><th className="pb-3 text-right">PIN Acceso</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {empleados.length === 0 && <tr><td colSpan={3} className="py-8 text-center text-[10px] font-bold text-slate-400 uppercase">Catálogo vacío</td></tr>}
+                      {empleados.map(emp => (
+                        <tr key={emp.id} className="hover:bg-slate-50/50">
+                          <td className="py-4 pr-4">
+                            <p className="text-[11px] font-black text-[#1A2744] uppercase flex items-center gap-1">{emp.nombre_completo} {emp.activo ? <div className="w-2 h-2 bg-emerald-400 rounded-full"></div> : <div className="w-2 h-2 bg-red-400 rounded-full"></div>}</p>
+                            <p className="text-[9px] font-bold text-amber-500 uppercase">{emp.puesto} | Entrada: {emp.hora_entrada.substring(0,5)}</p>
+                          </td>
+                          <td className="py-4 pr-4 text-[10px] font-black text-slate-500">
+                             Día: {formatearMoneda(emp.sueldo_diario)} <br/>
+                             <span className="text-emerald-500">Bono: {formatearMoneda(emp.bono_semanal)}</span>
+                          </td>
+                          <td className="py-4 text-right">
+                             <span className="bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-black tracking-[0.2em] font-mono">
+                                {emp.pin_acceso}
+                             </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
                 {/* LISTA GASTOS */}
                 {activeTab === 'gastos' && (
                   <table className="w-full text-left whitespace-nowrap">
@@ -370,36 +490,12 @@ export default function GerenciaDashboard() {
                       <tr><th className="pb-3 pr-4">Fecha</th><th className="pb-3 pr-4">Proveedor / Concepto</th><th className="pb-3 text-right">Monto</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {gastosRecientes.length === 0 && <tr><td colSpan={3} className="py-8 text-center text-[10px] font-bold text-slate-400 uppercase">Sin registros recientes</td></tr>}
+                      {gastosRecientes.length === 0 && <tr><td colSpan={3} className="py-8 text-center text-[10px] font-bold text-slate-400 uppercase">Sin registros</td></tr>}
                       {gastosRecientes.map(g => (
                         <tr key={g.id} className="hover:bg-slate-50/50">
                           <td className="py-4 pr-4 text-[10px] font-bold text-slate-500">{new Date(g.fecha_gasto).toLocaleDateString('es-MX')}</td>
-                          <td className="py-4 pr-4">
-                            <p className="text-[11px] font-black text-[#1A2744] uppercase">{g.proveedor}</p>
-                            <p className="text-[9px] font-bold text-indigo-500 uppercase">{g.concepto}</p>
-                          </td>
+                          <td className="py-4 pr-4"><p className="text-[11px] font-black text-[#1A2744] uppercase">{g.proveedor}</p><p className="text-[9px] font-bold text-indigo-500 uppercase">{g.concepto}</p></td>
                           <td className="py-4 text-right text-[11px] font-black text-red-500">-{formatearMoneda(g.monto)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-
-                {/* LISTA NÓMINA */}
-                {activeTab === 'nomina' && (
-                  <table className="w-full text-left whitespace-nowrap">
-                    <thead className="text-[9px] uppercase font-black text-slate-400 tracking-widest border-b border-slate-100">
-                      <tr><th className="pb-3 pr-4">Periodo</th><th className="pb-3 pr-4">Empleado</th><th className="pb-3 text-right">Pago Neto</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {nominaReciente.length === 0 && <tr><td colSpan={3} className="py-8 text-center text-[10px] font-bold text-slate-400 uppercase">Sin registros recientes</td></tr>}
-                      {nominaReciente.map(n => (
-                        <tr key={n.id} className="hover:bg-slate-50/50">
-                          <td className="py-4 pr-4 text-[9px] font-bold text-slate-500">
-                            {new Date(n.fecha_inicio).toLocaleDateString('es-MX', {day:'2-digit', month:'short'})} - {new Date(n.fecha_fin).toLocaleDateString('es-MX', {day:'2-digit', month:'short'})}
-                          </td>
-                          <td className="py-4 pr-4 text-[11px] font-black text-[#1A2744] uppercase">{n.nombre_empleado}</td>
-                          <td className="py-4 text-right text-[11px] font-black text-red-500">-{formatearMoneda(n.pago_neto)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -413,7 +509,7 @@ export default function GerenciaDashboard() {
                       <tr><th className="pb-3 pr-4">Fecha</th><th className="pb-3 pr-4">Categoría</th><th className="pb-3 text-right">Ingreso</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {ventasRecientes.length === 0 && <tr><td colSpan={3} className="py-8 text-center text-[10px] font-bold text-slate-400 uppercase">Sin registros recientes</td></tr>}
+                      {ventasRecientes.length === 0 && <tr><td colSpan={3} className="py-8 text-center text-[10px] font-bold text-slate-400 uppercase">Sin registros</td></tr>}
                       {ventasRecientes.map(v => (
                         <tr key={v.id} className="hover:bg-slate-50/50">
                           <td className="py-4 pr-4 text-[10px] font-bold text-slate-500">{new Date(v.fecha_venta).toLocaleDateString('es-MX')}</td>
@@ -433,14 +529,8 @@ export default function GerenciaDashboard() {
       </div>
 
       <style dangerouslySetInnerHTML={{__html: `
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
         .anim-fade-up { opacity: 0; animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
