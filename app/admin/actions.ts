@@ -31,20 +31,21 @@ export async function registrarLog(adminEmail: string, accion: string, detalle: 
   if (error) console.error("Error guardando log de auditoría:", error.message);
 }
 
-// NUEVA FUNCIÓN: EDITAR PERFIL DESDE DEV PANEL
-export async function actualizarPerfilGlobal(id: string, email: string, nuevoRol: string, nuevaDep: string, adminEmail: string) {
+// ACTUALIZACIÓN: EDITAR PERFIL DESDE DEV PANEL (INCLUYE NOMBRE)
+export async function actualizarPerfilGlobal(id: string, email: string, nuevoRol: string, nuevaDep: string, nuevoNombre: string, adminEmail: string) {
   try {
     const { error } = await supabaseAdmin
       .from('perfiles')
       .update({ 
         rol: nuevoRol, 
-        dependencia: nuevaDep.toUpperCase().trim() 
+        dependencia: nuevaDep.toUpperCase().trim(),
+        nombre_completo: nuevoNombre.toUpperCase().trim()
       })
       .eq('id', id);
 
     if (error) throw error;
 
-    await registrarLog(adminEmail, 'EDICION_PERFIL_DEV', `Editó a ${email}: Rol ${nuevoRol}, Dep ${nuevaDep}`);
+    await registrarLog(adminEmail, 'EDICION_PERFIL_DEV', `Editó a ${email}: Nombre: ${nuevoNombre.toUpperCase()}, Rol: ${nuevoRol}, Dep: ${nuevaDep}`);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };

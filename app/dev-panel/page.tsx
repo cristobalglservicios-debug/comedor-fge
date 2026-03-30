@@ -119,19 +119,21 @@ export default function DevPanelPage() {
     setCargandoAccion(false);
   };
 
-  // --- NUEVA ACCIÓN: GUARDAR CAMBIOS (ROL Y DEPENDENCIA) ---
+  // --- ACCIÓN: GUARDAR CAMBIOS (NOMBRE, ROL Y DEPENDENCIA) ---
   const handleGuardarCambios = async (id: string, email: string, rolOriginal: string) => {
+    const inputNom = document.getElementById(`nom-${id}`) as HTMLInputElement;
     const inputDep = document.getElementById(`dep-${id}`) as HTMLInputElement;
     const selectRol = document.getElementById(`rol-${id}`) as HTMLSelectElement;
 
-    if (!inputDep || !selectRol) return;
+    if (!inputNom || !inputDep || !selectRol) return;
 
     if (rolOriginal === 'dev' && selectRol.value !== 'dev') {
         if (!confirm("⚠️ ¿Estás seguro de quitarte el rol de DEV? Perderás acceso a este panel inmediatamente.")) return;
     }
 
     setCargandoAccion(true);
-    const res = await actualizarPerfilGlobal(id, email, selectRol.value, inputDep.value, userEmail || 'Dev-Admin');
+    // Ahora enviamos el nuevo nombre capturado del input
+    const res = await actualizarPerfilGlobal(id, email, selectRol.value, inputDep.value, inputNom.value, userEmail || 'Dev-Admin');
     
     if (res.success) {
       mostrarMensaje('Perfil actualizado', 'exito');
@@ -287,7 +289,6 @@ export default function DevPanelPage() {
           ))}
         </div>
 
-        {/* --- TAB ROLES ACTUALIZADO --- */}
         {activeTab === 'roles' && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl animate-fade-in">
             <div className="p-6 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -310,7 +311,7 @@ export default function DevPanelPage() {
               <table className="w-full text-left text-xs whitespace-nowrap">
                 <thead className="bg-slate-950/50 text-slate-400 uppercase font-black tracking-widest border-b border-slate-800">
                   <tr>
-                    <th className="px-6 py-4">Usuario</th>
+                    <th className="px-6 py-4">Usuario (Editable)</th>
                     <th className="px-6 py-4">Dependencia (Editable)</th>
                     <th className="px-6 py-4">Rol del Sistema</th>
                     <th className="px-6 py-4 text-right">Acciones</th>
@@ -320,8 +321,14 @@ export default function DevPanelPage() {
                   {perfilesFiltrados.slice(0, 100).map(p => (
                     <tr key={p.id} className="hover:bg-slate-800/30 transition-colors group">
                       <td className="px-6 py-4">
-                        <p className="text-white font-bold">{p.nombre_completo}</p>
-                        <p className="text-[9px] text-slate-500">{p.email || 'Sin correo'}</p>
+                        {/* INPUT PARA EDITAR NOMBRE */}
+                        <input 
+                            type="text" 
+                            id={`nom-${p.id}`}
+                            defaultValue={p.nombre_completo}
+                            className="bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white font-bold w-full uppercase focus:border-emerald-500 outline-none focus:bg-slate-900 transition-all mb-1"
+                        />
+                        <p className="text-[9px] text-slate-500 ml-2">{p.email || 'Sin correo'}</p>
                       </td>
                       <td className="px-6 py-4">
                         <input 
@@ -372,7 +379,6 @@ export default function DevPanelPage() {
           </div>
         )}
 
-        {/* --- OTROS TABS --- */}
         {activeTab === 'switches' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
             {configuraciones.map(config => (
@@ -436,7 +442,6 @@ export default function DevPanelPage() {
 
       </div>
 
-      {/* MODAL NUEVO USUARIO */}
       {modalNuevo && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-fade-in">
           <div className="bg-slate-900 border border-white/10 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
