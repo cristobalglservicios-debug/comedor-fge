@@ -133,25 +133,30 @@ export default function AdminDashboard() {
   };
 
   const generarEmail = (nombreCompleto: string) => {
-    const limpio = nombreCompleto.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const partes = limpio.split(/\s+/);
+    // Limpieza agresiva de caracteres especiales y espacios múltiples
+    const limpio = nombreCompleto
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " "); // Convierte espacios dobles en simples
+      
+    const partes = limpio.split(" ");
     
-    let nombre = "";
+    let nombre = partes[0] || "";
     let apellido = "";
 
+    // Extraer Apellido Paterno (penúltima palabra) o el único apellido si solo hay 2 palabras
     if (partes.length >= 3) {
-      nombre = partes[0];
       apellido = partes[partes.length - 2]; 
     } else if (partes.length === 2) {
-      nombre = partes[0];
       apellido = partes[1];
     } else {
-      nombre = partes[0];
       apellido = "";
     }
 
     const baseEmail = apellido ? `${nombre}.${apellido}` : nombre;
-    return `${baseEmail}@fge.gob.mx`;
+    return `${baseEmail}@comedorfge.gob.mx`;
   };
 
   const guardarNuevoEmpleado = async () => {
