@@ -76,7 +76,7 @@ export default function AdminDashboard() {
         const { data: miPerfil } = await supabase.from('perfiles').select('rol').eq('email', email).maybeSingle();
         const rol = miPerfil?.rol || 'empleado';
 
-        const esTuCuenta = email === 'admin.cristobal@fge.gob.mx' || rol === 'dev';
+        const esTuCuenta = email === 'admin.cristobal@fge.gob.mx' || email === 'cristobal.dev@fge.gob.mx' || rol === 'dev';
         const esAdminOficial = rol === 'admin' || email.startsWith('admin.') || email.includes('.admin@'); 
         
         if (!esTuCuenta && !esAdminOficial) {
@@ -183,6 +183,12 @@ export default function AdminDashboard() {
 
   const handleEliminarEmpleado = async () => {
     if (!empleadoEdit) return;
+    
+    // CANDADO MAESTRO DE INDESTRUCTIBILIDAD
+    if (empleadoEdit.email === 'cristobal.dev@fge.gob.mx' || empleadoEdit.rol === 'dev') {
+      return alert("⛔ ACCIÓN DENEGADA: La cuenta maestra de Desarrollador es indestructible y no puede ser eliminada.");
+    }
+
     if (!confirm(`⚠️ ¿ELIMINAR DEFINITIVAMENTE a ${empleadoEdit.nombre_completo}?`)) return;
     setCargando(true);
     await supabase.from('perfiles').delete().eq('id', empleadoEdit.id);
@@ -439,7 +445,6 @@ export default function AdminDashboard() {
     if (!confirm("⚠️ ¿BORRAR TODO EL SISTEMA? Se eliminarán empleados y bitácora. (Tus cuentas administrativas se mantendrán a salvo)")) return;
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    // CORRECCIÓN VITAL: Solo borra a los de rol empleado, no toca a los dev ni admins.
     await supabase.from('perfiles').delete().eq('rol', 'empleado');
     await registrarLog(userEmail || 'Sistema', 'LIMPIEZA_TOTAL', 'Eliminó la base de datos de empleados (Mantuvo Admins a salvo)');
     
@@ -907,12 +912,14 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="p-6 bg-red-50/50 rounded-[2rem] border border-red-100">
-                <label className="text-[9px] font-black uppercase text-red-400 tracking-[0.2em] block mb-3 ml-1 flex items-center gap-1.5"><AlertOctagon size={12}/> Zona de Peligro</label>
-                <button onClick={handleEliminarEmpleado} disabled={cargando} className="w-full bg-white hover:bg-red-500 text-red-500 hover:text-white border border-red-200 p-4 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95">
-                  {cargando ? <Loader2 className="animate-spin" size={16}/> : <Trash2 size={16}/>} Dar de Baja Definitiva
-                </button>
-              </div>
+              {empleadoEdit.rol !== 'dev' && (
+                <div className="p-6 bg-red-50/50 rounded-[2rem] border border-red-100">
+                  <label className="text-[9px] font-black uppercase text-red-400 tracking-[0.2em] block mb-3 ml-1 flex items-center gap-1.5"><AlertOctagon size={12}/> Zona de Peligro</label>
+                  <button onClick={handleEliminarEmpleado} disabled={cargando} className="w-full bg-white hover:bg-red-500 text-red-500 hover:text-white border border-red-200 p-4 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95">
+                    {cargando ? <Loader2 className="animate-spin" size={16}/> : <Trash2 size={16}/>} Dar de Baja Definitiva
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
