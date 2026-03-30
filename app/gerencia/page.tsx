@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft, Wallet, Users, ShoppingCart, Plus, CheckCircle2, AlertTriangle, Calendar, DollarSign, FileText, Tag, User, MapPin, Clock, UserCheck, ShieldCheck, KeyRound } from 'lucide-react';
+import { Loader2, ArrowLeft, Wallet, Users, ShoppingCart, Plus, CheckCircle2, AlertTriangle, Calendar, DollarSign, FileText, Tag, User, MapPin, Clock, UserCheck, ShieldCheck, KeyRound, UserPlus } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
