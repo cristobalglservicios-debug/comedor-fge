@@ -31,6 +31,48 @@ export async function registrarLog(adminEmail: string, accion: string, detalle: 
   if (error) console.error("Error guardando log de auditoría:", error.message);
 }
 
+// NUEVA FUNCIÓN: EDITAR PERFIL DESDE DEV PANEL
+export async function actualizarPerfilGlobal(id: string, email: string, nuevoRol: string, nuevaDep: string, adminEmail: string) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('perfiles')
+      .update({ 
+        rol: nuevoRol, 
+        dependencia: nuevaDep.toUpperCase().trim() 
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+
+    await registrarLog(adminEmail, 'EDICION_PERFIL_DEV', `Editó a ${email}: Rol ${nuevoRol}, Dep ${nuevaDep}`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// NUEVA FUNCIÓN: ELIMINAR USUARIO TOTAL (AUTH + PERFIL)
+export async function eliminarUsuarioGlobal(email: string, adminEmail: string) {
+  try {
+    const user = await buscarUsuarioPorEmail(email);
+    
+    if (user) {
+      // Eliminar de Auth
+      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(user.id);
+      if (authError) throw authError;
+
+      // Eliminar de Perfiles (por si no se borró por cascade)
+      await supabaseAdmin.from('perfiles').delete().eq('email', email);
+
+      await registrarLog(adminEmail, 'ELIMINACION_TOTAL_DEV', `Eliminó permanentemente a: ${email}`);
+      return { success: true };
+    }
+    return { success: false, error: 'Usuario no encontrado en Auth' };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 // 2. FUNCIÓN MAESTRA PARA EL DEV PANEL (Crea Auth + Perfil con Rol)
 export async function crearUsuarioGlobal(email: string, nombre: string, dependencia: string, rol: string, pass: string, adminEmail: string = 'Sistema-Dev') {
   try {
@@ -43,11 +85,9 @@ export async function crearUsuarioGlobal(email: string, nombre: string, dependen
     });
 
     if (authError) {
-      // Si ya existe en Auth, intentamos recuperar el ID para sincronizar el perfil por si acaso
       if (authError.message.includes('already registered') || authError.message.includes('already exists')) {
         const existingUser = await buscarUsuarioPorEmail(email);
         if (existingUser) {
-          // Si ya existe, actualizamos su perfil en la DB para asegurar que el ROL sea correcto
           const { error: syncError } = await supabaseAdmin
             .from('perfiles')
             .upsert({
@@ -81,7 +121,6 @@ export async function crearUsuarioGlobal(email: string, nombre: string, dependen
       }, { onConflict: 'nombre_completo' });
 
     if (profileError) {
-      // Si falla la DB, borramos el de Auth para no dejar basura inconsistente
       await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
       return { success: false, error: "Error al crear perfil de base de datos: " + profileError.message };
     }

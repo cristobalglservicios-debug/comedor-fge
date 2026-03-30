@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings, Ticket, ClipboardList } from 'lucide-react';
-import { crearUsuarioGlobal } from '../admin/actions'; 
+import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings, Ticket, ClipboardList, Save } from 'lucide-react';
+import { crearUsuarioGlobal, eliminarUsuarioGlobal, actualizarPerfilGlobal } from '../admin/actions'; 
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,6 +19,7 @@ export default function DevPanelPage() {
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [cargandoAccion, setCargandoAccion] = useState(false);
   const [mensaje, setMensaje] = useState<{ texto: string, tipo: 'exito' | 'error' } | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // Estados de Datos
   const [perfiles, setPerfiles] = useState<any[]>([]);
@@ -43,13 +44,14 @@ export default function DevPanelPage() {
     }
 
     const email = session.user.email?.toLowerCase();
+    setUserEmail(email || null);
+
     const { data: miPerfil } = await supabase
       .from('perfiles')
       .select('rol')
       .eq('email', email)
       .maybeSingle();
 
-    // SEGURIDAD: Solo entra si tiene rol 'dev'
     if (miPerfil?.rol === 'dev') {
       setLoadingAcceso(false);
       cargarDatos();
@@ -59,18 +61,15 @@ export default function DevPanelPage() {
   };
 
   const cargarDatos = async () => {
-    // 1. Cargar Perfiles para Roles
     const { data: dataPerfiles } = await supabase.from('perfiles').select('*').order('nombre_completo', { ascending: true });
     if (dataPerfiles) {
       setPerfiles(dataPerfiles);
       setPerfilesFiltrados(dataPerfiles);
     }
 
-    // 2. Cargar Switches de Configuración
     const { data: dataConfig } = await supabase.from('system_config').select('*').order('id', { ascending: true });
     if (dataConfig) setConfiguraciones(dataConfig);
 
-    // 3. Cargar Logs de Auditoría (Últimos 50 movimientos)
     const { data: dataLogs } = await supabase.from('historial_comedor').select('*').order('fecha_hora', { ascending: false }).limit(50);
     if (dataLogs) setLogs(dataLogs);
   };
@@ -96,7 +95,6 @@ export default function DevPanelPage() {
     router.push('/');
   };
 
-  // --- ACCIÓN: CREAR USUARIO GLOBAL (AUTH + DB) ---
   const ejecutarCrearUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
     setCargandoAccion(true);
@@ -106,7 +104,8 @@ export default function DevPanelPage() {
         nuevoUser.nombre, 
         nuevoUser.dependencia, 
         nuevoUser.rol, 
-        nuevoUser.pass
+        nuevoUser.pass,
+        userEmail || 'Dev-Admin'
     );
     
     if (res.success) {
@@ -120,20 +119,47 @@ export default function DevPanelPage() {
     setCargandoAccion(false);
   };
 
-  // --- ACCIONES DE ROLES ---
-  const actualizarRol = async (id: string, nuevoRol: string) => {
+  // --- NUEVA ACCIÓN: GUARDAR CAMBIOS (ROL Y DEPENDENCIA) ---
+  const handleGuardarCambios = async (id: string, email: string, rolOriginal: string) => {
+    const inputDep = document.getElementById(`dep-${id}`) as HTMLInputElement;
+    const selectRol = document.getElementById(`rol-${id}`) as HTMLSelectElement;
+
+    if (!inputDep || !selectRol) return;
+
+    if (rolOriginal === 'dev' && selectRol.value !== 'dev') {
+        if (!confirm("⚠️ ¿Estás seguro de quitarte el rol de DEV? Perderás acceso a este panel inmediatamente.")) return;
+    }
+
     setCargandoAccion(true);
-    const { error } = await supabase.from('perfiles').update({ rol: nuevoRol }).eq('id', id);
-    if (error) {
-      mostrarMensaje(`Error al actualizar rol: ${error.message}`, 'error');
-    } else {
-      mostrarMensaje('Rol actualizado correctamente', 'exito');
+    const res = await actualizarPerfilGlobal(id, email, selectRol.value, inputDep.value, userEmail || 'Dev-Admin');
+    
+    if (res.success) {
+      mostrarMensaje('Perfil actualizado', 'exito');
       cargarDatos();
+    } else {
+      mostrarMensaje(res.error || 'Error al actualizar', 'error');
     }
     setCargandoAccion(false);
   };
 
-  // --- ACCIONES DE SWITCHES ---
+  // --- NUEVA ACCIÓN: ELIMINAR TOTAL (AUTH + DB) ---
+  const handleEliminarUsuario = async (email: string, nombre: string, rol: string) => {
+    if (rol === 'dev') return alert("⛔ No puedes eliminar una cuenta de desarrollador desde el panel.");
+    
+    if (!confirm(`🔥 ¡PELIGRO! 🔥\n¿Eliminar permanentemente a ${nombre}?\nEsto borrará su cuenta de acceso y su perfil.`)) return;
+
+    setCargandoAccion(true);
+    const res = await eliminarUsuarioGlobal(email, userEmail || 'Dev-Admin');
+    
+    if (res.success) {
+      mostrarMensaje('Usuario eliminado del sistema', 'exito');
+      cargarDatos();
+    } else {
+      mostrarMensaje(res.error || 'Error al eliminar', 'error');
+    }
+    setCargandoAccion(false);
+  };
+
   const toggleSwitch = async (id: string, valorActual: boolean) => {
     setCargandoAccion(true);
     const nuevoValor = !valorActual;
@@ -147,7 +173,6 @@ export default function DevPanelPage() {
     setCargandoAccion(false);
   };
 
-  // --- ACCIONES DANGER ZONE (RAW DB) ---
   const purgarTabla = async (tabla: string) => {
     const confirmacion = window.prompt(`🔥 ADVERTENCIA CRÍTICA 🔥\nEstás a punto de vaciar la tabla '${tabla}'.\nEscribe "ELIMINAR" para confirmar:`);
     if (confirmacion !== 'ELIMINAR') {
@@ -243,7 +268,7 @@ export default function DevPanelPage() {
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto px-4 mt-8">
+      <div className="max-w-7xl mx-auto px-4 mt-8">
         
         <div className="flex bg-slate-900 rounded-xl p-1 mb-8 border border-slate-800 overflow-x-auto no-scrollbar">
           {[
@@ -262,12 +287,12 @@ export default function DevPanelPage() {
           ))}
         </div>
 
-        {/* --- TAB ROLES --- */}
+        {/* --- TAB ROLES ACTUALIZADO --- */}
         {activeTab === 'roles' && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl animate-fade-in">
             <div className="p-6 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="flex items-center gap-4">
-                <h2 className="text-lg font-black text-white uppercase tracking-widest">Usuarios</h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-widest">Usuarios / Acceso</h2>
                 <button 
                   onClick={() => setModalNuevo(true)}
                   className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 transition-all shadow-lg"
@@ -276,7 +301,7 @@ export default function DevPanelPage() {
                 </button>
               </div>
               <div className="relative w-full sm:w-72">
-                <input type="text" value={busqueda} onChange={manejarBusqueda} placeholder="Buscar por nombre o correo..." className="w-full bg-slate-950 border border-slate-700 p-3 pl-10 rounded-xl text-xs text-white focus:border-emerald-500 outline-none transition-colors" />
+                <input type="text" value={busqueda} onChange={manejarBusqueda} placeholder="Buscar..." className="w-full bg-slate-950 border border-slate-700 p-3 pl-10 rounded-xl text-xs text-white focus:border-emerald-500 outline-none transition-colors" />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
               </div>
             </div>
@@ -286,37 +311,58 @@ export default function DevPanelPage() {
                 <thead className="bg-slate-950/50 text-slate-400 uppercase font-black tracking-widest border-b border-slate-800">
                   <tr>
                     <th className="px-6 py-4">Usuario</th>
-                    <th className="px-6 py-4">Dependencia</th>
-                    <th className="px-6 py-4">Rol Actual</th>
-                    <th className="px-6 py-4 text-right">Acción</th>
+                    <th className="px-6 py-4">Dependencia (Editable)</th>
+                    <th className="px-6 py-4">Rol del Sistema</th>
+                    <th className="px-6 py-4 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
-                  {perfilesFiltrados.slice(0, 50).map(p => (
-                    <tr key={p.id} className="hover:bg-slate-800/30 transition-colors">
+                  {perfilesFiltrados.slice(0, 100).map(p => (
+                    <tr key={p.id} className="hover:bg-slate-800/30 transition-colors group">
                       <td className="px-6 py-4">
                         <p className="text-white font-bold">{p.nombre_completo}</p>
                         <p className="text-[9px] text-slate-500">{p.email || 'Sin correo'}</p>
                       </td>
-                      <td className="px-6 py-4 text-slate-400 uppercase">{p.dependencia}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border ${p.rol === 'admin' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : p.rol === 'cajero' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : p.rol === 'dev' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : p.rol === 'socio' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : p.rol === 'gerente' ? 'bg-pink-500/10 text-pink-400 border-pink-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                          {p.rol || 'empleado'}
-                        </span>
+                        <input 
+                            type="text" 
+                            id={`dep-${p.id}`}
+                            defaultValue={p.dependencia}
+                            className="bg-slate-950 border border-slate-800 p-2 rounded text-[10px] text-slate-300 w-full uppercase focus:border-emerald-500 outline-none focus:bg-slate-900 transition-all"
+                        />
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4">
                         <select 
-                          className="bg-slate-950 border border-slate-700 text-slate-300 p-2 rounded-lg text-xs outline-none focus:border-emerald-500 cursor-pointer"
-                          value={p.rol || 'empleado'}
-                          onChange={(e) => actualizarRol(p.id, e.target.value)}
+                          id={`rol-${p.id}`}
+                          className="bg-slate-950 border border-slate-800 text-slate-300 p-2 rounded-lg text-[10px] outline-none focus:border-emerald-500 cursor-pointer uppercase font-black"
+                          defaultValue={p.rol || 'empleado'}
                         >
                           <option value="empleado">Empleado</option>
                           <option value="cajero">Cajero</option>
                           <option value="admin">Administrador</option>
-                          <option value="gerente">Gerente Operativo</option>
-                          <option value="socio">Socio Inversor</option>
+                          <option value="gerente">Gerente</option>
+                          <option value="socio">Socio</option>
                           <option value="dev">Dev_Root</option>
                         </select>
+                      </td>
+                      <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => handleGuardarCambios(p.id, p.email, p.rol)}
+                          className="p-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-lg transition-all"
+                          title="Guardar Cambios"
+                        >
+                          <Save size={14} />
+                        </button>
+
+                        {p.rol !== 'dev' && (
+                          <button 
+                            onClick={() => handleEliminarUsuario(p.email, p.nombre_completo, p.rol)}
+                            className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all"
+                            title="Eliminar Permanente"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -326,6 +372,7 @@ export default function DevPanelPage() {
           </div>
         )}
 
+        {/* --- OTROS TABS --- */}
         {activeTab === 'switches' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
             {configuraciones.map(config => (
@@ -389,7 +436,7 @@ export default function DevPanelPage() {
 
       </div>
 
-      {/* MODAL NUEVO USUARIO (ALTA MAESTRA) */}
+      {/* MODAL NUEVO USUARIO */}
       {modalNuevo && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-fade-in">
           <div className="bg-slate-900 border border-white/10 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
@@ -431,7 +478,7 @@ export default function DevPanelPage() {
 
               <div>
                 <label className="text-[9px] font-black uppercase text-slate-500 mb-1 block ml-1 tracking-widest">Dependencia / Área</label>
-                <input required type="text" placeholder="Ej: ADMINISTRACION / COMEDOR" className="w-full bg-slate-950 border border-white/5 p-3 rounded-xl text-xs text-white focus:border-emerald-500 outline-none transition-all uppercase" 
+                <input required type="text" placeholder="Ej: ADMINISTRACION" className="w-full bg-slate-950 border border-white/5 p-3 rounded-xl text-xs text-white focus:border-emerald-500 outline-none transition-all uppercase" 
                 value={nuevoUser.dependencia} onChange={e => setNuevoUser({...nuevoUser, dependencia: e.target.value})} />
               </div>
 
