@@ -94,7 +94,6 @@ export default function PantallaCajero() {
     if (!usarCamara) return;
     let html5QrCode: any = null; let escaneando = false;
     const initScanner = async () => {
-      // @ts-ignore
       const { Html5Qrcode } = await import('html5-qrcode'); html5QrCode = new Html5Qrcode("reader");
       try {
         await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, (decodedText: string) => {
@@ -156,30 +155,29 @@ export default function PantallaCajero() {
   const menuMonitor = todosMenus.filter(m => m.fecha === fechaMonitor);
   const reservasMonitor = todasReservas.filter(r => r.menu_comedor?.fecha === fechaMonitor);
 
-  const procesarEscaneo = async (e?: any, codigoDirecto?: string) => {
-    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+  const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
+    if (e) e.preventDefault();
     
+    // Leemos el valor exacto que inyectó el lector láser en la caja de texto
     const valorDOM = codigoDirecto || inputRef.current?.value || '';
     let rawInput = valorDOM.trim().toUpperCase(); 
     
     if (!rawInput) return;
 
+    // LA MAGIA: Si el escáner escribe ']' en lugar de '|', lo reemplazamos inmediatamente
     rawInput = rawInput.replace(/\]/g, '|');
 
-    let identificador = '';
-    let cantidadACanjear = 1;
-    let valeUID = '';
-
-    if (rawInput.includes('|')) {
-      const partes = rawInput.split('|');
-      identificador = partes[0];
-      cantidadACanjear = parseInt(partes[1]) || 1;
-      valeUID = partes[3] || partes[2] || '';
-    } else {
-      identificador = rawInput;
-      cantidadACanjear = 1;
-      valeUID = 'SCAN-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    if (!rawInput.includes('|')) {
+      setMensaje({ tipo: 'error', texto: `CÓDIGO INCOMPLETO. LEYÓ: "${rawInput}"` });
+      if (inputRef.current) inputRef.current.value = '';
+      setSugerencias([]);
+      return;
     }
+
+    const partes = rawInput.split('|');
+    const identificador = partes[0];
+    const cantidadACanjear = parseInt(partes[1]) || 1;
+    const valeUID = partes[3] || partes[2] || '';
 
     ejecutarCanjeFinal(identificador, cantidadACanjear, valeUID);
   };
@@ -211,7 +209,7 @@ export default function PantallaCajero() {
     }
 
     if (!empleado) { 
-      setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ EL PERFIL ASOCIADO A: ${identificador}` }); 
+      setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ EL PERFIL: ${identificador}` }); 
     } 
     else if (empleado.tickets_restantes < cantidad) { 
       setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} NO TIENE SALDO PARA ${cantidad} RACIONES.` }); 
@@ -780,12 +778,12 @@ export default function PantallaCajero() {
                     </div>
                     <div>
                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 block ml-1">Token Empleado</label>
-                        <input type="text" maxLength={9} value={folioManual} onChange={(e)=>setFolioManual(e.target.value.toUpperCase())} className="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl text-center font-black text-xl text-[#1A2744] outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 uppercase tracking-[0.2em] transition-all shadow-sm placeholder:text-slate-300 placeholder:text-[10px]" placeholder="OPCIONAL" />
+                        <input type="text" maxLength={9} value={folioManual} onChange={(e)=>setFolioManual(e.target.value.toUpperCase())} className="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl text-center font-black text-xl text-[#1A2744] outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 uppercase tracking-[0.2em] transition-all shadow-sm placeholder:text-slate-300 placeholder:text-sm" placeholder="ID" />
                     </div>
                 </div>
 
                 <div className="flex gap-4">
-                    <button onClick={()=>ejecutarCanjeFinal(empleadoSeleccionado.nombre_completo, cantidadManual, folioManual ? folioManual : `MAN-${Date.now()}`)} disabled={cargando} className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 hover:bg-[#25365d]">
+                    <button onClick={()=>ejecutarCanjeFinal(empleadoSeleccionado.nombre_completo, cantidadManual, folioManual)} disabled={cargando || folioManual.length < 4} className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 hover:bg-[#25365d]">
                       {cargando ? <Loader2 className="animate-spin text-amber-400" size={18}/> : <><ShieldCheck size={16} className="text-amber-400"/> Ejecutar Descuento</>}
                     </button>
                 </div>
