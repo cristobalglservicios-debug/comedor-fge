@@ -2,294 +2,495 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck, UtensilsCrossed, MessageCircle } from 'lucide-react';
-import Barcode from 'react-barcode';
+import { Loader2, LogOut, FileSpreadsheet, Search, UserCog, Key, Trash2, Download, UserPlus, FileText, ShieldCheck, RefreshCw, ChefHat, UtensilsCrossed, Users, Ticket, Building2, Terminal, CheckCircle2, Layers, CalendarPlus, Minus, Plus, History, ClipboardList, X, KeyRound, AlertOctagon, PieChart } from 'lucide-react';
+import { crearUsuarioAdmin, eliminarUsuarioAdmin, actualizarPasswordAdmin, registrarLog } from './actions';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type EstadoVista = 'cargando' | 'busqueda' | 'dashboard' | 'animando' | 'ticket' | 'cambiar_password';
+const getLunesOpciones = () => {
+  const hoy = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"}));
+  const dia = hoy.getDay();
+  const dif = hoy.getDate() - dia + (dia === 0 ? -6 : 1); 
+  const lunesActual = new Date(hoy.setDate(dif));
+  
+  const formatea = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dStr = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dStr}`;
+  };
 
-const getHoyMerida = () => {
-  const fecha = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"}));
-  const y = fecha.getFullYear();
-  const m = String(fecha.getMonth() + 1).padStart(2, '0');
-  const d = String(fecha.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  const l1 = new Date(lunesActual); l1.setDate(l1.getDate() + 7);
+  const l2 = new Date(lunesActual); l2.setDate(l2.getDate() + 14);
+  const l3 = new Date(lunesActual); l3.setDate(l3.getDate() + 21);
+
+  return [
+    { label: 'Semana Actual (Aplica de Inmediato)', value: 'actual' },
+    { label: `Próxima Semana (Lunes ${formatea(l1)})`, value: formatea(l1) },
+    { label: `En 2 Semanas (Lunes ${formatea(l2)})`, value: formatea(l2) },
+    { label: `En 3 Semanas (Lunes ${formatea(l3)})`, value: formatea(l3) }
+  ];
 };
 
-const getDiaSemanaMerida = () => {
-  const fecha = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"}));
-  return fecha.getDay(); 
-};
-
-// --- DATA: MENÚ FIJO DE ANTOJITOS ---
-const MENU_ANTOJITOS = [
-  { categoria: 'Tortas', icono: '🥖', items: ['Asado', 'Empanizado', 'Cochinita', 'Pescado empanizado', 'Jamón y queso', 'Jamón, queso daysi y pastel mosaico'] },
-  { categoria: 'Tacos', icono: '🌮', items: ['Asado', 'Empanizado', 'Cochinita', 'Pescado empanizado', 'Cherna'] },
-  { categoria: 'Salbutes y Panuchos', icono: '🥙', items: ['Pollo', 'Empanizado', 'Picadillo', 'Huevo'] },
-  { categoria: 'Empanadas', icono: '🥟', items: ['Queso Manchego', 'Picadillo', 'Queso y picadillo'] },
-  { categoria: 'Huevos al gusto', icono: '🍳', items: ['Jamón', 'Longaniza', 'Chaya'] },
-  { categoria: 'Sopes', icono: '🫓', items: ['Asado', 'Cochinita'] },
-  { categoria: 'Tamales', icono: '🫔', items: ['Vaporcitos'] },
-  { categoria: 'Otros', icono: '🍔', items: ['Sandwich club', 'Hamburguesa', 'Hotdogs'] }
-];
-
-export default function MiValePage() {
+export default function AdminDashboard() {
   const router = useRouter();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [nombreBusqueda, setNombreBusqueda] = useState('');
-  const [empleado, setEmpleado] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState('cuotas');
   const [historial, setHistorial] = useState<any[]>([]);
-  const [error, setError] = useState('');
-  const [estadoVista, setEstadoVista] = useState<EstadoVista>('cargando');
-  const [pasoAnimacion, setPasoAnimacion] = useState(0);
+  const [empleados, setEmpleados] = useState<any[]>([]);
+  const [auditoriaLogs, setAuditoriaLogs] = useState<any[]>([]);
+  const [cuotasProgramadas, setCuotasProgramadas] = useState<any[]>([]);
+  const [cierres, setCierres] = useState<any[]>([]);
+  const [filtroNombre, setFiltroNombre] = useState('');
+  const [stats, setStats] = useState({ total: 0, canjeados: 0, disponibles: 0, dependencias: 0 });
+  const [cargando, setCargando] = useState(false);
+  const [loadingAcceso, setLoadingAcceso] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isDev, setIsDev] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [empleadoEdit, setEmpleadoEdit] = useState<any>(null);
+  const [nuevaPass, setNuevaPass] = useState('');
+  const [modalNuevo, setModalNuevo] = useState(false);
+  const [nuevoEmp, setNuevoEmp] = useState({ nombre: '', dependencia: '', cuota: 1 });
 
-  const [menusFuturos, setMenusFuturos] = useState<any[]>([]);
-  const [misReservas, setMisReservas] = useState<any[]>([]);
-  const [fechasDisponibles, setFechasDisponibles] = useState<string[]>([]);
-  const [fechaActiva, setFechaActiva] = useState<string>('');
-  const [cargandoApartado, setCargandoApartado] = useState(false);
-
-  const [nuevaPassword, setNuevaPassword] = useState('');
-  const [confirmarPassword, setConfirmarPassword] = useState('');
-  const [errorPassword, setErrorPassword] = useState('');
-  const [cargandoPassword, setCargandoPassword] = useState(false);
-
-  const [cantidadACanjear, setCantidadACanjear] = useState(1);
-  const [tokenSeguridad, setTokenSeguridad] = useState('');
-  const [tokenTimestamp, setTokenTimestamp] = useState(Date.now());
-
-  // ESTADO PARA EL PANEL DE ANTOJITOS
-  const [mostrarMenuFijo, setMostrarMenuFijo] = useState(false);
+  const [modalProgramar, setModalProgramar] = useState(false);
+  const [datosPendientesExcel, setDatosPendientesExcel] = useState<any[]>([]);
+  const [semanaDestino, setSemanaDestino] = useState('actual');
 
   useEffect(() => {
-    const intentarAutoLogin = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user?.email) {
-        setEstadoVista('busqueda');
-        return;
-      }
-
-      const debeCambiar = localStorage.getItem('debe_cambiar_password_fge') === 'true';
-      
-      // Sincronización por Email
-      const { data } = await supabase
-        .from('perfiles')
-        .select('*')
-        .eq('email', session.user.email)
-        .maybeSingle();
-
-      if (data) {
-        localStorage.setItem('fge_empleado_nombre', data.nombre_completo); 
-        setEmpleado(data);
+    const checkAccess = async () => {
+      setTimeout(async () => {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session) { router.push('/dashboard'); return; }
         
-        if (debeCambiar) {
-          setEstadoVista('cambiar_password');
-        } else {
-          cargarHistorialReciente(data.nombre_completo);
-          await cargarMenusYReservasFuturas(data.nombre_completo);
-          setEstadoVista('dashboard');
+        const email = session.user.email?.toLowerCase() || '';
+        
+        const { data: miPerfil } = await supabase.from('perfiles').select('rol').eq('email', email).maybeSingle();
+        const rol = miPerfil?.rol || 'empleado';
+
+        const esTuCuenta = email === 'admin.cristobal@fge.gob.mx' || email === 'cristobal.dev@fge.gob.mx' || rol === 'dev';
+        const esAdminOficial = rol === 'admin' || email.startsWith('admin.') || email.includes('.admin@'); 
+        
+        if (!esTuCuenta && !esAdminOficial) {
+          router.push('/dashboard');
+          return;
         }
-      } else {
-        setEstadoVista('busqueda');
+        
+        setIsSuperAdmin(esTuCuenta);
+        setIsDev(rol === 'dev');
+        setUserEmail(email);
+        setLoadingAcceso(false);
+        cargarDatosGenerales();
+      }, 300); 
+    };
+    checkAccess();
+  }, [router]);
+
+  const cargarDatosGenerales = async () => {
+    const { data: dataEmpleados } = await supabase.from('perfiles').select('*').order('nombre_completo', { ascending: true });
+    
+    if (dataEmpleados) {
+      setEmpleados(dataEmpleados);
+      
+      const empleadosReales = dataEmpleados.filter(e => e.rol !== 'dev' && !e.dependencia?.toUpperCase().includes('PRUEBA'));
+      
+      const dependenciasUnicas = new Set(empleadosReales.map(e => e.dependencia)).size;
+      let totalAsignados = 0; 
+      let totalCanjeados = 0;
+      
+      empleadosReales.forEach(emp => {
+        totalCanjeados += (emp.tickets_canjeado || 0);
+        totalAsignados += (emp.tickets_restantes || 0) + (emp.tickets_canjeado || 0);
+      });
+      
+      setStats({ 
+        total: totalAsignados, 
+        canjeados: totalCanjeados, 
+        disponibles: totalAsignados - totalCanjeados, 
+        dependencias: dependenciasUnicas 
+      });
+    }
+
+    const { data: dataHistorial } = await supabase.from('historial_comedor').select('*').order('fecha_hora', { ascending: false });
+    if (dataHistorial) setHistorial(dataHistorial);
+
+    const { data: dataLogs } = await supabase.from('auditoria_logs').select('*').order('creado_en', { ascending: false }).limit(200);
+    if (dataLogs) setAuditoriaLogs(dataLogs);
+
+    const { data: dataProg } = await supabase.from('cuotas_programadas').select('*');
+    if (dataProg) setCuotasProgramadas(dataProg);
+
+    const { data: dataCierres } = await supabase.from('cierres_semanales').select('*').order('fecha_cierre', { ascending: false });
+    if (dataCierres) setCierres(dataCierres);
+  };
+
+  const generarEmail = (nombreCompleto: string) => {
+    const limpio = nombreCompleto
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ");
+      
+    const partes = limpio.split(" ");
+    
+    let nombre = partes[0] || "";
+    let apellido = "";
+
+    if (partes.length >= 3) {
+      apellido = partes[partes.length - 2]; 
+    } else if (partes.length === 2) {
+      apellido = partes[1];
+    } else {
+      apellido = "";
+    }
+
+    const baseEmail = apellido ? `${nombre}.${apellido}` : nombre;
+    return `${baseEmail}@comedorfge.gob.mx`;
+  };
+
+  const guardarNuevoEmpleado = async () => {
+    if (nuevoEmp.nombre.length < 5) return alert("Ingresa el nombre completo");
+    setCargando(true);
+    const emailGen = generarEmail(nuevoEmp.nombre);
+    
+    const empData = { 
+        nombre_completo: nuevoEmp.nombre.toUpperCase().trim(), 
+        dependencia: nuevoEmp.dependencia.toUpperCase().trim() || 'GENERAL', 
+        tickets_restantes: nuevoEmp.cuota, 
+        tickets_canjeado: 0, 
+        email: emailGen 
+    };
+    
+    await supabase.from('perfiles').upsert(empData, { onConflict: 'nombre_completo' });
+    await crearUsuarioAdmin(emailGen, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
+    await registrarLog(userEmail || 'Sistema', 'ALTA_MANUAL', `Agregó a ${empData.nombre_completo} (${nuevoEmp.cuota} vales)`);
+    
+    alert(`✅ Empleado agregado con acceso: ${emailGen}`);
+    setNuevoEmp({ nombre: '', dependencia: '', cuota: 1 });
+    setModalNuevo(false);
+    cargarDatosGenerales();
+    setCargando(false);
+  };
+
+  const handleEliminarEmpleado = async () => {
+    if (!empleadoEdit) return;
+    
+    // CANDADO MAESTRO DE INDESTRUCTIBILIDAD
+    if (empleadoEdit.email === 'cristobal.dev@fge.gob.mx' || empleadoEdit.rol === 'dev') {
+      return alert("⛔ ACCIÓN DENEGADA: La cuenta maestra de Desarrollador es indestructible y no puede ser eliminada.");
+    }
+
+    if (!confirm(`⚠️ ¿ELIMINAR DEFINITIVAMENTE a ${empleadoEdit.nombre_completo}?`)) return;
+    setCargando(true);
+    await supabase.from('perfiles').delete().eq('id', empleadoEdit.id);
+    await eliminarUsuarioAdmin(empleadoEdit.email, userEmail || 'Sistema');
+    await registrarLog(userEmail || 'Sistema', 'ELIMINAR_EMPLEADO', `Eliminó el perfil de ${empleadoEdit.nombre_completo}`);
+    
+    alert("✅ Empleado eliminado");
+    setEmpleadoEdit(null);
+    cargarDatosGenerales();
+    setCargando(false);
+  };
+
+  const handleCambiarPassword = async () => {
+    if (nuevaPass.length < 6) return alert("La contraseña debe tener al menos 6 caracteres");
+    setCargando(true);
+    const res = await actualizarPasswordAdmin(empleadoEdit.email, nuevaPass, userEmail || 'Sistema');
+    setCargando(false);
+    if (res.success) { alert("✅ Contraseña actualizada"); setNuevaPass(''); } else { alert("❌ Error: " + res.error); }
+  };
+
+  const procesarExcel = async (e: any) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCargando(true);
+    const reader = new FileReader();
+
+    reader.onload = async (event: any) => {
+      try {
+        const bstr = event.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+
+        const dataRaw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        let indexNombre = -1;
+        let indexDependencia = -1;
+        let indexCuotaDirecta = -1;
+        let indicesDias: number[] = [];
+        let filaInicio = -1;
+
+        for (let i = 0; i < dataRaw.length; i++) {
+          const fila = dataRaw[i];
+          if (!fila) continue;
+
+          const nomIdx = fila.findIndex(c => String(c).toUpperCase().includes('NOMBRE'));
+
+          if (nomIdx !== -1) {
+            indexNombre = nomIdx;
+            filaInicio = i + 1;
+
+            const diasSemana = ['LUNES', 'MARTES', 'MIERCOLES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'SÁBADO', 'DOMINGO'];
+
+            fila.forEach((col, idx) => {
+              const colUpper = String(col).toUpperCase();
+              if (colUpper.includes('DEPENDENCIA') || colUpper.includes('AREA') || colUpper.includes('ADSCRIP')) {
+                indexDependencia = idx;
+              } else if (colUpper.match(/VALES|CUOTA|CANTIDAD|TICKET|TICEKT|RESTANTE/)) {
+                indexCuotaDirecta = idx;
+              } else if (diasSemana.some(d => colUpper.includes(d))) {
+                indicesDias.push(idx);
+              }
+            });
+            break;
+          }
+        }
+
+        if (indexNombre === -1) {
+          alert("❌ No se detectó la columna 'NOMBRE' en el Excel.");
+          setCargando(false);
+          return;
+        }
+
+        let ultimaDependencia = 'GENERAL';
+        const empleadosExtraidos = [];
+
+        for (let i = filaInicio; i < dataRaw.length; i++) {
+          const fila = dataRaw[i];
+          if (!fila || !fila[indexNombre]) continue;
+
+          const nombreLimpio = String(fila[indexNombre]).toUpperCase().trim();
+          if (nombreLimpio.length < 5 || nombreLimpio.includes('TOTAL') || nombreLimpio.includes('NOTA')) continue;
+
+          const depRaw = indexDependencia !== -1 ? fila[indexDependencia] : null;
+          if (depRaw && String(depRaw).trim() !== '') {
+            ultimaDependencia = String(depRaw).toUpperCase().trim();
+          }
+
+          let totalValesCalculados = 0;
+
+          if (indicesDias.length > 0) {
+            indicesDias.forEach(idx => {
+              const valorDia = String(fila[idx] || '').toUpperCase().trim();
+              if (valorDia.includes('DOBLE') || valorDia === '2') {
+                totalValesCalculados += 2;
+              } else if (valorDia.includes('AM') || valorDia.includes('PM') || valorDia.includes('INTERMEDIO') || valorDia === '1') {
+                totalValesCalculados += 1;
+              }
+            });
+          } else if (indexCuotaDirecta !== -1) {
+            totalValesCalculados = parseInt(String(fila[indexCuotaDirecta])) || 0;
+          }
+
+          empleadosExtraidos.push({
+            nombre_completo: nombreLimpio,
+            dependencia: ultimaDependencia,
+            tickets_restantes: totalValesCalculados,
+            emailGen: generarEmail(nombreLimpio)
+          });
+        }
+
+        setDatosPendientesExcel(empleadosExtraidos);
+        setModalProgramar(true);
+        setCargando(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+
+      } catch (err) {
+        console.error(err);
+        alert("❌ Error interno al procesar el archivo. Revisa su formato.");
+        setCargando(false);
       }
     };
-    intentarAutoLogin();
-  }, []);
-
-  const buscarEmpleadoManual = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    setEstadoVista('dashboard');
+    reader.readAsBinaryString(file);
   };
 
-  const actualizarPasswordUsuario = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorPassword('');
-
-    if (nuevaPassword.length < 6) {
-      setErrorPassword("La contraseña debe tener al menos 6 caracteres.");
-      return;
-    }
-    if (nuevaPassword !== confirmarPassword) {
-      setErrorPassword("Las contraseñas no coinciden.");
-      return;
-    }
-
-    setCargandoPassword(true);
+  const confirmarCargaExcel = async () => {
+    setCargando(true);
+    let procesados = 0;
     
-    const { error } = await supabase.auth.updateUser({
-      password: nuevaPassword
-    });
-
-    if (error) {
-      setErrorPassword(error.message);
-      setCargandoPassword(false);
-      return;
-    }
-
-    localStorage.removeItem('debe_cambiar_password_fge');
-    cargarHistorialReciente(empleado.nombre_completo);
-    await cargarMenusYReservasFuturas(empleado.nombre_completo);
-    setEstadoVista('dashboard');
-    setCargandoPassword(false);
-  };
-
-  const cargarHistorialReciente = async (nombre: string) => {
-    const { data } = await supabase
-      .from('historial_comedor')
-      .select('*')
-      .eq('nombre_empleado', nombre)
-      .order('fecha_hora', { ascending: false })
-      .limit(5);
-    if (data) setHistorial(data);
-  };
-
-  const cargarMenusYReservasFuturas = async (nombreEmpleado: string) => {
-    const hoy = getHoyMerida();
-    const ahora = new Date().toISOString();
-
-    const { data: menus } = await supabase
-      .from('menu_comedor')
-      .select('*')
-      .gte('fecha', hoy)
-      .gt('porciones_disponibles', 0)
-      .lte('creado_en', ahora) 
-      .order('fecha', { ascending: true });
-      
-    if (menus) {
-      setMenusFuturos(menus);
-      const diasUnicos = Array.from(new Set(menus.map(m => m.fecha)));
-      setFechasDisponibles(diasUnicos);
-      if (diasUnicos.length > 0 && !fechaActiva) {
-        setFechaActiva(diasUnicos[0]); 
-      }
-    }
-
-    const { data: reservas } = await supabase
-      .from('reservas_comedor')
-      .select('*, menu_comedor(fecha, platillo)')
-      .eq('nombre_empleado', nombreEmpleado);
-      
-    if (reservas) {
-      const reservasActivas = reservas.filter(r => r.menu_comedor && r.menu_comedor.fecha >= hoy);
-      setMisReservas(reservasActivas);
-    }
-  };
-
-  const apartarComida = async (menuItem: any) => {
-    const reservasActivas = misReservas.filter(r => r.estado === 'APARTADO').length;
-    
-    if (empleado.tickets_restantes - reservasActivas <= 0) {
-      return alert("🚫 Tus vales disponibles ya están comprometidos en otras reservas. No puedes apartar más platillos.");
-    }
-    
-    if (!confirm(`🍽 ¿Asegurar una porción de ${menuItem.platillo} para el ${formatearFechaDia(menuItem.fecha)}?`)) return;
-
-    setCargandoApartado(true);
-
-    const { error: rpcError } = await supabase.rpc('apartar_platillo', {
-        p_menu_id: menuItem.id,
-        p_nombre_empleado: empleado.nombre_completo,
-        p_dependencia: empleado.dependencia
-    });
-    
-    if (!rpcError) {
-      alert("✅ ¡Platillo asegurado exitosamente!");
-      await cargarMenusYReservasFuturas(empleado.nombre_completo);
-    } else {
-      if (rpcError.message.includes('AGOTADO')) {
-          alert("❌ Lo sentimos, el platillo se acaba de agotar.");
+    try {
+      if (semanaDestino === 'actual') {
+        for (const empData of datosPendientesExcel) {
+          await supabase.from('perfiles').upsert({
+            nombre_completo: empData.nombre_completo,
+            dependencia: empData.dependencia,
+            tickets_restantes: empData.tickets_restantes,
+            tickets_canjeado: 0,
+            email: empData.emailGen
+          }, { onConflict: 'nombre_completo' });
+          
+          await crearUsuarioAdmin(empData.emailGen, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
+          procesados++;
+        }
       } else {
-          alert("Hubo un error al procesar tu solicitud.");
+        const { data: perfilesActuales } = await supabase.from('perfiles').select('id, nombre_completo');
+        const mapaPerfiles = new Map(perfilesActuales?.map(p => [p.nombre_completo, p.id]) || []);
+
+        for (const empData of datosPendientesExcel) {
+          let empId = mapaPerfiles.get(empData.nombre_completo);
+
+          if (!empId) {
+            const { data: nuevoPerfil } = await supabase.from('perfiles').insert({
+              nombre_completo: empData.nombre_completo,
+              dependencia: empData.dependencia,
+              tickets_restantes: 0, 
+              tickets_canjeado: 0,
+              email: empData.emailGen
+            }).select('id').single();
+            
+            if (nuevoPerfil) {
+              empId = nuevoPerfil.id;
+              await crearUsuarioAdmin(empData.emailGen, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
+            }
+          }
+
+          if (empId) {
+            await supabase.from('cuotas_programadas').delete().match({ empleado_id: empId, fecha_lunes: semanaDestino });
+            await supabase.from('cuotas_programadas').insert({ empleado_id: empId, fecha_lunes: semanaDestino, cuota: empData.tickets_restantes });
+            procesados++;
+          }
+        }
       }
+
+      await registrarLog(userEmail || 'Sistema', 'CARGAR_EXCEL', `Programó nómina: ${procesados} empleados (${semanaDestino === 'actual' ? 'Semana Actual' : semanaDestino})`);
+      alert(`✅ Éxito: Se programaron ${procesados} empleados para ${semanaDestino === 'actual' ? 'la semana actual' : 'el lunes ' + semanaDestino}.`);
+    } catch (err) {
+       console.error(err);
+       alert("❌ Error interno al programar cuotas.");
+    } finally {
+      setModalProgramar(false);
+      setDatosPendientesExcel([]);
+      cargarDatosGenerales();
+      setCargando(false);
     }
-    setCargandoApartado(false);
   };
 
-  const cancelarReserva = async (reserva: any) => {
-    if (reserva.estado === 'CAPTURADO') return alert("⚠️ Tu pedido ya está en cocina, no se puede cancelar.");
-    if (!confirm(`⚠️ ¿Seguro que deseas cancelar tu reserva de ${reserva.menu_comedor?.platillo}?`)) return;
+  const descargarAccesos = () => {
+    const data = empleados.map(e => ({ Nombre: e.nombre_completo, Correo: e.email, Password_Temporal: "FGE2026*" }));
+    const hoja = XLSX.utils.json_to_sheet(data);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Accesos");
+    XLSX.writeFile(libro, "Lista_Accesos_FGE.xlsx");
+  };
 
-    setCargandoApartado(true);
+  const exportarHistorialExcel = () => {
+    if (historial.length === 0) return alert("No hay registros");
+    const data = historial.map(h => ({ Empleado: h.nombre_empleado, Dependencia: h.dependencia, Fecha_Hora: new Date(h.fecha_hora).toLocaleString('es-MX') }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Canjes"); XLSX.writeFile(wb, `Reporte_Cajero_${new Date().getTime()}.xlsx`);
+  };
 
-    const { error: errDelete } = await supabase.from('reservas_comedor').delete().eq('id', reserva.id);
+  const generarCortePDF = (tipo: 'diario' | 'semanal') => {
+    const doc = new jsPDF();
+    const fechaActual = new Date();
+    let datosFiltrados = historial;
+    if (tipo === 'diario') {
+      const hoy = fechaActual.toLocaleDateString('es-MX');
+      datosFiltrados = historial.filter(h => new Date(h.fecha_hora).toLocaleDateString('es-MX') === hoy);
+    }
+    if (datosFiltrados.length === 0) return alert("Sin registros.");
+    doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text("FISCALÍA GENERAL DEL ESTADO DE YUCATÁN", 105, 20, { align: "center" });
+    doc.setFontSize(12); doc.text(`CORTE OFICIAL - ${tipo.toUpperCase()}`, 105, 28, { align: "center" });
+    autoTable(doc, {
+      startY: 52,
+      head: [['#', 'Nombre del Empleado', 'Fecha y Hora de Canje']],
+      body: datosFiltrados.map((h, i) => [i + 1, h.nombre_empleado, new Date(h.fecha_hora).toLocaleString('es-MX')]),
+      headStyles: { fillColor: [26, 39, 68] }, 
+      margin: { bottom: 60 } 
+    });
+    const finalY = (doc as any).lastAutoTable.finalY + 40;
+    doc.setFontSize(9); doc.line(25, finalY, 95, finalY); doc.text("AUTORIZA", 60, finalY + 5, { align: "center" });
+    doc.text("M.D. JOSE MANUEL FLORES ACOSTA", 60, finalY + 10, { align: "center" });
+    doc.line(115, finalY, 185, finalY); doc.text("RECIBE", 150, finalY + 5, { align: "center" });
+    doc.text("KARLA XACUR TAMAYO", 150, finalY + 10, { align: "center" });
+    doc.save(`Corte_${tipo.toUpperCase()}.pdf`);
+  };
+
+  const reiniciarSemana = async () => {
+    if (!confirm("🔵 ¿CERRAR SEMANA? Esto guardará el reporte de sobrantes y pondrá los contadores en 0 para cargar la nueva nómina.")) return;
+    setCargando(true);
+
+    const { data: empCierre } = await supabase.from('perfiles').select('tickets_canjeado, tickets_restantes').neq('id', '00000000-0000-0000-0000-000000000000');
+    let c_semana = 0; let s_semana = 0;
+    if (empCierre) {
+      empCierre.forEach(e => { c_semana += (e.tickets_canjeado || 0); s_semana += (e.tickets_restantes || 0); });
+    }
+
+    await supabase.from('cierres_semanales').insert({
+      admin_email: userEmail || 'Sistema',
+      vales_canjeados: c_semana,
+      vales_sobrantes: s_semana,
+      vales_asignados_total: c_semana + s_semana
+    });
+
+    await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
+    await registrarLog(userEmail || 'Sistema', 'REINICIO_SEMANA', `Cierre semanal. Sobraron: ${s_semana} | Canjeados: ${c_semana}`);
     
-    if (!errDelete) {
-      const { data: menu } = await supabase.from('menu_comedor').select('porciones_disponibles').eq('id', reserva.menu_id).single();
-      if (menu) {
-        await supabase.from('menu_comedor').update({ porciones_disponibles: menu.porciones_disponibles + 1 }).eq('id', reserva.menu_id);
-      }
-      alert("✅ Reserva cancelada. La porción ha sido devuelta al menú.");
-      await cargarMenusYReservasFuturas(empleado.nombre_completo);
-    } else {
-      alert("❌ Error al cancelar la reserva.");
-    }
-    setCargandoApartado(false);
+    alert("✅ Cierre exitoso y contadores en 0. Sistema listo para cargar el nuevo Excel de la semana.");
+    cargarDatosGenerales(); setCargando(false);
   };
 
-  const iniciarGeneracion = () => {
-    if (empleado.tickets_restantes < cantidadACanjear) {
-      alert(`🚫 No tienes suficientes vales (${empleado.tickets_restantes} disponibles).`);
-      return;
-    }
-
-    const uid = Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 100);
-    setTokenSeguridad(uid);
-    setTokenTimestamp(Date.now());
-
-    setEstadoVista('animando');
-    setPasoAnimacion(1);
-    setTimeout(() => setPasoAnimacion(2), 800);
-    setTimeout(() => setPasoAnimacion(3), 1600);
-    setTimeout(() => setPasoAnimacion(4), 2400);
-    setTimeout(() => {
-      setPasoAnimacion(5);
-      setEstadoVista('ticket');
-    }, 3200);
+  const limpiarHistorialPruebas = async () => {
+    if (!confirm("⚠️ ¿BORRAR TODO EL SISTEMA? Se eliminarán empleados y bitácora. (Tus cuentas administrativas se mantendrán a salvo)")) return;
+    setCargando(true);
+    await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('perfiles').delete().eq('rol', 'empleado');
+    await registrarLog(userEmail || 'Sistema', 'LIMPIEZA_TOTAL', 'Eliminó la base de datos de empleados (Mantuvo Admins a salvo)');
+    
+    cargarDatosGenerales(); setCargando(false);
   };
 
-  const handleLogout = async () => {
-    localStorage.removeItem('fge_empleado_nombre'); 
-    localStorage.removeItem('debe_cambiar_password_fge');
-    await supabase.auth.signOut();
-    router.push('/');
+  const actualizarCuota = async (id: string, n: number) => { 
+    if (n >= 0) { 
+      const emp = empleados.find(e => e.id === id);
+      await supabase.from('perfiles').update({ tickets_restantes: n }).eq('id', id); 
+      if (emp) await registrarLog(userEmail || 'Sistema', 'AJUSTE_CUOTA', `Modificó cuota de ${emp.nombre_completo} a ${n} vales`);
+      cargarDatosGenerales(); 
+    } 
   };
-
-  const formatearFechaPestaña = (fechaISO: string) => {
-    const date = new Date(fechaISO + 'T12:00:00Z');
-    const day = date.getDate();
-    const weekday = date.toLocaleDateString('es-MX', { weekday: 'short' });
-    return { day, weekday };
-  };
-
-  const formatearFechaDia = (fechaISO: string) => {
-    const date = new Date(fechaISO + 'T12:00:00Z');
-    return date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
-  };
-
-  const hoyCorto = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Merida"})).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
   
-  const menusParaMostrar = menusFuturos.filter(m => m.fecha === fechaActiva);
-  const reservasDelDia = misReservas.filter(r => r.menu_comedor?.fecha === fechaActiva);
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/dashboard'); };
+  const empleadosFiltrados = empleados.filter(e => e.nombre_completo.toLowerCase().includes(filtroNombre.toLowerCase()) || e.dependencia.toLowerCase().includes(filtroNombre.toLowerCase()));
+  
+  const dependenciasArray = Object.entries(empleados.reduce((acc, emp) => {
+    if (emp.rol === 'dev' || emp.dependencia?.toUpperCase().includes('PRUEBA')) return acc;
+    
+    const dep = emp.dependencia || 'Sin Asignar';
+    if (!acc[dep]) acc[dep] = { asignados: 0, canjeados: 0, disponibles: 0 };
+    acc[dep].asignados += (emp.tickets_restantes || 0) + (emp.tickets_canjeado || 0);
+    acc[dep].canjeados += (emp.tickets_canjeado || 0);
+    acc[dep].disponibles += (emp.tickets_restantes || 0);
+    return acc;
+  }, {} as any)).map(([nombre, vals]: [string, any]) => ({ nombre, ...vals })).sort((a, b) => b.asignados - a.asignados);
 
-  const desayunos = menusParaMostrar.filter(m => m.tipo_comida === 'DESAYUNO');
-  const almuerzos = menusParaMostrar.filter(m => m.tipo_comida === 'ALMUERZO');
-  const cenas = menusParaMostrar.filter(m => m.tipo_comida === 'CENA');
+  const mesActual = new Date().getMonth();
+  const anioActual = new Date().getFullYear();
+  let canjeadosMesHistorial = 0;
+  let sobrantesMesHistorial = 0;
 
-  const diaSemana = getDiaSemanaMerida();
-  const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
-  const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
+  cierres.forEach(c => {
+    const d = new Date(c.fecha_cierre);
+    if(d.getMonth() === mesActual && d.getFullYear() === anioActual) {
+       canjeadosMesHistorial += c.vales_canjeados;
+       sobrantesMesHistorial += c.vales_sobrantes;
+    }
+  });
 
-  // Lógica original de lectura para cajero
-  const valorQR = empleado?.nombre_completo || 'EMP';
+  const totalCanjeadosMes = canjeadosMesHistorial + stats.canjeados;
+  const totalSobrantesMes = sobrantesMesHistorial + stats.disponibles;
 
-  // AQUÍ ESTÁ EL CULPABLE SOLUCIONADO: Al entrar a este if, la pantalla corta la ejecución.
-  if (estadoVista === 'cargando') {
+  if (loadingAcceso) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-[#1A2744]/5 to-transparent z-0"></div>
@@ -302,535 +503,465 @@ export default function MiValePage() {
           </div>
           <div className="flex items-center gap-3 text-[#1A2744]">
             <Loader2 className="animate-spin text-amber-500" size={16} />
-            <p className="text-[10px] font-black tracking-[0.3em] uppercase">Verificando Perfil...</p>
+            <p className="text-[10px] font-black tracking-[0.3em] uppercase">Autenticando Administración...</p>
           </div>
         </div>
-        <style dangerouslySetInnerHTML={{__html: `
-          @keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
-          .animate-pulse-slow { animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        `}} />
       </div>
     );
   }
 
-  // --- COMPONENTE DE TARJETA OPTIMIZADO PARA MÓVIL (TÁCTIL) ---
-  const TarjetaPlatillo = ({ m, index }: { m: any, index: number }) => (
-    <div 
-      className="anim-fade-up bg-white p-5 rounded-3xl flex justify-between items-center border border-slate-100 shadow-sm active:scale-[0.98] active:bg-slate-50 transition-all duration-200 mb-3 relative overflow-hidden"
-      style={{ animationDelay: `${index * 100}ms` }}
-    >
-      <div className="flex-1 pr-4 relative z-10">
-        <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1">{m.platillo}</h3>
-        {m.descripcion && <p className="text-slate-400 text-[10px] leading-snug font-medium mb-1">{m.descripcion}</p>}
-        {m.porciones_disponibles <= 15 && m.porciones_totales < 9000 && (
-          <span className="text-red-500 text-[9px] font-black uppercase flex items-center gap-1 anim-latido mt-1 bg-red-50 inline-flex px-2 py-0.5 rounded-lg border border-red-100"><Flame size={12}/> ¡Quedan {m.porciones_disponibles}!</span>
-        )}
-      </div>
-      
-      <div className="flex flex-col items-center gap-3 shrink-0 relative z-10">
-        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-2xl w-14 h-14 border transition-colors duration-300 ${m.porciones_disponibles <= 15 ? 'bg-red-50 border-red-100 text-red-600 anim-latido' : 'bg-slate-50 border-slate-100 text-[#1A2744]'}`}>
-          <p className="text-2xl font-black leading-none tracking-tighter">{m.porciones_disponibles}</p>
-          <p className="text-[8px] font-black uppercase mt-0.5 opacity-60">Disp.</p>
-        </div>
-        <button 
-          onClick={() => apartarComida(m)}
-          disabled={cargandoApartado}
-          className="relative overflow-hidden w-full bg-gradient-to-r from-emerald-500 to-emerald-400 text-white py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-[0_4px_10px_rgba(16,185,129,0.3)] active:scale-90 active:shadow-sm transition-all flex items-center justify-center gap-1 before:absolute before:inset-0 before:bg-white/30 before:-translate-x-full before:animate-[shimmer_3s_infinite]"
-        >
-          {cargandoApartado ? <Loader2 className="anim-girar relative z-10" size={14}/> : <><Plus size={14} className="relative z-10"/> <span className="relative z-10">Apartar</span></>}
-        </button>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans pb-10 relative">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#1A2744] font-sans pb-20 relative">
       
-      {/* DECORACIÓN DE FONDO GLOBAL */}
-      <div className="fixed top-[-10%] right-[-5%] w-[40vh] h-[40vh] bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none z-0"></div>
-      <div className="fixed bottom-[-10%] left-[-5%] w-[30vh] h-[30vh] bg-amber-500/5 rounded-full blur-[80px] pointer-events-none z-0"></div>
+      <div className="fixed top-0 left-0 w-full h-[40vh] bg-gradient-to-b from-[#1A2744] to-[#F8FAFC] -z-10"></div>
+      <div className="fixed top-[-20%] right-[-10%] w-[60vh] h-[60vh] bg-amber-500/10 rounded-full blur-[100px] -z-10"></div>
 
       <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 p-4 sticky top-0 z-50 shadow-sm flex justify-between items-center px-4 md:px-8">
         <div className="flex items-center gap-4">
           <div className="relative w-12 h-12 bg-gradient-to-br from-[#1A2744] to-[#2A3F6D] rounded-2xl rotate-3 flex items-center justify-center shadow-lg border border-slate-700/50 shrink-0 group hover:rotate-6 transition-transform duration-300">
             <UtensilsCrossed className="absolute text-white/10 w-6 h-6 -rotate-3" strokeWidth={1.5} />
-            <ChefHat className="relative text-amber-400 -rotate-3" size={20} strokeWidth={1.5} />
+            <ChefHat className="relative text-amber-400 -rotate-3 group-hover:scale-110 transition-transform duration-300" size={20} strokeWidth={1.5} />
           </div>
-          <div className="overflow-hidden">
-            <p className="text-amber-500 text-[8px] font-black tracking-[0.2em] uppercase mb-0.5">Comedor FGE</p>
-            <h1 className="font-black text-xs md:text-sm uppercase tracking-wider leading-tight text-[#1A2744] truncate">
-              {empleado ? empleado.nombre_completo : 'Panel Empleado'}
-            </h1>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-black text-sm md:text-lg uppercase tracking-wider leading-tight text-[#1A2744]">Administración</h1>
+              {isSuperAdmin && <span className="bg-amber-400 text-[#1A2744] text-[8px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm tracking-widest"><ShieldCheck size={10} /> SUPER ADMIN</span>}
+            </div>
+            <p className="text-amber-500 text-[9px] font-black tracking-[0.2em] uppercase mt-0.5">{userEmail}</p>
           </div>
         </div>
         
         <div className="flex items-center gap-2">
-          {(empleado?.rol === 'admin' || empleado?.rol === 'dev') && (
-            <button 
-              onClick={() => router.push('/admin')} 
-              className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl active:bg-indigo-100 transition-all border border-indigo-100 active:scale-95"
-              title="Panel Administración"
-            >
-              <ShieldCheck size={18} />
-            </button>
-          )}
-
-          {empleado?.rol === 'dev' && (
+          {/* BOTÓN NUEVO: Salto a Mi Vale */}
+          <button 
+            onClick={() => router.push('/mi-vale')} 
+            className="bg-blue-50 text-blue-600 px-3 py-2.5 rounded-xl hover:bg-blue-100 active:scale-95 transition-all border border-blue-100 flex items-center gap-2"
+            title="Ir a mis vales"
+          >
+            <Ticket size={18} />
+            <span className="hidden md:inline text-[10px] font-black uppercase tracking-widest mt-0.5">Mis Vales</span>
+          </button>
+          {isDev && (
             <button 
               onClick={() => router.push('/dev-panel')} 
-              className="bg-amber-50 text-amber-600 p-2.5 rounded-xl active:bg-amber-100 transition-all border border-amber-100 anim-latido active:scale-95"
+              className="bg-amber-50 text-amber-600 p-2.5 rounded-xl active:bg-amber-100 transition-all border border-amber-100 anim-latido active:scale-95 hidden md:block"
               title="Panel Developer"
             >
               <Terminal size={18} />
             </button>
           )}
-
-          <button onClick={handleLogout} className="bg-red-50 text-red-600 p-2.5 rounded-xl active:bg-red-100 transition-all border border-red-100 active:scale-95">
-            <LogOut size={18} />
-          </button>
+          <button onClick={handleLogout} className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-100 active:scale-95 transition-all border border-red-100"><LogOut size={18} /></button>
         </div>
       </nav>
 
-      <div className="max-w-md mx-auto px-4 mt-6 relative z-10">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 mt-8 relative z-10">
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8 anim-fade-up" style={{animationDelay: '100ms'}}>
+          <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute -right-6 -top-6 text-slate-50 opacity-50 group-hover:scale-110 transition-transform"><Ticket size={100} /></div>
+            <h2 className="text-4xl font-black text-[#1A2744] relative z-10">{stats.total}</h2>
+            <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Asignados (Activos)</p>
+          </div>
+          <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute -right-6 -top-6 text-emerald-50 opacity-50 group-hover:scale-110 transition-transform"><CheckCircle2 size={100} /></div>
+            <h2 className="text-4xl font-black text-emerald-500 relative z-10">{stats.canjeados}</h2>
+            <p className="text-emerald-600/60 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Canjeados (Esta Semana)</p>
+          </div>
+          <div className="bg-[#1A2744] p-6 rounded-[2rem] shadow-xl shadow-[#1A2744]/20 border border-[#2A3F6D] flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-400/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="absolute -right-6 -top-6 text-white/5 group-hover:scale-110 transition-transform"><Layers size={100} /></div>
+            <h2 className="text-4xl font-black text-white relative z-10">{stats.disponibles}</h2>
+            <p className="text-amber-400 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Stock Disponible</p>
+          </div>
+          <div className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute -right-6 -top-6 text-blue-50 opacity-50 group-hover:scale-110 transition-transform"><Building2 size={100} /></div>
+            <h2 className="text-4xl font-black text-blue-600 relative z-10">{stats.dependencias}</h2>
+            <p className="text-blue-500/60 text-[9px] font-black uppercase tracking-[0.2em] mt-1 relative z-10">Áreas Activas</p>
+          </div>
+        </div>
 
-        {estadoVista === 'cambiar_password' && empleado && (
-          <form onSubmit={actualizarPasswordUsuario} className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 anim-fade-up text-center">
-            <div className="w-20 h-20 bg-amber-50 border border-amber-100 text-amber-500 rounded-[2rem] rotate-3 flex items-center justify-center mx-auto mb-6 shadow-sm">
-              <Lock size={32} className="-rotate-3" />
-            </div>
-            <h2 className="text-2xl font-black text-[#1A2744] mb-2 uppercase tracking-tight">Seguridad FGE</h2>
-            <p className="text-slate-500 mb-8 text-xs font-medium">Por tu seguridad, debes crear una contraseña personal para acceder a tus vales.</p>
-            
-            <div className="space-y-4 mb-8">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300"><Lock size={18} /></div>
-                <input 
-                  type="password" 
-                  value={nuevaPassword}
-                  onChange={(e) => setNuevaPassword(e.target.value)}
-                  className="w-full pl-11 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all placeholder:font-normal placeholder:text-slate-300 tracking-widest"
-                  placeholder="Nueva Contraseña"
-                  required
-                />
-              </div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300"><Lock size={18} /></div>
-                <input 
-                  type="password" 
-                  value={confirmarPassword}
-                  onChange={(e) => setConfirmarPassword(e.target.value)}
-                  className="w-full pl-11 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all placeholder:font-normal placeholder:text-slate-300 tracking-widest"
-                  placeholder="Confirmar Contraseña"
-                  required
-                />
-              </div>
-            </div>
-            
-            <button 
-              type="submit" 
-              disabled={cargandoPassword}
-              className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] transition-all shadow-xl shadow-[#1A2744]/20 active:scale-[0.95] flex items-center justify-center gap-2"
-            >
-              {cargandoPassword ? <Loader2 className="animate-spin text-amber-400" size={18}/> : 'Guardar y Continuar'}
-            </button>
-            {errorPassword && <p className="text-red-500 mt-6 text-center text-xs font-black uppercase tracking-wider">{errorPassword}</p>}
-          </form>
-        )}
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl sm:rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white overflow-hidden anim-fade-up" style={{animationDelay: '200ms'}}>
+          
+          <div className="flex p-3 gap-2 overflow-x-auto bg-slate-50/50 border-b border-slate-100 no-scrollbar">
+            {[
+              { id: 'cuotas', label: 'Cuotas Globales', icon: <Building2 size={16}/> },
+              { id: 'empleados', label: 'Plantilla Laboral', icon: <Users size={16}/> },
+              { id: 'reportes', label: 'Reportes y Cierres', icon: <FileText size={16}/> },
+              { id: 'auditoría', label: 'Security Logs', icon: <ShieldCheck size={16}/> }
+            ].map(tab => (
+              <button 
+                key={tab.id} 
+                onClick={() => setActiveTab(tab.id)} 
+                className={`flex-1 min-w-[150px] py-3.5 px-4 rounded-[1.2rem] font-black text-[10px] uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden ${activeTab === tab.id ? 'bg-[#1A2744] text-amber-400 shadow-xl shadow-[#1A2744]/20 scale-100' : 'bg-transparent text-slate-500 hover:bg-slate-100 active:scale-95'}`}
+              >
+                {tab.icon} <span className="mt-0.5">{tab.label}</span>
+              </button>
+            ))}
+          </div>
 
-        {estadoVista === 'dashboard' && empleado && (
-          <div className="flex flex-col gap-6 anim-fade-up">
+          <div className="p-6 sm:p-10 min-h-[500px]">
             
-            {mostrarBannerCierre && (
-              <div className="bg-red-50 border border-red-200 p-4 rounded-3xl flex items-start gap-3 anim-latido shadow-sm">
-                <div className="bg-white border border-red-100 text-red-600 p-2 rounded-xl shrink-0 mt-0.5 shadow-sm">
-                  <AlertTriangle size={18} />
+            {activeTab === 'cuotas' && (
+              <div className="animate-in fade-in duration-500">
+                <div className="flex items-center gap-3 mb-8 border-b border-slate-100 pb-4">
+                  <div className="bg-blue-50 p-2.5 rounded-xl text-blue-500"><Building2 size={20}/></div>
+                  <div>
+                    <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Desglose por Dependencia</h3>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Control de cuotas asignadas (Esta Semana)</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-red-800 font-black text-xs uppercase tracking-wider mb-1">Cierre de Semana</h4>
-                  <p className="text-red-600 text-[10px] font-bold leading-relaxed">
-                    Aún tienes <span className="text-red-800 font-black bg-white px-1.5 py-0.5 rounded shadow-sm border border-red-100">{empleado.tickets_restantes} vales</span>. Aparta tu comida. Los vales no son acumulables.
-                  </p>
+
+                <div className="grid gap-4">
+                  {dependenciasArray.map((dep, i) => (
+                    <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-white rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-md hover:border-slate-200 transition-all group">
+                      <div className="mb-4 sm:mb-0">
+                        <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-1 rounded-md uppercase tracking-[0.2em] mb-2 inline-block">Área / Depto</span>
+                        <h4 className="font-black text-sm uppercase text-[#1A2744] group-hover:text-blue-600 transition-colors">{dep.nombre}</h4>
+                      </div>
+                      <div className="flex gap-3 sm:gap-6 justify-between sm:justify-end">
+                        <div className="bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100 text-center min-w-[80px]">
+                          <p className="text-xl font-black text-[#1A2744] leading-none mb-1">{dep.asignados}</p>
+                          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Asignados</p>
+                        </div>
+                        <div className="bg-emerald-50 px-4 py-3 rounded-2xl border border-emerald-100 text-center min-w-[80px]">
+                          <p className="text-xl font-black text-emerald-600 leading-none mb-1">{dep.canjeados}</p>
+                          <p className="text-[8px] font-black uppercase tracking-widest text-emerald-500">Canjeados</p>
+                        </div>
+                        <div className="bg-amber-50 px-4 py-3 rounded-2xl border border-amber-100 text-center min-w-[80px]">
+                          <p className="text-xl font-black text-amber-500 leading-none mb-1">{dep.disponibles}</p>
+                          <p className="text-[8px] font-black uppercase tracking-widest text-amber-500/70">Disponibles</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {dependenciasArray.length === 0 && (
+                    <div className="py-20 text-center bg-slate-50 rounded-[2rem] border border-slate-100">
+                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Sin datos para contabilizar</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white p-5 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-center text-center">
-                <div className="w-10 h-10 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mb-3">
-                  <TicketCheck size={20} />
-                </div>
-                <h3 className="text-3xl font-black text-[#1A2744] mb-1">{empleado.tickets_canjeado || 0}</h3>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Usados</p>
-              </div>
-              <div className="bg-[#1A2744] p-5 rounded-[2rem] shadow-xl shadow-[#1A2744]/20 border border-[#2A3F6D] flex flex-col items-center text-center relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-400/10 to-transparent opacity-50"></div>
-                <div className="relative z-10 flex flex-col items-center">
-                  <div className="w-10 h-10 bg-[#2A3F6D] text-amber-400 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
-                    <Utensils size={20} />
+            {activeTab === 'empleados' && (
+              <div className="animate-in fade-in duration-500">
+                <div className="flex flex-col xl:flex-row gap-4 mb-8">
+                  <div className="relative flex-1 group/input">
+                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within/input:text-amber-500 transition-colors" size={20} />
+                    <input type="text" placeholder="Buscar por nombre o dependencia..." value={filtroNombre} onChange={(e) => setFiltroNombre(e.target.value)} className="w-full pl-14 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all uppercase placeholder:font-normal placeholder:text-slate-400" />
                   </div>
-                  <h3 className="text-3xl font-black text-white mb-1">{empleado.tickets_restantes || 0}</h3>
-                  <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest">Disponibles</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-[2.5rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.1)] border border-slate-100 relative overflow-hidden">
-               <div className="relative z-10">
-                 <div className="flex items-center gap-3 mb-6">
-                   <div className="bg-amber-50 border border-amber-100 p-3 rounded-2xl text-amber-500 shadow-sm"><QrCode size={20}/></div>
-                   <div>
-                     <h3 className="text-[#1A2744] font-black text-sm uppercase tracking-tight">Canje Rápido</h3>
-                     <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mt-0.5">Generar Vale Digital</p>
-                   </div>
-                 </div>
-
-                 <div className="flex items-center justify-between bg-slate-50/80 p-3 rounded-3xl border border-slate-100 mb-6">
-                    <button 
-                      onClick={() => setCantidadACanjear(Math.max(1, cantidadACanjear - 1))}
-                      className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm border border-slate-100 active:scale-90 active:bg-slate-100 transition-transform"
-                    >
-                      <Minus size={20} />
+                  <div className="flex gap-3 flex-wrap sm:flex-nowrap">
+                    <button onClick={() => setModalNuevo(true)} className="flex-1 sm:flex-none bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap"><UserPlus size={16}/> Alta Manual</button>
+                    <input type="file" className="hidden" ref={fileInputRef} onChange={procesarExcel} />
+                    <button onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none bg-[#1A2744] hover:bg-[#25365d] active:scale-95 text-white px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-[#1A2744]/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap">
+                      {cargando ? <Loader2 className="animate-spin text-amber-400" size={16}/> : <FileSpreadsheet size={16} className="text-amber-400"/>} Cargar Nómina
                     </button>
-                    <div className="text-center flex-1">
-                      <span className="text-4xl font-black text-[#1A2744]">{cantidadACanjear}</span>
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Unidades</p>
-                    </div>
-                    <button 
-                      onClick={() => setCantidadACanjear(Math.min(empleado.tickets_restantes, cantidadACanjear + 1))}
-                      className="w-14 h-14 bg-[#1A2744] rounded-2xl flex items-center justify-center text-white shadow-md active:scale-90 active:bg-[#25365d] transition-transform"
-                    >
-                      <Plus size={20} />
+                    <button onClick={descargarAccesos} className="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 active:scale-95 text-[#1A2744] px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 whitespace-nowrap border border-slate-200">
+                      <Download size={16}/> Accesos
                     </button>
-                 </div>
-
-                 <button 
-                  onClick={iniciarGeneracion}
-                  className="relative w-full bg-[#1A2744] text-white py-5 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-95 transition-all flex items-center justify-center gap-3 overflow-hidden before:absolute before:inset-0 before:bg-white/10 before:-translate-x-full before:animate-[shimmer_3s_infinite]"
-                >
-                  <span className="relative z-10 flex items-center gap-2">Generar Vale <Check size={16} className="text-amber-400" /></span>
-                </button>
-               </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-[#1A2744] to-[#25365d] rounded-[2.5rem] shadow-2xl p-6 border border-slate-700 relative overflow-hidden">
-              <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-amber-400/10 rounded-full blur-[40px] pointer-events-none"></div>
-              
-              <div className="flex items-center gap-4 mb-8 relative z-10">
-                <div className="bg-[#2A3F6D] p-3 rounded-2xl shadow-inner border border-slate-600/50">
-                  <ChefHat className="text-amber-400" size={24}/>
-                </div>
-                <div>
-                  <h2 className="text-white text-xl font-black uppercase tracking-wider">Menú FGE</h2>
-                  <p className="text-amber-400/80 text-[9px] uppercase font-black tracking-[0.2em] mt-1">Planifica tus comidas</p>
-                </div>
-              </div>
-
-              {fechasDisponibles.length > 0 && (
-                <div className="flex gap-3 overflow-x-auto pb-6 mb-2 no-scrollbar border-b border-white/5 relative z-10">
-                  {fechasDisponibles.map(fecha => {
-                    const { day, weekday } = formatearFechaPestaña(fecha);
-                    const isActive = fechaActiva === fecha;
-                    return (
-                      <button 
-                        key={fecha} 
-                        onClick={() => setFechaActiva(fecha)}
-                        className={`flex flex-col items-center justify-center rounded-[1.2rem] min-w-[70px] h-[85px] transition-all duration-300 border active:scale-95 ${isActive ? 'bg-amber-400 text-[#1A2744] shadow-lg shadow-amber-400/20 border-amber-300 scale-105' : 'bg-[#2A3F6D]/50 border-[#2A3F6D] text-slate-300'}`}
-                      >
-                        <span className="font-black text-2xl tracking-tighter">{day}</span>
-                        <span className="text-[9px] font-black uppercase mt-1 tracking-widest opacity-80">{weekday}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* BANNER DE ANTOJITOS FIJOS */}
-              <button 
-                onClick={() => setMostrarMenuFijo(true)}
-                className="relative z-10 w-full mb-8 bg-[#2A3F6D]/40 border border-[#2A3F6D] active:bg-[#2A3F6D] p-4 rounded-2xl flex items-center justify-between transition-all active:scale-95"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="bg-[#1A2744] p-2.5 rounded-xl text-amber-400 shadow-inner">
-                    <Store size={18}/>
-                  </div>
-                  <div className="text-left">
-                    <h4 className="text-white font-black text-xs uppercase tracking-widest mb-0.5">Comida Rápida</h4>
-                    <p className="text-slate-400 text-[9px] font-bold uppercase tracking-wider">Ver menú mostrador</p>
                   </div>
                 </div>
-                <ChevronRight className="text-slate-500" size={20}/>
-              </button>
-
-              <div key={fechaActiva} className="min-h-[150px] relative z-10">
                 
-                {reservasDelDia.length > 0 && (
-                  <div className="space-y-4 mb-8">
-                    {reservasDelDia.map((reserva) => (
-                      <div key={reserva.id} className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-[2rem] flex flex-col items-center text-center anim-fade-up relative overflow-hidden" style={{animationDelay: '0ms'}}>
-                        <div className="bg-emerald-500 text-white p-3 rounded-2xl mb-4 shadow-[0_0_20px_rgba(16,185,129,0.5)]">
-                          <Check size={24}/>
-                        </div>
-                        <p className="text-emerald-400 font-black uppercase text-[10px] tracking-[0.2em] mb-1">Apartado Confirmado</p>
-                        <p className="text-white text-sm font-black uppercase leading-tight mt-2 mb-6 max-w-full">
-                          {reserva.menu_comedor?.platillo}
-                        </p>
-                        <button 
-                          onClick={() => cancelarReserva(reserva)}
-                          disabled={cargandoApartado || reserva.estado === 'CAPTURADO'}
-                          className={`w-full py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2 relative z-10 ${reserva.estado === 'CAPTURADO' ? 'bg-[#1A2744] text-slate-500 cursor-not-allowed' : 'bg-red-500/10 active:bg-red-500 text-red-400 active:text-white border border-red-500/20'}`}
-                        >
-                          {cargandoApartado ? <Loader2 className="anim-girar" size={14}/> : reserva.estado === 'CAPTURADO' ? 'En preparación' : <><X size={14}/> Cancelar Apartado</>}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {menusParaMostrar.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center text-slate-400 py-12 border-2 border-dashed border-[#2A3F6D] rounded-[2rem] bg-[#2A3F6D]/10">
-                    <Calendar size={32} className="mb-4 opacity-40"/>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-center leading-relaxed">Menú no publicado<br/>para esta fecha</p>
-                  </div>
-                ) : (
-                  <div className="space-y-10">
-                    {desayunos.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="bg-amber-400/10 p-2 rounded-lg"><Sunrise className="text-amber-400" size={18} /></div>
-                          <h3 className="text-white font-black text-sm uppercase tracking-[0.2em]">Desayunos</h3>
-                        </div>
-                        <div className="space-y-3">
-                          {desayunos.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={i} />)}
-                        </div>
-                      </div>
-                    )}
-
-                    {almuerzos.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="bg-emerald-400/10 p-2 rounded-lg"><Sun className="text-emerald-400" size={18} /></div>
-                          <h3 className="text-white font-black text-sm uppercase tracking-[0.2em]">Almuerzos</h3>
-                        </div>
-
-                        {almuerzos.filter(m => m.porciones_totales < 9000).length > 0 && (
-                          <div className="mb-10">
-                             <div className="space-y-3">
-                               {almuerzos.filter(m => m.porciones_totales < 9000).map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + i} />)}
-                             </div>
-                          </div>
-                        )}
-
-                        {almuerzos.filter(m => m.porciones_totales >= 9000).length > 0 && (
-                          <div className="bg-[#2A3F6D]/30 p-5 rounded-[2rem] border border-[#2A3F6D]">
-                            <h4 className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-black mb-4 flex items-center gap-2"><Star size={12} className="text-amber-400"/> Menú Fijo</h4>
-                            <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x">
-                               {almuerzos.filter(m => m.porciones_totales >= 9000).map((m, i) => (
-                                 <div key={m.id} className="snap-start min-w-[240px] bg-white p-5 rounded-3xl flex flex-col justify-between border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] active:scale-[0.98] transition-all duration-200">
-                                   <div>
-                                       <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-4">{m.platillo}</h3>
-                                   </div>
-                                   <div className="flex items-end justify-between gap-2 mt-auto">
-                                       <div className="flex flex-col">
-                                         <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Check size={10}/> Siempre</span>
-                                         <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest">Disponible</span>
-                                       </div>
-                                       <button 
-                                          onClick={() => apartarComida(m)} 
-                                          disabled={cargandoApartado} 
-                                          className="relative overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-400 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-[0_4px_10px_rgba(16,185,129,0.3)] active:scale-90 active:shadow-sm transition-all flex items-center justify-center gap-1 before:absolute before:inset-0 before:bg-white/30 before:-translate-x-full before:animate-[shimmer_3s_infinite]"
-                                        >
-                                         {cargandoApartado ? <Loader2 className="anim-girar relative z-10" size={12}/> : <><Plus size={12} className="relative z-10"/><span className="relative z-10">Apartar</span></>}
-                                       </button>
-                                   </div>
-                                 </div>
-                               ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {cenas.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="bg-blue-400/10 p-2 rounded-lg"><Moon className="text-blue-400" size={18} /></div>
-                          <h3 className="text-white font-black text-sm uppercase tracking-[0.2em]">Cenas</h3>
-                        </div>
-                        <div className="space-y-3">
-                          {cenas.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + almuerzos.length + i} />)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div className="overflow-x-auto border border-slate-100 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] bg-white max-h-[600px] no-scrollbar">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 sticky top-0 text-[9px] tracking-[0.2em] uppercase font-black text-slate-400 border-b border-slate-100 z-10">
+                      <tr>
+                        <th className="p-5 pl-8">Empleado Registrado</th>
+                        <th className="p-5">Correo Institucional</th>
+                        <th className="p-5 text-center">Cuota Actual</th>
+                        <th className="p-5 text-center">Programado (Futuro)</th>
+                        <th className="p-5 text-right pr-8">Ajustes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {empleadosFiltrados.map((emp, i) => {
+                        const cuotaFutura = cuotasProgramadas.find(c => c.empleado_id === emp.id);
+                        return (
+                          <tr key={i} className={`hover:bg-slate-50/50 transition-colors group ${emp.rol === 'dev' ? 'opacity-50 grayscale hover:opacity-100' : ''}`}>
+                            <td className="p-5 pl-8">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 font-black text-xs border border-slate-200 uppercase">{emp.nombre_completo.substring(0,2)}</div>
+                                  <div>
+                                    <p className="font-black text-[#1A2744] text-xs uppercase flex items-center gap-2">
+                                      {emp.nombre_completo}
+                                      {emp.rol === 'dev' && <span className="bg-slate-800 text-white text-[8px] px-1.5 py-0.5 rounded tracking-widest shadow-sm">DEV</span>}
+                                    </p>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{emp.dependencia}</p>
+                                  </div>
+                                </div>
+                            </td>
+                            <td className="p-5 text-[10px] text-slate-500 font-bold">{emp.email}</td>
+                            <td className="p-5">
+                              <div className="flex items-center justify-center gap-2 bg-slate-50 w-max mx-auto p-1.5 rounded-2xl border border-slate-100">
+                                <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes - 1)} className="w-8 h-8 rounded-xl bg-white shadow-sm border border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-200 transition-colors flex items-center justify-center"><Minus size={14}/></button>
+                                <span className="font-black text-[#1A2744] text-sm w-6 text-center">{emp.tickets_restantes}</span>
+                                <button onClick={() => actualizarCuota(emp.id, emp.tickets_restantes + 1)} className="w-8 h-8 rounded-xl bg-white shadow-sm border border-slate-100 text-slate-400 hover:text-emerald-500 hover:border-emerald-200 transition-colors flex items-center justify-center"><Plus size={14}/></button>
+                              </div>
+                            </td>
+                            <td className="p-5 text-center">
+                              {cuotaFutura ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="bg-blue-50 text-blue-600 border border-blue-100 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1">
+                                    <Ticket size={12}/> {cuotaFutura.cuota} vales
+                                  </span>
+                                  <span className="text-slate-400 text-[8px] font-bold uppercase tracking-widest flex items-center gap-1"><CalendarPlus size={10}/> Lunes {cuotaFutura.fecha_lunes}</span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-300 bg-slate-50 px-3 py-1 rounded-md text-[10px] font-black border border-slate-100">-</span>
+                              )}
+                            </td>
+                            <td className="p-5 text-right pr-8">
+                                <button onClick={() => setEmpleadoEdit(emp)} className="text-slate-400 p-2.5 bg-white rounded-xl shadow-sm border border-slate-100 hover:text-amber-500 hover:border-amber-200 active:scale-95 transition-all"><UserCog size={18}/></button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {empleadosFiltrados.length === 0 && (
+                        <tr><td colSpan={5} className="py-20 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">No se encontraron empleados</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 mb-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-slate-400"><History size={18} /></div>
-                <h3 className="text-sm font-black text-[#1A2744] uppercase tracking-tight">Historial</h3>
-              </div>
-              <div className="flex flex-col gap-3">
-                {historial.map((h, i) => (
-                  <div key={i} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <div>
-                      <p className="font-black text-[#1A2744] text-xs uppercase">{new Date(h.fecha_hora).toLocaleDateString('es-MX')}</p>
-                      <p className="text-slate-400 text-[10px] font-bold tracking-widest uppercase mt-1">🕒 {new Date(h.fecha_hora).toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'})}</p>
+            {activeTab === 'reportes' && (
+              <div className="animate-in fade-in duration-500">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-6 border-b border-slate-100 pb-6">
+                  <div>
+                    <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Reportes y Auditoría</h3>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Control y Cierres de Bitácora</p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <button onClick={reiniciarSemana} className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 transition-all border border-blue-200 active:scale-95"><RefreshCw size={16}/> Cierre de Semana</button>
+                    {isSuperAdmin && (
+                      <button onClick={limpiarHistorialPruebas} className="bg-red-50 hover:bg-red-100 text-red-500 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 transition-all border border-red-200 active:scale-95"><Trash2 size={16}/> Purgar Todo</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* DASHBOARD CONTROL MENSUAL */}
+                <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 mb-8 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-blue-50 rounded-full blur-3xl -z-10"></div>
+                  <h3 className="text-xs font-black text-[#1A2744] uppercase tracking-widest mb-6 flex items-center gap-2"><PieChart size={18} className="text-blue-500"/> Acumulado Mensual (Límite: 5,500)</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
+                        <p className="text-emerald-600/70 text-[10px] font-black uppercase tracking-widest mb-1">Total Consumidos</p>
+                        <p className="text-3xl font-black text-emerald-600">{totalCanjeadosMes}</p>
                     </div>
-                    <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest">Canjeado</span>
-                  </div>
-                ))}
-                {historial.length === 0 && <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6 border-2 border-dashed border-slate-100 rounded-2xl">No hay canjes previos</p>}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {estadoVista === 'animando' && (
-          <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl border border-slate-100 flex flex-col items-center justify-center min-h-[400px]">
-            <div className="w-24 h-24 bg-[#1A2744] rounded-[2rem] rotate-3 flex items-center justify-center mb-10 relative shadow-[0_15px_30px_rgba(26,39,68,0.2)] border border-slate-100">
-              <QrCode size={36} className="text-amber-400 -rotate-3" />
-              <div className="absolute inset-0 rounded-[2rem] border-4 border-amber-400/20 anim-latido"></div>
-            </div>
-            <h3 className="text-sm font-black text-[#1A2744] mb-8 uppercase tracking-[0.2em]">Generando Vale</h3>
-            <div className="w-full flex flex-col gap-5">
-              <PasoCheck visible={pasoAnimacion >= 1} texto="Verificando Identidad" completed={pasoAnimacion > 1} />
-              <PasoCheck visible={pasoAnimacion >= 2} texto={`Aprobando ${cantidadACanjear} Raciones`} completed={pasoAnimacion > 2} />
-              <PasoCheck visible={pasoAnimacion >= 3} texto="Asignando Token Seguro" completed={pasoAnimacion > 3} />
-              <PasoCheck visible={pasoAnimacion >= 4} texto="Renderizando Código" completed={pasoAnimacion > 4} active={pasoAnimacion === 4} />
-            </div>
-          </div>
-        )}
-
-        {estadoVista === 'ticket' && (
-          <div className="flex flex-col items-center gap-6 anim-fade-up">
-            <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl w-full border border-slate-100 relative">
-              
-              <div className="bg-[#1A2744] p-8 text-center border-b-2 border-dashed border-slate-200 relative">
-                <ChefHat className="text-amber-400/20 absolute top-4 left-4 w-16 h-16 -rotate-12" />
-                <p className="text-amber-400 text-[9px] uppercase font-black tracking-[0.3em] mb-2 relative z-10">Comedor Fiscalía</p>
-                <h2 className="text-white text-2xl font-black uppercase tracking-widest relative z-10">Vale Digital</h2>
-                
-                {/* Muescas del ticket */}
-                <div className="absolute -bottom-4 -left-4 w-8 h-8 bg-[#F8FAFC] rounded-full shadow-inner"></div>
-                <div className="absolute -bottom-4 -right-4 w-8 h-8 bg-[#F8FAFC] rounded-full shadow-inner"></div>
-              </div>
-
-              <div className="p-8 flex flex-col items-center relative">
-                <div className="flex justify-between w-full mb-8 gap-4 text-center">
-                  <div className="flex-1">
-                    <p className="text-slate-400 text-[8px] uppercase font-black tracking-[0.2em] mb-1">Titular</p>
-                    <p className="text-[#1A2744] text-xs font-black leading-tight uppercase truncate">{empleado.nombre_completo}</p>
-                  </div>
-                  <div className="flex-1 border-l border-slate-100">
-                    <p className="text-slate-400 text-[8px] uppercase font-black tracking-[0.2em] mb-1">Fecha</p>
-                    <p className="text-[#1A2744] text-xs font-black uppercase">{hoyCorto}</p>
-                  </div>
-                </div>
-
-                <div className="w-full bg-slate-50 py-6 px-2 rounded-[2rem] flex flex-col items-center mb-8 border border-slate-100 relative overflow-hidden">
-                   
-                  <div className="relative z-10 w-full flex justify-center bg-white py-4 mb-4" style={{ touchAction: 'pan-x' }}>
-                    <div style={{ minWidth: 'max-content' }}>
-                      <Barcode 
-                        value={valorQR} 
-                        format="CODE128"
-                        width={1.5}
-                        height={80}
-                        displayValue={true}
-                        fontSize={14}
-                        background="#ffffff"
-                        lineColor="#000000"
-                        margin={10}
-                      />
+                    <div className="bg-red-50 p-5 rounded-2xl border border-red-100">
+                        <p className="text-red-600/70 text-[10px] font-black uppercase tracking-widest mb-1">No Canjeados</p>
+                        <p className="text-3xl font-black text-red-600">{totalSobrantesMes}</p>
+                    </div>
+                    <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100">
+                        <p className="text-amber-600/70 text-[10px] font-black uppercase tracking-widest mb-1">Margen Restante</p>
+                        <p className="text-3xl font-black text-amber-500">{Math.max(0, 5500 - totalCanjeadosMes)}</p>
                     </div>
                   </div>
                   
-                  <div className="relative z-10 bg-amber-400 text-[#1A2744] px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-amber-400/30 flex items-center gap-2">
-                    <Layers size={14}/> {cantidadACanjear} RACIONES
+                  <div className="mt-6 bg-slate-100 h-3 rounded-full overflow-hidden flex shadow-inner">
+                    <div style={{width: `${Math.min(100, (totalCanjeadosMes / 5500) * 100)}%`}} className="bg-blue-500 h-full transition-all duration-1000"></div>
                   </div>
+                  <div className="flex justify-between mt-2 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                    <span>0</span>
+                    <span className={totalCanjeadosMes > 5000 ? "text-red-500" : ""}>Límite 5,500</span>
+                  </div>
+                </div>
 
-                  <div className="relative z-10 mt-8 pt-6 border-t border-slate-200 w-full text-center">
-                    <p className="text-slate-400 text-[8px] font-black uppercase tracking-[0.2em] mb-2">Token de Validación</p>
-                    <div className="flex justify-center items-center gap-2 text-[#1A2744] font-black text-2xl tracking-[0.3em]">
-                        <Hash size={20} className="text-slate-300"/> {tokenSeguridad}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
+                  <button onClick={exportarHistorialExcel} className="group flex flex-col items-center justify-center p-10 bg-white border border-slate-100 rounded-[2.5rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(16,185,129,0.1)] hover:border-emerald-200 transition-all duration-300 active:scale-95">
+                    <div className="bg-emerald-50 text-emerald-500 p-5 rounded-[1.5rem] mb-6 group-hover:scale-110 transition-transform duration-300"><FileSpreadsheet size={40} strokeWidth={1.5}/></div>
+                    <span className="font-black text-[#1A2744] text-xs uppercase tracking-widest mb-1">Data Excel</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Base en crudo</span>
+                  </button>
+                  
+                  <button onClick={() => generarCortePDF('diario')} className="group flex flex-col items-center justify-center p-10 bg-[#1A2744] border border-[#2A3F6D] rounded-[2.5rem] shadow-[0_10px_30px_rgba(26,39,68,0.2)] hover:shadow-[0_20px_40px_rgba(26,39,68,0.4)] hover:bg-[#2A3F6D] transition-all duration-300 relative overflow-hidden active:scale-95">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="bg-blue-500/20 text-blue-400 p-5 rounded-[1.5rem] mb-6 group-hover:scale-110 transition-transform duration-300 border border-blue-500/30 relative z-10"><FileText size={40} strokeWidth={1.5}/></div>
+                    <span className="font-black text-white text-xs uppercase tracking-widest mb-1 relative z-10">Corte Diario</span>
+                    <span className="text-[9px] text-blue-300/70 font-bold uppercase tracking-widest relative z-10">PDF Oficial</span>
+                  </button>
+
+                  <button onClick={() => generarCortePDF('semanal')} className="group flex flex-col items-center justify-center p-10 bg-white border border-slate-100 rounded-[2.5rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(251,191,36,0.1)] hover:border-amber-200 transition-all duration-300 active:scale-95">
+                    <div className="bg-amber-50 text-amber-500 p-5 rounded-[1.5rem] mb-6 group-hover:scale-110 transition-transform duration-300"><FileText size={40} strokeWidth={1.5}/></div>
+                    <span className="font-black text-[#1A2744] text-xs uppercase tracking-widest mb-1">Concentrado</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Semanal PDF</span>
+                  </button>
+                </div>
+
+                <div className="bg-white border border-slate-100 rounded-[2rem] shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-slate-50 flex items-center gap-3">
+                    <History size={18} className="text-slate-400" />
+                    <h4 className="text-xs font-black text-[#1A2744] uppercase tracking-widest">Pre-visualización de Canjes (Bitácora en vivo)</h4>
+                  </div>
+                  <div className="overflow-x-auto max-h-[300px] no-scrollbar">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 sticky top-0 text-[9px] uppercase font-black text-slate-400 tracking-[0.2em] border-b border-slate-100 z-10">
+                        <tr><th className="p-5 pl-8">Empleado Registrado</th><th className="p-5 text-right pr-8">Fecha y Hora de Canje</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {historial.map((h, i) => (
+                          <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="p-5 pl-8 font-black text-xs text-[#1A2744] uppercase">{h.nombre_empleado}</td>
+                            <td className="p-5 text-right pr-8 text-[10px] font-bold text-slate-500">{new Date(h.fecha_hora).toLocaleString('es-MX')}</td>
+                          </tr>
+                        ))}
+                        {historial.length === 0 && <tr><td colSpan={2} className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">Sin registros</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'auditoría' && (
+              <div className="animate-in fade-in duration-500 max-w-5xl mx-auto">
+                <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-amber-50 p-2.5 rounded-xl text-amber-500"><ShieldCheck size={20}/></div>
+                    <div>
+                      <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Security Logs</h3>
+                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Auditoría de acciones administrativas</p>
                     </div>
                   </div>
+                  <button onClick={cargarDatosGenerales} className="text-[10px] font-black text-slate-400 hover:text-[#1A2744] flex items-center gap-1.5 transition-colors uppercase tracking-widest bg-white p-3 rounded-xl border border-slate-100 shadow-sm active:scale-95"><RefreshCw size={14}/> Sincronizar</button>
                 </div>
-
-                <div className="w-full bg-emerald-50 text-emerald-600 p-4 rounded-xl text-center font-black text-[10px] uppercase tracking-[0.2em] border border-emerald-100 flex justify-center items-center gap-2 anim-latido">
-                  <Check size={16}/> Muestre en Ventanilla
+                
+                <div className="overflow-x-auto border border-slate-100 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] bg-white max-h-[600px] no-scrollbar">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 sticky top-0 text-[9px] uppercase font-black text-slate-400 tracking-[0.2em] border-b border-slate-100 z-10">
+                      <tr>
+                        <th className="p-5 pl-8 w-48">Fecha / Hora</th>
+                        <th className="p-5">Usuario Admin</th>
+                        <th className="p-5">Acción Ejecutada</th>
+                        <th className="p-5 pr-8">Detalle Técnico</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {auditoriaLogs.map((log, i) => (
+                        <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
+                          <td className="p-5 pl-8 whitespace-nowrap text-[10px] font-bold text-slate-500">{new Date(log.creado_en).toLocaleString('es-MX')}</td>
+                          <td className="p-5 font-black text-xs text-[#1A2744] group-hover:text-amber-600 transition-colors">{log.admin_email}</td>
+                          <td className="p-5">
+                            <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest uppercase border border-slate-200 group-hover:border-slate-300 transition-colors">
+                              {log.accion}
+                            </span>
+                          </td>
+                          <td className="p-5 text-[10px] font-bold text-slate-500 uppercase pr-8 leading-relaxed">{log.detalle}</td>
+                        </tr>
+                      ))}
+                      {auditoriaLogs.length === 0 && (
+                        <tr><td colSpan={4} className="p-16 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest">No hay movimientos en el registro</td></tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            </div>
+            )}
 
-            <button 
-              onClick={() => { setEstadoVista('dashboard'); setCantidadACanjear(1); }} 
-              className="bg-slate-200 active:bg-slate-300 text-slate-600 px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] active:scale-95 transition-all w-full"
-            >
-              Finalizar y Regresar
-            </button>
           </div>
-        )}
-
+        </div>
       </div>
 
-      {/* BOTÓN FLOTANTE DE SOPORTE WHATSAPP */}
-      {empleado && estadoVista !== 'animando' && (
-        <a
-          href={`https://wa.me/529991190990?text=${encodeURIComponent(`Hola Soporte, soy ${empleado.nombre_completo} (${empleado.dependencia}). Necesito ayuda con la app Comedor FGE:`)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="fixed bottom-6 right-6 z-[100] bg-[#25D366] text-white px-4 py-3.5 rounded-[1.5rem] shadow-[0_8px_30px_rgba(37,211,102,0.3)] hover:shadow-[0_15px_40px_rgba(37,211,102,0.4)] active:scale-90 hover:-translate-y-1 transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-widest"
-        >
-          <MessageCircle size={20} />
-          <span className="mt-0.5">Soporte</span>
-        </a>
-      )}
-
-      {/* MODAL BOTTOM SHEET: MENÚ DE ANTOJITOS */}
-      {mostrarMenuFijo && (
-        <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-[#1A2744]/90 backdrop-blur-sm anim-fade-up">
-          <div className="bg-[#F8FAFC] w-full max-w-md h-[85vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2.5rem] rounded-t-[2.5rem] overflow-hidden flex flex-col shadow-2xl relative">
-            <div className="bg-white p-6 pb-4 shrink-0 border-b border-slate-100 relative z-10 rounded-t-[2.5rem] sm:rounded-t-[2rem]">
-              <button 
-                onClick={() => setMostrarMenuFijo(false)}
-                className="absolute top-6 right-6 bg-slate-50 text-slate-400 active:text-red-500 active:bg-red-50 p-2.5 rounded-full transition-all border border-slate-100"
-              >
-                <X size={20} />
-              </button>
-              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden"></div>
-              <h2 className="text-[#1A2744] text-lg font-black uppercase tracking-tight flex items-center gap-3">
-                <div className="bg-amber-50 p-2 rounded-xl text-amber-500 border border-amber-100"><Store size={20}/></div> 
-                Comida Rápida
-              </h2>
-              <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest mt-2 ml-14">Disponibles todos los días</p>
+      {/* MODAL PROGRAMAR SEMANA */}
+      {modalProgramar && (
+        <div className="fixed inset-0 bg-[#1A2744]/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden border border-white/10">
+            <div className="bg-slate-50 p-8 border-b border-slate-100 text-center relative">
+              <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-[1.5rem] rotate-3 flex items-center justify-center mx-auto mb-4 shadow-sm border border-blue-100"><CalendarPlus size={28} className="-rotate-3"/></div>
+              <h2 className="text-xl font-black text-[#1A2744] uppercase tracking-tight">Programar Cuotas</h2>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">Nómina detectada: <span className="text-blue-600 font-black bg-blue-100 px-2 py-0.5 rounded">{datosPendientesExcel.length} Empleados</span></p>
             </div>
             
-            <div className="p-6 overflow-y-auto flex-1 space-y-4 no-scrollbar pb-20">
-              {MENU_ANTOJITOS.map((categoria, i) => (
-                <div key={i} className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] anim-fade-up hover:border-amber-200 transition-colors group" style={{animationDelay: `${i * 50}ms`}}>
-                  <div className="flex items-center gap-3 mb-4 border-b border-slate-50 pb-3">
-                    <span className="text-2xl bg-slate-50 w-10 h-10 flex items-center justify-center rounded-xl border border-slate-100 group-hover:bg-amber-50 group-hover:border-amber-100 transition-colors">{categoria.icono}</span>
-                    <h3 className="text-[#1A2744] font-black text-xs uppercase tracking-wider">{categoria.categoria}</h3>
-                  </div>
-                  <ul className="space-y-3">
-                    {categoria.items.map((item, j) => (
-                      <li key={j} className="flex items-start gap-2 text-xs font-bold text-slate-600">
-                        <span className="text-amber-400 mt-0.5">•</span> 
-                        <span className="leading-snug uppercase text-[10px] tracking-wide">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-              
-              <div className="bg-blue-50 p-5 rounded-[1.5rem] border border-blue-100 text-center mt-6">
-                <p className="text-blue-800 text-[10px] font-black uppercase tracking-widest leading-relaxed">
-                  Estos platillos se preparan al momento. Solicítalos en ventanilla.
-                </p>
+            <div className="p-8">
+              <div className="space-y-3 mb-8">
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block ml-1">Selecciona la semana de aplicación</label>
+                <select 
+                  value={semanaDestino} 
+                  onChange={e => setSemanaDestino(e.target.value)}
+                  className="w-full bg-white border-2 border-slate-200 p-4 rounded-2xl text-xs font-black text-[#1A2744] outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-400/10 transition-all uppercase cursor-pointer"
+                >
+                  {getLunesOpciones().map((op, i) => (
+                    <option key={i} value={op.value}>{op.label}</option>
+                  ))}
+                </select>
               </div>
+
+              <div className="flex gap-4">
+                <button onClick={() => { setModalProgramar(false); setDatosPendientesExcel([]); }} className="flex-1 py-4 text-[10px] font-black uppercase text-slate-400 hover:text-[#1A2744] transition-colors bg-slate-50 rounded-2xl hover:bg-slate-100">Cancelar</button>
+                <button onClick={confirmarCargaExcel} disabled={cargando} className="flex-[2] bg-[#1A2744] text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-[#25365d] active:scale-95 transition-all shadow-xl shadow-[#1A2744]/20 disabled:opacity-50 disabled:active:scale-100">
+                  {cargando ? <Loader2 className="animate-spin text-amber-400" size={18} /> : 'Guardar y Procesar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL GESTIONAR EMPLEADO */}
+      {empleadoEdit && (
+        <div className="fixed inset-0 bg-[#1A2744]/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden border border-white/10">
+            <div className="bg-gradient-to-b from-slate-50 to-white p-10 text-center relative border-b border-slate-100">
+               <button onClick={() => setEmpleadoEdit(null)} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 bg-white p-2 rounded-full shadow-sm border border-slate-100 transition-colors active:scale-90"><X size={16}/></button>
+               <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-[2rem] rotate-3 flex items-center justify-center mx-auto mb-6 shadow-sm border border-amber-100"><UserCog size={36} className="-rotate-3"/></div>
+               <h2 className="text-2xl font-black text-[#1A2744] uppercase mb-2 tracking-tight">Gestión de Identidad</h2>
+               <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] bg-slate-100 inline-block px-3 py-1 rounded-md">{empleadoEdit.nombre_completo}</p>
+            </div>
+
+            <div className="p-10 space-y-6">
+              <div className="p-6 bg-slate-50/80 rounded-[2rem] border border-slate-100">
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block mb-3 ml-1">Restablecer Contraseña</label>
+                <div className="flex gap-3">
+                  <input type="text" placeholder="Nueva Contraseña..." value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-4 rounded-xl text-xs font-bold outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all placeholder:text-slate-300" />
+                  <button onClick={handleCambiarPassword} disabled={cargando} className="bg-[#1A2744] hover:bg-[#25365d] text-white w-14 rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center shrink-0">
+                    {cargando ? <Loader2 className="animate-spin text-amber-400" size={16} /> : <Key size={16} className="text-amber-400"/>}
+                  </button>
+                </div>
+              </div>
+
+              {empleadoEdit.rol !== 'dev' && (
+                <div className="p-6 bg-red-50/50 rounded-[2rem] border border-red-100">
+                  <label className="text-[9px] font-black uppercase text-red-400 tracking-[0.2em] block mb-3 ml-1 flex items-center gap-1.5"><AlertOctagon size={12}/> Zona de Peligro</label>
+                  <button onClick={handleEliminarEmpleado} disabled={cargando} className="w-full bg-white hover:bg-red-500 text-red-500 hover:text-white border border-red-200 p-4 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95">
+                    {cargando ? <Loader2 className="animate-spin" size={16}/> : <Trash2 size={16}/>} Dar de Baja Definitiva
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ALTA MANUAL */}
+      {modalNuevo && (
+        <div className="fixed inset-0 bg-[#1A2744]/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden border border-white/10">
+            <div className="bg-gradient-to-b from-slate-50 to-white p-8 text-center relative border-b border-slate-100">
+               <button onClick={() => setModalNuevo(false)} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 bg-white p-2 rounded-full shadow-sm border border-slate-100 transition-colors active:scale-90"><X size={16}/></button>
+               <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-[1.5rem] rotate-3 flex items-center justify-center mx-auto mb-4 shadow-sm border border-emerald-100"><UserPlus size={28} className="-rotate-3"/></div>
+               <h2 className="text-xl font-black text-[#1A2744] uppercase mb-1 tracking-tight">Alta Manual</h2>
+               <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em]">Registro Individual</p>
+            </div>
+            
+            <div className="p-8 space-y-5">
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block mb-2 ml-1">Nombre Completo</label>
+                <input type="text" placeholder="Ej. JUAN PEREZ LOPEZ" value={nuevoEmp.nombre} onChange={e => setNuevoEmp({...nuevoEmp, nombre: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs font-black uppercase text-[#1A2744] outline-none focus:bg-white focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 transition-all placeholder:font-normal placeholder:text-slate-300" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block mb-2 ml-1">Dependencia / Área</label>
+                <input type="text" placeholder="Ej. ADMINISTRACION" value={nuevoEmp.dependencia} onChange={e => setNuevoEmp({...nuevoEmp, dependencia: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs font-black uppercase text-[#1A2744] outline-none focus:bg-white focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 transition-all placeholder:font-normal placeholder:text-slate-300" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block mb-2 ml-1">Cuota Inicial (Vales)</label>
+                <input type="number" min="0" value={nuevoEmp.cuota} onChange={e => setNuevoEmp({...nuevoEmp, cuota: parseInt(e.target.value) || 0})} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-lg text-center font-black text-[#1A2744] outline-none focus:bg-white focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 transition-all" />
+              </div>
+              
+              <button onClick={guardarNuevoEmpleado} disabled={cargando} className="w-full mt-4 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-xl shadow-emerald-500/20 disabled:opacity-50 disabled:active:scale-100">
+                {cargando ? <Loader2 className="animate-spin text-white" size={18} /> : <><CheckCircle2 size={16}/> Confirmar Alta</>}
+              </button>
             </div>
           </div>
         </div>
@@ -841,50 +972,13 @@ export default function MiValePage() {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.9); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes pulseSoft {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(1.05); }
-        }
-        @keyframes spinSlow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        @keyframes shimmer {
-          100% { transform: translateX(100%); }
-        }
         .anim-fade-up {
           opacity: 0;
           animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
-        .anim-scale-in {
-          opacity: 0;
-          animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        .anim-latido {
-          animation: pulseSoft 2s ease-in-out infinite;
-        }
-        .anim-girar {
-          animation: spinSlow 1s linear infinite;
-        }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
-    </div>
-  );
-}
-
-function PasoCheck({ visible, texto, completed, active }: { visible: boolean, texto: string, completed: boolean, active?: boolean }) {
-  if (!visible) return null;
-  return (
-    <div className={`flex items-center gap-4 text-[10px] uppercase tracking-widest font-black transition-all duration-500 ${completed ? 'text-[#1A2744]' : active ? 'text-amber-500' : 'text-slate-300'}`}>
-      <div className={`w-6 h-6 rounded-xl flex items-center justify-center text-[10px] transition-colors duration-500 ${completed ? 'bg-emerald-50 text-emerald-500 border border-emerald-100' : active ? 'border-2 border-amber-400 bg-white' : 'bg-slate-50 border border-slate-100'}`}>
-        {completed ? '✓' : ''} {active && <div className="w-2 h-2 bg-amber-400 rounded-full anim-latido"></div>}
-      </div>
-      {texto}
     </div>
   );
 }
