@@ -48,7 +48,6 @@ export default function PantallaCajero() {
 
   const [modalManual, setModalManual] = useState(false);
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<any>(null);
-  const [folioManual, setFolioManual] = useState('');
   const [cantidadManual, setCantidadManual] = useState(1);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -79,7 +78,7 @@ export default function PantallaCajero() {
       await cargarDatosDia(); 
       await cargarDatosGlobales();
       
-      const { data: perfiles } = await supabase.from('perfiles').select('nombre_completo, dependencia, tickets_restantes');
+      const { data: perfiles } = await supabase.from('perfiles').select('nombre_completo, dependencia, tickets_restantes, id');
       if (perfiles) setDirectorio(perfiles);
       
       setTimeout(() => inputRef.current?.focus(), 500);
@@ -133,8 +132,14 @@ export default function PantallaCajero() {
   const manejarInput = () => {
     if (!inputRef.current) return;
     const val = inputRef.current.value.toUpperCase();
-    if (val.length >= 3 && !val.includes('|') && !val.includes(']')) { 
-        // CORRECCIÓN INTEGRADA: Busca sin importar si está en mayúscula o minúscula en la BD
+    
+    // Si son puros números y son 10, es que el láser acaba de disparar el código gordo
+    if (/^\d{10}$/.test(val)) {
+        setSugerencias([]);
+        return;
+    }
+
+    if (val.length >= 3) { 
         const resultados = directorio.filter(p => p.nombre_completo.toUpperCase().includes(val)).slice(0, 5); 
         setSugerencias(resultados); 
     } else { 
@@ -147,7 +152,6 @@ export default function PantallaCajero() {
     if (inputRef.current) inputRef.current.value = '';
     setEmpleadoSeleccionado(emp);
     setCantidadManual(1);
-    setFolioManual('');
     setModalManual(true); 
   };
   
@@ -156,86 +160,95 @@ export default function PantallaCajero() {
   const menuMonitor = todosMenus.filter(m => m.fecha === fechaMonitor);
   const reservasMonitor = todasReservas.filter(r => r.menu_comedor?.fecha === fechaMonitor);
 
+  // NUEVA LÓGICA DE ESCANEO ULTRARRÁPIDO
   const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
-    
-    // Leemos el valor exacto que inyectó el lector láser en la caja de texto
     const valorDOM = codigoDirecto || inputRef.current?.value || '';
-    let rawInput = valorDOM.trim().toUpperCase(); 
+    const uidCorto = valorDOM.trim(); 
     
-    if (!rawInput) return;
-
-    // LA MAGIA: Si el escáner escribe ']' en lugar de '|', lo reemplazamos inmediatamente
-    rawInput = rawInput.replace(/\]/g, '|');
-
-    if (!rawInput.includes('|')) {
-      setMensaje({ tipo: 'error', texto: `CÓDIGO INCOMPLETO. LEYÓ: "${rawInput}"` });
-      if (inputRef.current) inputRef.current.value = '';
-      setSugerencias([]);
-      return;
+    if (!uidCorto) return;
+    if (uidCorto.length !== 10 || !/^\d+$/.test(uidCorto)) {
+        setMensaje({ tipo: 'error', texto: `VALE INVÁLIDO. LECTURA: "${uidCorto}"` });
+        if (inputRef.current) inputRef.current.value = '';
+        return;
     }
 
-    const partes = rawInput.split('|');
-    const identificador = partes[0];
-    const cantidadACanjear = parseInt(partes[1]) || 1;
-    const valeUID = partes[3] || partes[2] || '';
-
-    ejecutarCanjeFinal(identificador, cantidadACanjear, valeUID);
-  };
-
-  const ejecutarCanjeFinal = async (identificador: string, cantidad: number, uid: string) => {
     setMensaje({ tipo: null, texto: '' }); setCargando(true);
 
-    if (!uid) {
-        setMensaje({ tipo: 'error', texto: 'FORMATO DE QR O FOLIO INVÁLIDO.' });
-        setCargando(false); return;
+    // 1. Buscamos el vale en la tabla temporal vales_activos
+    const { data: valeActivo } = await supabase.from('vales_activos').select('*').eq('id', uidCorto).maybeSingle();
+
+    if (!valeActivo) {
+        setMensaje({ tipo: 'quemado', texto: 'VALE NO EXISTE O YA FUE COBRADO/CANCELADO.' });
+        setCargando(false);
+        if (inputRef.current) inputRef.current.value = '';
+        return;
     }
 
-    const { data: yaCobrado } = await supabase.from('vales_quemados').select('id').eq('id', uid).maybeSingle();
-    if (yaCobrado) {
-      setMensaje({ tipo: 'quemado', texto: '¡FRAUDE DETECTADO! ESTE VALE YA FUE COBRADO ANTERIORMENTE.' });
-      setCargando(false); setFolioManual(''); setModalManual(false); 
-      if (inputRef.current) inputRef.current.value = '';
-      setSugerencias([]); return;
-    }
-
-    let empleado = null;
-    const { data: empNombre } = await supabase.from('perfiles').select('*').eq('nombre_completo', identificador).maybeSingle();
-    
-    if (empNombre) {
-        empleado = empNombre;
-    } else {
-        const { data: empEmail } = await supabase.from('perfiles').select('*').ilike('email', `${identificador.toLowerCase()}@%`).maybeSingle();
-        empleado = empEmail;
-    }
+    // 2. Buscamos al empleado en la tabla perfiles
+    const { data: empleado } = await supabase.from('perfiles').select('*').eq('nombre_completo', valeActivo.nombre_empleado).maybeSingle();
 
     if (!empleado) { 
-      setMensaje({ tipo: 'error', texto: `NO SE ENCONTRÓ EL PERFIL: ${identificador}` }); 
+      setMensaje({ tipo: 'error', texto: `ERROR: PERFIL INCOMPLETO PARA ${valeActivo.nombre_empleado}` }); 
     } 
-    else if (empleado.tickets_restantes < cantidad) { 
-      setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} NO TIENE SALDO PARA ${cantidad} RACIONES.` }); 
+    else if (empleado.tickets_restantes < valeActivo.cantidad) { 
+      setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} NO TIENE SALDO PARA ESTE VALE.` }); 
     } 
     else {
-      await supabase.from('vales_quemados').insert({ id: uid });
-      await supabase.from('perfiles').update({ tickets_restantes: empleado.tickets_restantes - cantidad, tickets_canjeado: (empleado.tickets_canjeado || 0) + cantidad }).eq('id', empleado.id);
-      const registrosHistorial = Array(cantidad).fill({ nombre_empleado: empleado.nombre_completo, dependencia: empleado.dependencia });
+      // 3. Ejecutamos el cobro
+      await supabase.from('perfiles').update({ tickets_restantes: empleado.tickets_restantes - valeActivo.cantidad, tickets_canjeado: (empleado.tickets_canjeado || 0) + valeActivo.cantidad }).eq('id', empleado.id);
+      
+      const registrosHistorial = Array(valeActivo.cantidad).fill({ nombre_empleado: empleado.nombre_completo, dependencia: empleado.dependencia });
       await supabase.from('historial_comedor').insert(registrosHistorial);
       
       const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.estado === 'APARTADO');
       if (reservaExistente) await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', reservaExistente.id);
 
-      setMensaje({ tipo: 'exito', texto: cantidad > 1 ? `CANJE MÚLTIPLE OK (${cantidad})` : '¡VALE CANJEADO EXITOSAMENTE!', empleado, cantidad, hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) });
+      // 4. DESTRUIMOS EL VALE TEMPORAL PARA QUE NO LO PUEDAN CLONAR NI REUSAR
+      await supabase.from('vales_activos').delete().eq('id', uidCorto);
+
+      setMensaje({ tipo: 'exito', texto: valeActivo.cantidad > 1 ? `CANJE MÚLTIPLE OK (${valeActivo.cantidad})` : '¡VALE CANJEADO EXITOSAMENTE!', empleado, cantidad: valeActivo.cantidad, hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) });
       await cargarDatosDia(); await cargarDatosGlobales();
-      setModalManual(false);
     }
     
     setCargando(false); 
-    setSugerencias([]);
     if (inputRef.current) {
         inputRef.current.value = '';
         inputRef.current.focus();
     }
   };
+
+  const ejecutarCanjeManual = async () => {
+      if(!empleadoSeleccionado) return;
+      setMensaje({ tipo: null, texto: '' }); setCargando(true);
+
+      const { data: empleado } = await supabase.from('perfiles').select('*').eq('id', empleadoSeleccionado.id).maybeSingle();
+      
+      if (!empleado) { 
+        setMensaje({ tipo: 'error', texto: `PERFIL NO ENCONTRADO EN BASE DE DATOS.` }); 
+      } 
+      else if (empleado.tickets_restantes < cantidadManual) { 
+        setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} NO TIENE SALDO PARA ${cantidadManual} RACIONES.` }); 
+      } 
+      else {
+        await supabase.from('perfiles').update({ tickets_restantes: empleado.tickets_restantes - cantidadManual, tickets_canjeado: (empleado.tickets_canjeado || 0) + cantidadManual }).eq('id', empleado.id);
+        const registrosHistorial = Array(cantidadManual).fill({ nombre_empleado: empleado.nombre_completo, dependencia: empleado.dependencia });
+        await supabase.from('historial_comedor').insert(registrosHistorial);
+        
+        const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.estado === 'APARTADO');
+        if (reservaExistente) await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', reservaExistente.id);
+
+        setMensaje({ tipo: 'exito', texto: cantidadManual > 1 ? `COBRO MANUAL MÚLTIPLE OK (${cantidadManual})` : '¡COBRO MANUAL EXITOSO!', empleado, cantidad: cantidadManual, hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) });
+        await cargarDatosDia(); await cargarDatosGlobales();
+        setModalManual(false);
+      }
+      
+      setCargando(false);
+      if (inputRef.current) {
+        inputRef.current.value = '';
+        inputRef.current.focus();
+      }
+  }
 
   const procesarPlanificador = async () => {
     setCargando(true);
@@ -484,7 +497,7 @@ export default function PantallaCajero() {
                     <div className="bg-red-100 p-4 rounded-full mb-6">
                       <AlertOctagon size={56} className="text-red-500 drop-shadow-md" />
                     </div>
-                    <h2 className="text-3xl font-black text-red-950 uppercase mb-3 tracking-tighter">FRAUDE DETECTADO</h2>
+                    <h2 className="text-3xl font-black text-red-950 uppercase mb-3 tracking-tighter">ERROR EN VALE</h2>
                     <p className="text-red-600 font-bold text-[11px] uppercase tracking-widest leading-relaxed max-w-sm bg-white p-4 rounded-xl border border-red-100 shadow-sm">{mensaje.texto}</p>
                   </div>
                 )}
@@ -750,7 +763,7 @@ export default function PantallaCajero() {
         </div>
       </div>
 
-      {/* MODAL DE SEGURIDAD PARA CANJE MANUAL */}
+      {/* MODAL DE COBRO MANUAL SUPER MEJORADO */}
       {modalManual && empleadoSeleccionado && (
         <div className="fixed inset-0 bg-[#1A2744]/95 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[3rem] w-full max-w-md overflow-hidden shadow-2xl shadow-black/50 border border-white/10 animate-in zoom-in-95 duration-300 relative">
@@ -758,8 +771,8 @@ export default function PantallaCajero() {
             <div className="bg-gradient-to-b from-slate-50 to-white p-10 text-center relative border-b border-slate-100">
                 <button onClick={()=>setModalManual(false)} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 bg-white p-2 rounded-full shadow-sm border border-slate-100 transition-colors"><X size={16}/></button>
                 <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-[2rem] rotate-3 flex items-center justify-center mx-auto mb-6 shadow-sm border border-amber-100"><KeyRound size={36} className="-rotate-3"/></div>
-                <h2 className="text-2xl font-black text-[#1A2744] uppercase mb-2 tracking-tight">Anulación Manual</h2>
-                <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] bg-slate-100 inline-block px-3 py-1 rounded-md">Protocolo de Emergencia</p>
+                <h2 className="text-2xl font-black text-[#1A2744] uppercase mb-2 tracking-tight">Cobro Manual</h2>
+                <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] bg-slate-100 inline-block px-3 py-1 rounded-md">Sin código de barras</p>
             </div>
 
             <div className="p-10">
@@ -768,24 +781,18 @@ export default function PantallaCajero() {
                     <p className="text-[#1A2744] font-black text-xl uppercase leading-tight">{empleadoSeleccionado.nombre_completo}</p>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-5 mb-8">
-                    <div>
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 block ml-1">Raciones a cobrar</label>
-                        <div className="flex items-center bg-slate-50 rounded-2xl border border-slate-200 shadow-sm p-1">
-                           <button onClick={()=>setCantidadManual(Math.max(1, cantidadManual-1))} className="p-3 hover:bg-white rounded-xl text-slate-400 hover:text-[#1A2744] hover:shadow-sm transition-all"><Minus size={16}/></button>
-                           <span className="flex-1 text-center font-black text-xl text-[#1A2744]">{cantidadManual}</span>
-                           <button onClick={()=>setCantidadManual(Math.min(empleadoSeleccionado.tickets_restantes, cantidadManual+1))} className="p-3 hover:bg-white rounded-xl text-slate-400 hover:text-[#1A2744] hover:shadow-sm transition-all"><Plus size={16}/></button>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 block ml-1">Token Empleado</label>
-                        <input type="text" maxLength={9} value={folioManual} onChange={(e)=>setFolioManual(e.target.value.toUpperCase())} className="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl text-center font-black text-xl text-[#1A2744] outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 uppercase tracking-[0.2em] transition-all shadow-sm placeholder:text-slate-300 placeholder:text-sm" placeholder="ID" />
+                <div className="mb-8">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 block text-center">Raciones a cobrar</label>
+                    <div className="flex items-center bg-slate-50 rounded-2xl border border-slate-200 shadow-sm p-1 max-w-[200px] mx-auto">
+                        <button onClick={()=>setCantidadManual(Math.max(1, cantidadManual-1))} className="p-3 hover:bg-white rounded-xl text-slate-400 hover:text-[#1A2744] hover:shadow-sm transition-all"><Minus size={16}/></button>
+                        <span className="flex-1 text-center font-black text-2xl text-[#1A2744]">{cantidadManual}</span>
+                        <button onClick={()=>setCantidadManual(Math.min(empleadoSeleccionado.tickets_restantes, cantidadManual+1))} className="p-3 hover:bg-white rounded-xl text-slate-400 hover:text-[#1A2744] hover:shadow-sm transition-all"><Plus size={16}/></button>
                     </div>
                 </div>
 
                 <div className="flex gap-4">
-                    <button onClick={()=>ejecutarCanjeFinal(empleadoSeleccionado.nombre_completo, cantidadManual, folioManual)} disabled={cargando || folioManual.length < 4} className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 hover:bg-[#25365d]">
-                      {cargando ? <Loader2 className="animate-spin text-amber-400" size={18}/> : <><ShieldCheck size={16} className="text-amber-400"/> Ejecutar Descuento</>}
+                    <button onClick={ejecutarCanjeManual} disabled={cargando} className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-[#25365d]">
+                      {cargando ? <Loader2 className="animate-spin text-amber-400" size={18}/> : <><ShieldCheck size={16} className="text-amber-400"/> Ejecutar Cobro Directo</>}
                     </button>
                 </div>
             </div>
