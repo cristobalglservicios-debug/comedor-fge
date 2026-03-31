@@ -98,9 +98,11 @@ export default function AdminDashboard() {
     const { data: dataEmpleados } = await supabase.from('perfiles').select('*').order('nombre_completo', { ascending: true });
     
     if (dataEmpleados) {
-      setEmpleados(dataEmpleados);
+      // BLINDAJE: Filtramos a los usuarios 'dev' para que no existan en la tabla visual
+      const empleadosSinDev = dataEmpleados.filter(e => e.rol !== 'dev');
+      setEmpleados(empleadosSinDev);
       
-      const empleadosReales = dataEmpleados.filter(e => e.rol !== 'dev' && !e.dependencia?.toUpperCase().includes('PRUEBA'));
+      const empleadosReales = empleadosSinDev.filter(e => !e.dependencia?.toUpperCase().includes('PRUEBA'));
       
       const dependenciasUnicas = new Set(empleadosReales.map(e => e.dependencia)).size;
       let totalAsignados = 0; 
@@ -673,14 +675,13 @@ export default function AdminDashboard() {
                       {empleadosFiltrados.map((emp, i) => {
                         const cuotaFutura = cuotasProgramadas.find(c => c.empleado_id === emp.id);
                         return (
-                          <tr key={i} className={`hover:bg-slate-50/50 transition-colors group ${emp.rol === 'dev' ? 'opacity-50 grayscale hover:opacity-100' : ''}`}>
+                          <tr key={i} className={`hover:bg-slate-50/50 transition-colors group`}>
                             <td className="p-5 pl-8">
                                 <div className="flex items-center gap-3">
                                   <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 font-black text-xs border border-slate-200 uppercase">{emp.nombre_completo.substring(0,2)}</div>
                                   <div>
                                     <p className="font-black text-[#1A2744] text-xs uppercase flex items-center gap-2">
                                       {emp.nombre_completo}
-                                      {emp.rol === 'dev' && <span className="bg-slate-800 text-white text-[8px] px-1.5 py-0.5 rounded tracking-widest shadow-sm">DEV</span>}
                                     </p>
                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{emp.dependencia}</p>
                                   </div>
