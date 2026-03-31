@@ -98,8 +98,13 @@ export default function AdminDashboard() {
     const { data: dataEmpleados } = await supabase.from('perfiles').select('*').order('nombre_completo', { ascending: true });
     
     if (dataEmpleados) {
-      // BLINDAJE: Filtramos a los usuarios 'dev' para que no existan en la tabla visual
-      const empleadosSinDev = dataEmpleados.filter(e => e.rol !== 'dev');
+      // BLINDAJE: Filtramos a los usuarios 'dev' y correos maestros para que sean invisibles en la tabla
+      const empleadosSinDev = dataEmpleados.filter(e => 
+        e.rol !== 'dev' && 
+        e.email !== 'cristobal.dev@fge.gob.mx' && 
+        e.email !== 'admin.cristobal@fge.gob.mx'
+      );
+      
       setEmpleados(empleadosSinDev);
       
       const empleadosReales = empleadosSinDev.filter(e => !e.dependencia?.toUpperCase().includes('PRUEBA'));
@@ -186,9 +191,8 @@ export default function AdminDashboard() {
   const handleEliminarEmpleado = async () => {
     if (!empleadoEdit) return;
     
-    // CANDADO MAESTRO DE INDESTRUCTIBILIDAD
-    if (empleadoEdit.email === 'cristobal.dev@fge.gob.mx' || empleadoEdit.rol === 'dev') {
-      return alert("⛔ ACCIÓN DENEGADA: La cuenta maestra de Desarrollador es indestructible y no puede ser eliminada.");
+    if (empleadoEdit.email === 'cristobal.dev@fge.gob.mx' || empleadoEdit.email === 'admin.cristobal@fge.gob.mx' || empleadoEdit.rol === 'dev') {
+      return alert("⛔ ACCIÓN DENEGADA: Cuenta maestra protegida.");
     }
 
     if (!confirm(`⚠️ ¿ELIMINAR DEFINITIVAMENTE a ${empleadoEdit.nombre_completo}?`)) return;
@@ -496,6 +500,8 @@ export default function AdminDashboard() {
 
   const totalCanjeadosMes = canjeadosMesHistorial + stats.canjeados;
   const totalSobrantesMes = sobrantesMesHistorial + stats.disponibles;
+
+  const esCuentaIntocable = empleadoEdit?.rol === 'dev' || empleadoEdit?.email === 'cristobal.dev@fge.gob.mx' || empleadoEdit?.email === 'admin.cristobal@fge.gob.mx';
 
   if (loadingAcceso) {
     return (
@@ -908,23 +914,31 @@ export default function AdminDashboard() {
             </div>
 
             <div className="p-10 space-y-6">
-              <div className="p-6 bg-slate-50/80 rounded-[2rem] border border-slate-100">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block mb-3 ml-1">Restablecer Contraseña</label>
-                <div className="flex gap-3">
-                  <input type="text" placeholder="Nueva Contraseña..." value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-4 rounded-xl text-xs font-bold outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all placeholder:text-slate-300" />
-                  <button onClick={handleCambiarPassword} disabled={cargando} className="bg-[#1A2744] hover:bg-[#25365d] text-white w-14 rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center shrink-0">
-                    {cargando ? <Loader2 className="animate-spin text-amber-400" size={16} /> : <Key size={16} className="text-amber-400"/>}
-                  </button>
+              {esCuentaIntocable ? (
+                <div className="p-6 bg-[#1A2744] rounded-[2rem] border border-[#2A3F6D] text-center shadow-inner">
+                  <ShieldCheck size={36} className="text-amber-400 mx-auto mb-4" />
+                  <h3 className="text-white font-black uppercase tracking-widest text-sm mb-2">Cuenta Maestra Protegida</h3>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest leading-relaxed">Las credenciales y accesos de desarrollo no pueden modificarse desde aquí.</p>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="p-6 bg-slate-50/80 rounded-[2rem] border border-slate-100">
+                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] block mb-3 ml-1">Restablecer Contraseña</label>
+                    <div className="flex gap-3">
+                      <input type="text" placeholder="Nueva Contraseña..." value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} className="flex-1 bg-white border border-slate-200 p-4 rounded-xl text-xs font-bold outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all placeholder:text-slate-300" />
+                      <button onClick={handleCambiarPassword} disabled={cargando} className="bg-[#1A2744] hover:bg-[#25365d] text-white w-14 rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center shrink-0">
+                        {cargando ? <Loader2 className="animate-spin text-amber-400" size={16} /> : <Key size={16} className="text-amber-400"/>}
+                      </button>
+                    </div>
+                  </div>
 
-              {empleadoEdit.rol !== 'dev' && (
-                <div className="p-6 bg-red-50/50 rounded-[2rem] border border-red-100">
-                  <label className="text-[9px] font-black uppercase text-red-400 tracking-[0.2em] block mb-3 ml-1 flex items-center gap-1.5"><AlertOctagon size={12}/> Zona de Peligro</label>
-                  <button onClick={handleEliminarEmpleado} disabled={cargando} className="w-full bg-white hover:bg-red-500 text-red-500 hover:text-white border border-red-200 p-4 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95">
-                    {cargando ? <Loader2 className="animate-spin" size={16}/> : <Trash2 size={16}/>} Dar de Baja Definitiva
-                  </button>
-                </div>
+                  <div className="p-6 bg-red-50/50 rounded-[2rem] border border-red-100">
+                    <label className="text-[9px] font-black uppercase text-red-400 tracking-[0.2em] block mb-3 ml-1 flex items-center gap-1.5"><AlertOctagon size={12}/> Zona de Peligro</label>
+                    <button onClick={handleEliminarEmpleado} disabled={cargando} className="w-full bg-white hover:bg-red-500 text-red-500 hover:text-white border border-red-200 p-4 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95">
+                      {cargando ? <Loader2 className="animate-spin" size={16}/> : <Trash2 size={16}/>} Dar de Baja Definitiva
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </div>
