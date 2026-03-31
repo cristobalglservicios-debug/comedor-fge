@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck, UtensilsCrossed, MessageCircle } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck, UtensilsCrossed, MessageCircle, UserX } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -68,24 +68,32 @@ export default function MiValePage() {
 
   useEffect(() => {
     const intentarAutoLogin = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (!session?.user?.email) {
+        console.log("No hay sesión activa");
         setEstadoVista('busqueda');
         return;
       }
 
-      const debeCambiar = localStorage.getItem('debe_cambiar_password_fge') === 'true';
       const emailLimpio = session.user.email.toLowerCase().trim();
+      console.log("Buscando perfil para:", emailLimpio);
+
+      const debeCambiar = localStorage.getItem('debe_cambiar_password_fge') === 'true';
       
-      // Sincronización por Email INMUNE A MAYUSCULAS/ESPACIOS
-      const { data } = await supabase
+      // BUSQUEDA MULTICAPA: ilike para ignorar mayúsculas y trim en la base
+      const { data, error } = await supabase
         .from('perfiles')
         .select('*')
         .ilike('email', emailLimpio)
         .maybeSingle();
 
+      if (error) {
+        console.error("Error de base de datos:", error);
+      }
+
       if (data) {
+        console.log("Perfil encontrado:", data.nombre_completo);
         localStorage.setItem('fge_empleado_nombre', data.nombre_completo); 
         setEmpleado(data);
         
@@ -97,11 +105,12 @@ export default function MiValePage() {
           setEstadoVista('dashboard');
         }
       } else {
+        console.log("No se encontró fila en la tabla perfiles para este correo.");
         setEstadoVista('busqueda');
       }
     };
     intentarAutoLogin();
-  }, []);
+  }, [router]);
 
   const buscarEmpleadoManual = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -134,9 +143,11 @@ export default function MiValePage() {
     }
 
     localStorage.removeItem('debe_cambiar_password_fge');
-    cargarHistorialReciente(empleado.nombre_completo);
-    await cargarMenusYReservasFuturas(empleado.nombre_completo);
-    setEstadoVista('dashboard');
+    if (empleado) {
+      cargarHistorialReciente(empleado.nombre_completo);
+      await cargarMenusYReservasFuturas(empleado.nombre_completo);
+      setEstadoVista('dashboard');
+    }
     setCargandoPassword(false);
   };
 
@@ -286,7 +297,7 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // Lógica de lectura para cajero (CON CORCHETES PARA LASER)
+  // LÓGICA DE SEGURIDAD PARA LÁSER (CORRECTO: CORCHETE ])
   const valorQR = empleado && tokenSeguridad 
     ? `${empleado.nombre_completo}]${cantidadACanjear}]${tokenSeguridad}` 
     : (empleado?.nombre_completo || 'EMP');
@@ -315,17 +326,19 @@ export default function MiValePage() {
     );
   }
 
+  // --- INTERFAZ MEJORADA: PERFIL NO ENCONTRADO ---
   if (estadoVista === 'busqueda') {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center relative overflow-hidden p-6 text-center">
         <div className="absolute inset-0 bg-gradient-to-br from-[#1A2744]/5 to-transparent z-0"></div>
         <div className="bg-white p-10 rounded-[3rem] shadow-2xl border border-red-100 max-w-sm relative z-10">
           <div className="w-24 h-24 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-            <AlertTriangle size={40} />
+            <UserX size={40} />
           </div>
-          <h2 className="text-[#1A2744] font-black text-2xl uppercase mb-3">Perfil No Encontrado</h2>
+          <h2 className="text-[#1A2744] font-black text-2xl uppercase mb-3">Acceso Denegado</h2>
           <p className="text-slate-500 text-xs font-bold leading-relaxed mb-8">
-            Tu correo institucional no figura en la base de datos del comedor o hay un error en tu registro. Contacta a soporte técnico.
+            Tu correo institucional no figura en la base de datos del comedor o hay un error en tu registro. <br/><br/>
+            <span className="text-[10px] bg-slate-100 p-2 rounded block">Contacta a soporte para verificar tu alta.</span>
           </p>
           <button onClick={handleLogout} className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-[#25365d] transition-colors">
             Cerrar Sesión
@@ -380,7 +393,7 @@ export default function MiValePage() {
           </div>
           <div className="overflow-hidden">
             <p className="text-amber-500 text-[8px] font-black tracking-[0.2em] uppercase mb-0.5">Comedor FGE</p>
-            <h1 className="font-black text-xs md:text-sm uppercase tracking-wider leading-tight text-[#1A2744] truncate">
+            <h1 className="font-black text-xs md:text-sm uppercase tracking-wider leading-tight text-[#1A2744] truncate max-w-[150px] md:max-w-none">
               {empleado ? empleado.nombre_completo : 'Panel Empleado'}
             </h1>
           </div>
@@ -753,19 +766,20 @@ export default function MiValePage() {
 
                 <div className="w-full bg-slate-50 py-6 px-2 rounded-[2rem] flex flex-col items-center mb-8 border border-slate-100 relative overflow-hidden">
                    
-                  <div className="relative z-10 w-full flex justify-center bg-white py-4 mb-4" style={{ touchAction: 'pan-x' }}>
+                  {/* AQUÍ ESTÁ EL AJUSTE PARA LÁSER FÍSICO */}
+                  <div className="relative z-10 w-full flex justify-center bg-white py-6 mb-4 rounded-xl border border-slate-100" style={{ touchAction: 'pan-x' }}>
                     <div style={{ minWidth: 'max-content' }}>
                       <Barcode 
                         value={valorQR} 
                         format="CODE128"
-                        width={1.5}
-                        height={80}
+                        width={2.5} 
+                        height={100} 
                         displayValue={true}
-                        fontSize={14}
+                        fontSize={16}
                         font="monospace"
                         background="#ffffff"
                         lineColor="#000000"
-                        margin={10}
+                        margin={15}
                       />
                     </div>
                   </div>
