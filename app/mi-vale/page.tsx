@@ -76,12 +76,13 @@ export default function MiValePage() {
       }
 
       const debeCambiar = localStorage.getItem('debe_cambiar_password_fge') === 'true';
+      const emailLimpio = session.user.email.toLowerCase().trim();
       
-      // Sincronización por Email
+      // Sincronización por Email INMUNE A MAYUSCULAS/ESPACIOS
       const { data } = await supabase
         .from('perfiles')
         .select('*')
-        .eq('email', session.user.email)
+        .ilike('email', emailLimpio)
         .maybeSingle();
 
       if (data) {
@@ -285,9 +286,9 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // LÓGICA ORIGINAL CORREGIDA PARA LECTURA DE CAJERO (SEPARADOR PIPE |)
+  // Lógica de lectura para cajero (CON CORCHETES PARA LASER)
   const valorQR = empleado && tokenSeguridad 
-    ? `${empleado.nombre_completo}|${cantidadACanjear}|${tokenSeguridad}` 
+    ? `${empleado.nombre_completo}]${cantidadACanjear}]${tokenSeguridad}` 
     : (empleado?.nombre_completo || 'EMP');
 
   if (estadoVista === 'cargando') {
@@ -310,6 +311,26 @@ export default function MiValePage() {
           @keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
           .animate-pulse-slow { animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
         `}} />
+      </div>
+    );
+  }
+
+  if (estadoVista === 'busqueda') {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center relative overflow-hidden p-6 text-center">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1A2744]/5 to-transparent z-0"></div>
+        <div className="bg-white p-10 rounded-[3rem] shadow-2xl border border-red-100 max-w-sm relative z-10">
+          <div className="w-24 h-24 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle size={40} />
+          </div>
+          <h2 className="text-[#1A2744] font-black text-2xl uppercase mb-3">Perfil No Encontrado</h2>
+          <p className="text-slate-500 text-xs font-bold leading-relaxed mb-8">
+            Tu correo institucional no figura en la base de datos del comedor o hay un error en tu registro. Contacta a soporte técnico.
+          </p>
+          <button onClick={handleLogout} className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-[#25365d] transition-colors">
+            Cerrar Sesión
+          </button>
+        </div>
       </div>
     );
   }
