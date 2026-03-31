@@ -69,7 +69,7 @@ export default function LoginScreen() {
         if (rol === 'dev') {
           router.push('/dev-panel');
         } else if (rol === 'admin') {
-          router.push('/admin');
+          router.push('/mi-vale'); // CORRECCIÓN: El admin ahora entra a su perfil de empleado primero
         } else if (rol === 'cajero') {
           router.push('/cajero');
         } else if (rol === 'socio') {
