@@ -61,9 +61,6 @@ export default function MiValePage() {
 
   const [cantidadACanjear, setCantidadACanjear] = useState(1);
   const [tokenSeguridad, setTokenSeguridad] = useState('');
-  const [tokenTimestamp, setTokenTimestamp] = useState(Date.now());
-
-  // ESTADO PARA EL PANEL DE ANTOJITOS
   const [mostrarMenuFijo, setMostrarMenuFijo] = useState(false);
 
   useEffect(() => {
@@ -244,15 +241,30 @@ export default function MiValePage() {
     setCargandoApartado(false);
   };
 
-  const iniciarGeneracion = () => {
+  const iniciarGeneracion = async () => {
     if (empleado.tickets_restantes < cantidadACanjear) {
       alert(`🚫 No tienes suficientes vales (${empleado.tickets_restantes} disponibles).`);
       return;
     }
 
-    const uid = Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 100);
-    setTokenSeguridad(uid);
-    setTokenTimestamp(Date.now());
+    // NÚMERO DE BARRAS TIPO SUPERMERCADO (10 dígitos)
+    const codigoCorto = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+    
+    // Guardar en base de datos temporal
+    const { error } = await supabase.from('vales_activos').insert({
+      id: codigoCorto,
+      nombre_empleado: empleado.nombre_completo,
+      dependencia: empleado.dependencia,
+      cantidad: cantidadACanjear
+    });
+
+    if (error) {
+      alert("Error de conexión. No se pudo generar el vale. Intenta de nuevo.");
+      console.error(error);
+      return;
+    }
+
+    setTokenSeguridad(codigoCorto);
 
     setEstadoVista('animando');
     setPasoAnimacion(1);
@@ -297,10 +309,8 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // LÓGICA DE SEGURIDAD PARA LÁSER (CORRECTO: CORCHETE ])
-  const valorQR = empleado && tokenSeguridad 
-    ? `${empleado.nombre_completo}]${cantidadACanjear}]${tokenSeguridad}` 
-    : (empleado?.nombre_completo || 'EMP');
+  // LÓGICA DE SEGURIDAD PARA LÁSER FÍSICO (CÓDIGO NUMÉRICO DE BARRAS GRUESAS)
+  const valorQR = tokenSeguridad || '0000000000';
 
   if (estadoVista === 'cargando') {
     return (
@@ -766,7 +776,6 @@ export default function MiValePage() {
 
                 <div className="w-full bg-slate-50 py-6 px-2 rounded-[2rem] flex flex-col items-center mb-8 border border-slate-100 relative overflow-hidden">
                    
-                  {/* AQUÍ ESTÁ EL AJUSTE PARA LÁSER FÍSICO */}
                   <div className="relative z-10 w-full flex justify-center bg-white py-6 mb-4 rounded-xl border border-slate-100" style={{ touchAction: 'pan-x' }}>
                     <div style={{ minWidth: 'max-content' }}>
                       <Barcode 
@@ -789,7 +798,7 @@ export default function MiValePage() {
                   </div>
 
                   <div className="relative z-10 mt-8 pt-6 border-t border-slate-200 w-full text-center">
-                    <p className="text-slate-400 text-[8px] font-black uppercase tracking-[0.2em] mb-2">Token de Validación</p>
+                    <p className="text-slate-400 text-[8px] font-black uppercase tracking-[0.2em] mb-2">Código Asignado</p>
                     <div className="flex justify-center items-center gap-2 text-[#1A2744] font-black text-2xl tracking-[0.3em]">
                         <Hash size={20} className="text-slate-300"/> {tokenSeguridad}
                     </div>
