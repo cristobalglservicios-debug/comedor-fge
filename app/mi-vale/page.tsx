@@ -285,10 +285,11 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // Lógica original de lectura para cajero
-  const valorQR = empleado?.nombre_completo || 'EMP';
+  // LÓGICA CORREGIDA PARA LECTURA DE CAJERO: Ensamble seguro NOMBRE|CANTIDAD|TOKEN
+  const valorQR = empleado && tokenSeguridad 
+    ? `${empleado.nombre_completo}|${cantidadACanjear}|${tokenSeguridad}` 
+    : (empleado?.nombre_completo || 'EMP');
 
-  // AQUÍ ESTÁ EL CULPABLE SOLUCIONADO: Al entrar a este if, la pantalla corta la ejecución.
   if (estadoVista === 'cargando') {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center relative overflow-hidden">
