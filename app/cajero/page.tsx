@@ -134,7 +134,8 @@ export default function PantallaCajero() {
     if (!inputRef.current) return;
     const val = inputRef.current.value.toUpperCase();
     if (val.length >= 3 && !val.includes('|') && !val.includes(']')) { 
-        const resultados = directorio.filter(p => p.nombre_completo.includes(val)).slice(0, 5); 
+        // CORRECCIÓN INTEGRADA: Busca sin importar si está en mayúscula o minúscula en la BD
+        const resultados = directorio.filter(p => p.nombre_completo.toUpperCase().includes(val)).slice(0, 5); 
         setSugerencias(resultados); 
     } else { 
         setSugerencias([]); 

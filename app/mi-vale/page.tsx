@@ -285,7 +285,7 @@ export default function MiValePage() {
   const esFinDeSemana = diaSemana === 5 || diaSemana === 6 || diaSemana === 0;
   const mostrarBannerCierre = esFinDeSemana && empleado?.tickets_restantes > 0;
 
-  // LÓGICA CORREGIDA PARA LECTURA DE CAJERO: Ensamble seguro NOMBRE|CANTIDAD|TOKEN
+  // LÓGICA ORIGINAL CORREGIDA PARA LECTURA DE CAJERO (SEPARADOR PIPE |)
   const valorQR = empleado && tokenSeguridad 
     ? `${empleado.nombre_completo}|${cantidadACanjear}|${tokenSeguridad}` 
     : (empleado?.nombre_completo || 'EMP');
