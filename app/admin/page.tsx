@@ -434,6 +434,7 @@ export default function AdminDashboard() {
     });
 
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('vales_activos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
     await registrarLog(userEmail || 'Sistema', 'REINICIO_SEMANA', `Cierre semanal. Sobraron: ${s_semana} | Canjeados: ${c_semana}`);
     
@@ -442,12 +443,16 @@ export default function AdminDashboard() {
   };
 
   const limpiarHistorialPruebas = async () => {
-    if (!confirm("⚠️ ¿BORRAR TODO EL SISTEMA? Se eliminarán empleados y bitácora. (Tus cuentas administrativas se mantendrán a salvo)")) return;
+    if (!confirm("⚠️ ¿PURGAR SISTEMA? Se vaciarán historiales, reservas y vales activos. Los perfiles de empleados quedarán INTACTOS con saldo en 0.")) return;
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('perfiles').delete().eq('rol', 'empleado');
-    await registrarLog(userEmail || 'Sistema', 'LIMPIEZA_TOTAL', 'Eliminó la base de datos de empleados (Mantuvo Admins a salvo)');
+    await supabase.from('vales_activos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('reservas_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
     
+    await registrarLog(userEmail || 'Sistema', 'LIMPIEZA_TOTAL', 'Vació historiales y puso contadores en 0. Empleados intactos.');
+    
+    alert("✅ Sistema purgado exitosamente. Los empleados se conservaron.");
     cargarDatosGenerales(); setCargando(false);
   };
 
