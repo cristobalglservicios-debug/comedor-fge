@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings, Ticket, ClipboardList, Save } from 'lucide-react';
+import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings, Ticket, ClipboardList, Save, Radar } from 'lucide-react';
 import { crearUsuarioGlobal, eliminarUsuarioGlobal, actualizarPerfilGlobal } from '../admin/actions'; 
 
 const supabase = createClient(
@@ -11,7 +11,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Tab = 'roles' | 'switches' | 'danger' | 'auditoria';
+type Tab = 'roles' | 'switches' | 'danger' | 'auditoria' | 'monitor';
 
 export default function DevPanelPage() {
   const router = useRouter();
@@ -20,7 +20,7 @@ export default function DevPanelPage() {
   const [cargandoAccion, setCargandoAccion] = useState(false);
   const [mensaje, setMensaje] = useState<{ texto: string, tipo: 'exito' | 'error' } | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [adminToken, setAdminToken] = useState<string>(''); // Nuevo estado para el Token Seguro
+  const [adminToken, setAdminToken] = useState<string>('');
 
   // Estados de Datos
   const [perfiles, setPerfiles] = useState<any[]>([]);
@@ -28,6 +28,7 @@ export default function DevPanelPage() {
   const [busqueda, setBusqueda] = useState('');
   const [configuraciones, setConfiguraciones] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [alertasSeguridad, setAlertasSeguridad] = useState<any[]>([]); // Nuevo estado para alertas
 
   // Estado Modal Nuevo Usuario
   const [modalNuevo, setModalNuevo] = useState(false);
@@ -46,7 +47,7 @@ export default function DevPanelPage() {
 
     const email = session.user.email?.toLowerCase();
     setUserEmail(email || null);
-    setAdminToken(session.access_token); // Capturamos el Token Seguro
+    setAdminToken(session.access_token);
 
     const { data: miPerfil } = await supabase
       .from('perfiles')
@@ -74,6 +75,10 @@ export default function DevPanelPage() {
 
     const { data: dataLogs } = await supabase.from('historial_comedor').select('*').order('fecha_hora', { ascending: false }).limit(50);
     if (dataLogs) setLogs(dataLogs);
+
+    // Cargar alertas de seguridad
+    const { data: dataAlertas } = await supabase.from('alertas_seguridad').select('*').order('creado_en', { ascending: false }).limit(50);
+    if (dataAlertas) setAlertasSeguridad(dataAlertas);
   };
 
   const manejarBusqueda = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,7 +107,6 @@ export default function DevPanelPage() {
     if (!adminToken) return mostrarMensaje("Error: Faltan credenciales de seguridad", "error");
     setCargandoAccion(true);
     
-    // Enviamos el adminToken en lugar del correo
     const res = await crearUsuarioGlobal(
         nuevoUser.email, 
         nuevoUser.nombre, 
@@ -123,7 +127,6 @@ export default function DevPanelPage() {
     setCargandoAccion(false);
   };
 
-  // --- ACCIÓN: GUARDAR CAMBIOS (NOMBRE, ROL Y DEPENDENCIA) ---
   const handleGuardarCambios = async (id: string, email: string, rolOriginal: string) => {
     const inputNom = document.getElementById(`nom-${id}`) as HTMLInputElement;
     const inputDep = document.getElementById(`dep-${id}`) as HTMLInputElement;
@@ -137,7 +140,6 @@ export default function DevPanelPage() {
     }
 
     setCargandoAccion(true);
-    // Enviamos el adminToken
     const res = await actualizarPerfilGlobal(id, email, selectRol.value, inputDep.value, inputNom.value, adminToken);
     
     if (res.success) {
@@ -149,7 +151,6 @@ export default function DevPanelPage() {
     setCargandoAccion(false);
   };
 
-  // --- NUEVA ACCIÓN: ELIMINAR TOTAL (AUTH + DB) ---
   const handleEliminarUsuario = async (email: string, nombre: string, rol: string) => {
     if (rol === 'dev') return alert("⛔ No puedes eliminar una cuenta de desarrollador desde el panel.");
     if (!adminToken) return mostrarMensaje("Error: Faltan credenciales de seguridad", "error");
@@ -157,7 +158,6 @@ export default function DevPanelPage() {
     if (!confirm(`🔥 ¡PELIGRO! 🔥\n¿Eliminar permanentemente a ${nombre}?\nEsto borrará su cuenta de acceso y su perfil.`)) return;
 
     setCargandoAccion(true);
-    // Enviamos el adminToken
     const res = await eliminarUsuarioGlobal(email, adminToken);
     
     if (res.success) {
@@ -284,14 +284,16 @@ export default function DevPanelPage() {
             { id: 'roles', label: 'Gestión Roles', icon: <Users size={16}/> },
             { id: 'switches', label: 'Kill Switches', icon: <Power size={16}/> },
             { id: 'auditoria', label: 'Logs Auditoría', icon: <Activity size={16}/> },
+            { id: 'monitor', label: 'Monitor Brechas', icon: <Radar size={16}/> },
             { id: 'danger', label: 'Danger Zone', icon: <ShieldAlert size={16}/> }
           ].map(t => (
             <button 
               key={t.id} 
               onClick={() => setActiveTab(t.id as Tab)}
-              className={`flex-1 min-w-[150px] py-3 rounded-lg text-[11px] font-bold uppercase flex items-center justify-center gap-2 transition-all ${activeTab === t.id ? 'bg-slate-800 text-emerald-400 shadow-inner' : 'text-slate-500 hover:bg-slate-800/50'}`}
+              className={`flex-1 min-w-[150px] py-3 rounded-lg text-[11px] font-bold uppercase flex items-center justify-center gap-2 transition-all ${activeTab === t.id ? (t.id === 'monitor' ? 'bg-red-900/50 text-red-400 shadow-inner' : 'bg-slate-800 text-emerald-400 shadow-inner') : 'text-slate-500 hover:bg-slate-800/50'}`}
             >
               {t.icon} {t.label}
+              {t.id === 'monitor' && alertasSeguridad.length > 0 && <span className="bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full animate-pulse">{alertasSeguridad.length}</span>}
             </button>
           ))}
         </div>
@@ -328,7 +330,6 @@ export default function DevPanelPage() {
                   {perfilesFiltrados.slice(0, 100).map(p => (
                     <tr key={p.id} className="hover:bg-slate-800/30 transition-colors group">
                       <td className="px-6 py-4">
-                        {/* INPUT PARA EDITAR NOMBRE */}
                         <input 
                             type="text" 
                             id={`nom-${p.id}`}
@@ -429,6 +430,39 @@ export default function DevPanelPage() {
           </div>
         )}
 
+        {/* NUEVA PESTAÑA DE MONITOR DE BRECHAS */}
+        {activeTab === 'monitor' && (
+          <div className="bg-slate-900 border border-red-900/30 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(220,38,38,0.05)] animate-fade-in">
+            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-red-950/10">
+              <h2 className="text-lg font-black text-red-500 uppercase tracking-widest flex items-center gap-2"><Radar className="animate-spin-slow"/> Radar de Intrusiones</h2>
+              <button onClick={cargarDatos} className="bg-red-900/30 hover:bg-red-900/50 p-2 rounded-lg text-red-400 transition-colors border border-red-900/50"><RefreshCw size={16}/></button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[10px] whitespace-nowrap font-mono">
+                <thead className="bg-slate-950/80 text-red-400/70 uppercase tracking-widest border-b border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4 w-48">Timestamp (Hora de Impacto)</th>
+                    <th className="px-6 py-4">Intruso Detectado (Email)</th>
+                    <th className="px-6 py-4">Acción Interceptada y Bloqueada</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/30 text-slate-300">
+                  {alertasSeguridad.map((alerta, i) => (
+                    <tr key={i} className="hover:bg-red-950/20 transition-colors group">
+                      <td className="px-6 py-4 text-slate-500">{new Date(alerta.creado_en).toLocaleString('es-MX')}</td>
+                      <td className="px-6 py-4 font-bold text-red-400 group-hover:text-red-300">{alerta.email_intruso}</td>
+                      <td className="px-6 py-4"><span className="bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-1 rounded">{alerta.accion_intentada}</span></td>
+                    </tr>
+                  ))}
+                  {alertasSeguridad.length === 0 && (
+                    <tr><td colSpan={3} className="px-6 py-12 text-center text-emerald-500 font-bold uppercase tracking-widest">Sin intentos de intrusión detectados</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'danger' && (
           <div className="space-y-6 animate-fade-in">
             <div className="bg-red-950/20 border border-red-900/50 p-8 rounded-2xl shadow-2xl relative overflow-hidden">
@@ -506,6 +540,8 @@ export default function DevPanelPage() {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin-slow { animation: spin-slow 3s linear infinite; }
       `}} />
     </div>
   );

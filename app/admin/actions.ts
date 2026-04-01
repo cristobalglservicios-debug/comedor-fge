@@ -13,20 +13,30 @@ const supabaseAuth = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// BLINDAJE ORO: Verificación estricta de identidad mediante Token JWT
-async function verificarAdmin(token: string) {
-  if (!token) throw new Error("Acceso denegado: No hay token de seguridad");
+// BLINDAJE ORO + RADAR DE INTRUSOS: Verificación estricta de identidad y registro de ataques
+async function verificarAdmin(token: string, accionIntento: string) {
+  if (!token) {
+    await supabaseAdmin.from('alertas_seguridad').insert([{ email_intruso: 'ANÓNIMO / SIN TOKEN', accion_intentada: accionIntento }]);
+    throw new Error("Acceso denegado: No hay token de seguridad");
+  }
   
-  // 1. Validamos que el token sea real, no haya expirado y pertenezca a una sesión activa
+  // 1. Validamos que el token sea real
   const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
-  if (error || !user) throw new Error("Acceso denegado: Token inválido o falsificado");
+  if (error || !user) {
+    await supabaseAdmin.from('alertas_seguridad').insert([{ email_intruso: 'TOKEN FALSO / EXPIRADO', accion_intentada: accionIntento }]);
+    throw new Error("Acceso denegado: Token inválido o falsificado");
+  }
 
   // 2. Buscamos el perfil del usuario validado para comprobar su ROL exacto
   const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol, email').eq('email', user.email).single();
   
   const esAdmin = perfil?.rol === 'admin' || perfil?.rol === 'dev' || user.email === 'cristobal.dev@fge.gob.mx' || user.email === 'admin.cristobal@fge.gob.mx';
   
-  if (!esAdmin) throw new Error("Acceso denegado: Nivel de privilegios insuficiente. Intento bloqueado.");
+  if (!esAdmin) {
+    // DISPARO DEL RADAR: El usuario está logueado pero intentó hacer algo que no debe
+    await supabaseAdmin.from('alertas_seguridad').insert([{ email_intruso: user.email, accion_intentada: accionIntento }]);
+    throw new Error("Acceso denegado: Nivel de privilegios insuficiente. Intento bloqueado y reportado.");
+  }
 
   return user.email; // Retornamos el email real y comprobado por el servidor
 }
@@ -49,7 +59,7 @@ async function buscarUsuarioPorEmail(email: string) {
 // 1. FUNCIÓN DE AUDITORÍA
 export async function registrarLog(adminToken: string, accion: string, detalle: string) {
   try {
-    const adminEmailReal = await verificarAdmin(adminToken);
+    const adminEmailReal = await verificarAdmin(adminToken, `Intento de registrar log: ${accion}`);
     const { error } = await supabaseAdmin
       .from('auditoria_logs')
       .insert([{ admin_email: adminEmailReal, accion: accion, detalle: detalle }]);
@@ -63,7 +73,7 @@ export async function registrarLog(adminToken: string, accion: string, detalle: 
 // ACTUALIZACIÓN: EDITAR PERFIL DESDE DEV PANEL (INCLUYE NOMBRE)
 export async function actualizarPerfilGlobal(id: string, email: string, nuevoRol: string, nuevaDep: string, nuevoNombre: string, adminToken: string) {
   try {
-    const adminEmailReal = await verificarAdmin(adminToken);
+    const adminEmailReal = await verificarAdmin(adminToken, `Intento de editar perfil de: ${email} a rol ${nuevoRol}`);
     const { error } = await supabaseAdmin
       .from('perfiles')
       .update({ 
@@ -85,7 +95,7 @@ export async function actualizarPerfilGlobal(id: string, email: string, nuevoRol
 // NUEVA FUNCIÓN: ELIMINAR USUARIO TOTAL (AUTH + PERFIL)
 export async function eliminarUsuarioGlobal(email: string, adminToken: string) {
   try {
-    const adminEmailReal = await verificarAdmin(adminToken);
+    const adminEmailReal = await verificarAdmin(adminToken, `Intento de eliminar globalmente a: ${email}`);
     const user = await buscarUsuarioPorEmail(email);
     
     if (user) {
@@ -108,7 +118,7 @@ export async function eliminarUsuarioGlobal(email: string, adminToken: string) {
 // 2. FUNCIÓN MAESTRA PARA EL DEV PANEL (Crea Auth + Perfil con Rol)
 export async function crearUsuarioGlobal(email: string, nombre: string, dependencia: string, rol: string, pass: string, adminToken: string) {
   try {
-    const adminEmailReal = await verificarAdmin(adminToken);
+    const adminEmailReal = await verificarAdmin(adminToken, `Intento de crear usuario global: ${email} con rol ${rol}`);
     
     // A. Crear el usuario en el módulo de Autenticación
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -170,7 +180,7 @@ export async function crearUsuarioGlobal(email: string, nombre: string, dependen
 // 3. FUNCIONES DE ADMINISTRACIÓN EXISTENTES (RESGUARDADAS)
 export async function crearUsuarioAdmin(email: string, nombre: string, adminToken: string, passwordInicial: string = 'FGE2026*') {
   try {
-    const adminEmailReal = await verificarAdmin(adminToken);
+    const adminEmailReal = await verificarAdmin(adminToken, `Intento de crear usuario desde Admin: ${email}`);
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: passwordInicial, 
@@ -203,7 +213,7 @@ export async function crearUsuarioAdmin(email: string, nombre: string, adminToke
 
 export async function eliminarUsuarioAdmin(email: string, adminToken: string) {
   try {
-    const adminEmailReal = await verificarAdmin(adminToken);
+    const adminEmailReal = await verificarAdmin(adminToken, `Intento de eliminar usuario desde Admin: ${email}`);
     const user = await buscarUsuarioPorEmail(email);
     
     if (user) {
@@ -219,7 +229,7 @@ export async function eliminarUsuarioAdmin(email: string, adminToken: string) {
 
 export async function actualizarPasswordAdmin(email: string, nuevaPass: string, adminToken: string) {
   try {
-    const adminEmailReal = await verificarAdmin(adminToken);
+    const adminEmailReal = await verificarAdmin(adminToken, `Intento de cambiar contraseña a: ${email}`);
     const user = await buscarUsuarioPorEmail(email);
     if (!user) return { success: false, error: 'Usuario no encontrado en el sistema de acceso' };
 
