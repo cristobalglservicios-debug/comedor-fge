@@ -7,6 +7,30 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY! 
 )
 
+// Cliente secundario solo para leer y verificar tokens sin privilegios
+const supabaseAuth = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+// BLINDAJE ORO: Verificación estricta de identidad mediante Token JWT
+async function verificarAdmin(token: string) {
+  if (!token) throw new Error("Acceso denegado: No hay token de seguridad");
+  
+  // 1. Validamos que el token sea real, no haya expirado y pertenezca a una sesión activa
+  const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
+  if (error || !user) throw new Error("Acceso denegado: Token inválido o falsificado");
+
+  // 2. Buscamos el perfil del usuario validado para comprobar su ROL exacto
+  const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol, email').eq('email', user.email).single();
+  
+  const esAdmin = perfil?.rol === 'admin' || perfil?.rol === 'dev' || user.email === 'cristobal.dev@fge.gob.mx' || user.email === 'admin.cristobal@fge.gob.mx';
+  
+  if (!esAdmin) throw new Error("Acceso denegado: Nivel de privilegios insuficiente. Intento bloqueado.");
+
+  return user.email; // Retornamos el email real y comprobado por el servidor
+}
+
 // Búsqueda segura sin límite de 1000 usuarios
 async function buscarUsuarioPorEmail(email: string) {
   let page = 1;
@@ -23,17 +47,23 @@ async function buscarUsuarioPorEmail(email: string) {
 }
 
 // 1. FUNCIÓN DE AUDITORÍA
-export async function registrarLog(adminEmail: string, accion: string, detalle: string) {
-  const { error } = await supabaseAdmin
-    .from('auditoria_logs')
-    .insert([{ admin_email: adminEmail, accion: accion, detalle: detalle }]);
-  
-  if (error) console.error("Error guardando log de auditoría:", error.message);
+export async function registrarLog(adminToken: string, accion: string, detalle: string) {
+  try {
+    const adminEmailReal = await verificarAdmin(adminToken);
+    const { error } = await supabaseAdmin
+      .from('auditoria_logs')
+      .insert([{ admin_email: adminEmailReal, accion: accion, detalle: detalle }]);
+    
+    if (error) console.error("Error guardando log de auditoría:", error.message);
+  } catch (e) {
+    console.error("Intento de auditoría bloqueado por seguridad.");
+  }
 }
 
 // ACTUALIZACIÓN: EDITAR PERFIL DESDE DEV PANEL (INCLUYE NOMBRE)
-export async function actualizarPerfilGlobal(id: string, email: string, nuevoRol: string, nuevaDep: string, nuevoNombre: string, adminEmail: string) {
+export async function actualizarPerfilGlobal(id: string, email: string, nuevoRol: string, nuevaDep: string, nuevoNombre: string, adminToken: string) {
   try {
+    const adminEmailReal = await verificarAdmin(adminToken);
     const { error } = await supabaseAdmin
       .from('perfiles')
       .update({ 
@@ -45,7 +75,7 @@ export async function actualizarPerfilGlobal(id: string, email: string, nuevoRol
 
     if (error) throw error;
 
-    await registrarLog(adminEmail, 'EDICION_PERFIL_DEV', `Editó a ${email}: Nombre: ${nuevoNombre.toUpperCase()}, Rol: ${nuevoRol}, Dep: ${nuevaDep}`);
+    await registrarLog(adminToken, 'EDICION_PERFIL_DEV', `Editó a ${email}: Nombre: ${nuevoNombre.toUpperCase()}, Rol: ${nuevoRol}, Dep: ${nuevaDep}`);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -53,8 +83,9 @@ export async function actualizarPerfilGlobal(id: string, email: string, nuevoRol
 }
 
 // NUEVA FUNCIÓN: ELIMINAR USUARIO TOTAL (AUTH + PERFIL)
-export async function eliminarUsuarioGlobal(email: string, adminEmail: string) {
+export async function eliminarUsuarioGlobal(email: string, adminToken: string) {
   try {
+    const adminEmailReal = await verificarAdmin(adminToken);
     const user = await buscarUsuarioPorEmail(email);
     
     if (user) {
@@ -65,7 +96,7 @@ export async function eliminarUsuarioGlobal(email: string, adminEmail: string) {
       // Eliminar de Perfiles (por si no se borró por cascade)
       await supabaseAdmin.from('perfiles').delete().eq('email', email);
 
-      await registrarLog(adminEmail, 'ELIMINACION_TOTAL_DEV', `Eliminó permanentemente a: ${email}`);
+      await registrarLog(adminToken, 'ELIMINACION_TOTAL_DEV', `Eliminó permanentemente a: ${email}`);
       return { success: true };
     }
     return { success: false, error: 'Usuario no encontrado en Auth' };
@@ -75,8 +106,10 @@ export async function eliminarUsuarioGlobal(email: string, adminEmail: string) {
 }
 
 // 2. FUNCIÓN MAESTRA PARA EL DEV PANEL (Crea Auth + Perfil con Rol)
-export async function crearUsuarioGlobal(email: string, nombre: string, dependencia: string, rol: string, pass: string, adminEmail: string = 'Sistema-Dev') {
+export async function crearUsuarioGlobal(email: string, nombre: string, dependencia: string, rol: string, pass: string, adminToken: string) {
   try {
+    const adminEmailReal = await verificarAdmin(adminToken);
+    
     // A. Crear el usuario en el módulo de Autenticación
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email.toLowerCase().trim(),
@@ -102,7 +135,7 @@ export async function crearUsuarioGlobal(email: string, nombre: string, dependen
 
           if (syncError) return { success: false, error: "Auth existe, pero falló sincronización de perfil: " + syncError.message };
           
-          await registrarLog(adminEmail, 'SYNC_EXISTENTE', `Usuario ya existía. Se forzó rol ${rol} para: ${email}`);
+          await registrarLog(adminToken, 'SYNC_EXISTENTE', `Usuario ya existía. Se forzó rol ${rol} para: ${email}`);
           return { success: true, msg: "El usuario ya existía, pero se actualizó su rol y perfil correctamente." };
         }
       }
@@ -126,7 +159,7 @@ export async function crearUsuarioGlobal(email: string, nombre: string, dependen
       return { success: false, error: "Error al crear perfil de base de datos: " + profileError.message };
     }
 
-    await registrarLog(adminEmail, 'ALTA_MAESTRA', `Usuario creado con rol ${rol.toUpperCase()}: ${email}`);
+    await registrarLog(adminToken, 'ALTA_MAESTRA', `Usuario creado con rol ${rol.toUpperCase()}: ${email}`);
     return { success: true };
 
   } catch (err: any) {
@@ -135,52 +168,67 @@ export async function crearUsuarioGlobal(email: string, nombre: string, dependen
 }
 
 // 3. FUNCIONES DE ADMINISTRACIÓN EXISTENTES (RESGUARDADAS)
-export async function crearUsuarioAdmin(email: string, nombre: string, adminEmail: string = 'Sistema', passwordInicial: string = 'FGE2026*') {
-  const { data, error } = await supabaseAdmin.auth.admin.createUser({
-    email: email,
-    password: passwordInicial, 
-    email_confirm: true,
-    user_metadata: { full_name: nombre }
-  })
+export async function crearUsuarioAdmin(email: string, nombre: string, adminToken: string, passwordInicial: string = 'FGE2026*') {
+  try {
+    const adminEmailReal = await verificarAdmin(adminToken);
+    const { data, error } = await supabaseAdmin.auth.admin.createUser({
+      email: email,
+      password: passwordInicial, 
+      email_confirm: true,
+      user_metadata: { full_name: nombre }
+    })
 
-  if (error) {
-    if (error.message.includes('already registered') || error.message.includes('already exists')) {
-      const user = await buscarUsuarioPorEmail(email);
-      
-      if (user) {
-        await supabaseAdmin.auth.admin.updateUserById(user.id, { 
-          password: passwordInicial,
-          email_confirm: true 
-        });
-        await registrarLog(adminEmail, 'RESETEO_ACCESO', `Fuerza clave ${passwordInicial} y activación para: ${email}`);
+    if (error) {
+      if (error.message.includes('already registered') || error.message.includes('already exists')) {
+        const user = await buscarUsuarioPorEmail(email);
+        
+        if (user) {
+          await supabaseAdmin.auth.admin.updateUserById(user.id, { 
+            password: passwordInicial,
+            email_confirm: true 
+          });
+          await registrarLog(adminToken, 'RESETEO_ACCESO', `Fuerza clave ${passwordInicial} y activación para: ${email}`);
+        }
+        return { success: true, msg: `Cuenta reseteada y actualizada a ${passwordInicial}` };
       }
-      return { success: true, msg: `Cuenta reseteada y actualizada a ${passwordInicial}` };
+      return { success: false, error: error.message };
     }
-    return { success: false, error: error.message };
-  }
 
-  await registrarLog(adminEmail, 'CREAR_ACCESO', `Cuenta nueva creada para: ${email}`);
-  return { success: true, data };
+    await registrarLog(adminToken, 'CREAR_ACCESO', `Cuenta nueva creada para: ${email}`);
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
 
-export async function eliminarUsuarioAdmin(email: string, adminEmail: string = 'Sistema') {
-  const user = await buscarUsuarioPorEmail(email);
-  
-  if (user) {
-    await supabaseAdmin.auth.admin.deleteUser(user.id);
-    await registrarLog(adminEmail, 'ELIMINAR_ACCESO', `Cuenta de acceso eliminada: ${email}`);
+export async function eliminarUsuarioAdmin(email: string, adminToken: string) {
+  try {
+    const adminEmailReal = await verificarAdmin(adminToken);
+    const user = await buscarUsuarioPorEmail(email);
+    
+    if (user) {
+      await supabaseAdmin.auth.admin.deleteUser(user.id);
+      await registrarLog(adminToken, 'ELIMINAR_ACCESO', `Cuenta de acceso eliminada: ${email}`);
+      return { success: true };
+    }
+    return { success: false, error: 'Usuario no encontrado' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function actualizarPasswordAdmin(email: string, nuevaPass: string, adminToken: string) {
+  try {
+    const adminEmailReal = await verificarAdmin(adminToken);
+    const user = await buscarUsuarioPorEmail(email);
+    if (!user) return { success: false, error: 'Usuario no encontrado en el sistema de acceso' };
+
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, { password: nuevaPass });
+    if (error) return { success: false, error: error.message };
+    
+    await registrarLog(adminToken, 'CAMBIO_PASSWORD', `Contraseña cambiada manualmente a: ${email}`);
     return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
-  return { success: false, error: 'Usuario no encontrado' };
-}
-
-export async function actualizarPasswordAdmin(email: string, nuevaPass: string, adminEmail: string = 'Sistema') {
-  const user = await buscarUsuarioPorEmail(email);
-  if (!user) return { success: false, error: 'Usuario no encontrado en el sistema de acceso' };
-
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, { password: nuevaPass });
-  if (error) return { success: false, error: error.message };
-  
-  await registrarLog(adminEmail, 'CAMBIO_PASSWORD', `Contraseña cambiada manualmente a: ${email}`);
-  return { success: true };
 }

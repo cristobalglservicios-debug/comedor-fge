@@ -52,6 +52,7 @@ export default function AdminDashboard() {
   const [cargando, setCargando] = useState(false);
   const [loadingAcceso, setLoadingAcceso] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [adminToken, setAdminToken] = useState<string>('');
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isDev, setIsDev] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +88,7 @@ export default function AdminDashboard() {
         setIsSuperAdmin(esTuCuenta);
         setIsDev(rol === 'dev');
         setUserEmail(email);
+        setAdminToken(session.access_token);
         setLoadingAcceso(false);
         cargarDatosGenerales();
       }, 300); 
@@ -98,7 +100,6 @@ export default function AdminDashboard() {
     const { data: dataEmpleados } = await supabase.from('perfiles').select('*').order('nombre_completo', { ascending: true });
     
     if (dataEmpleados) {
-      // BLINDAJE: Filtramos a los usuarios 'dev' y correos maestros para que sean invisibles en la tabla
       const empleadosSinDev = dataEmpleados.filter(e => 
         e.rol !== 'dev' && 
         e.email !== 'cristobal.dev@fge.gob.mx' && 
@@ -166,6 +167,7 @@ export default function AdminDashboard() {
 
   const guardarNuevoEmpleado = async () => {
     if (nuevoEmp.nombre.length < 5) return alert("Ingresa el nombre completo");
+    if (!adminToken) return alert("Error de sesión: Faltan credenciales de seguridad.");
     setCargando(true);
     const emailGen = generarEmail(nuevoEmp.nombre);
     
@@ -178,8 +180,8 @@ export default function AdminDashboard() {
     };
     
     await supabase.from('perfiles').upsert(empData, { onConflict: 'nombre_completo' });
-    await crearUsuarioAdmin(emailGen, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
-    await registrarLog(userEmail || 'Sistema', 'ALTA_MANUAL', `Agregó a ${empData.nombre_completo} (${nuevoEmp.cuota} vales)`);
+    await crearUsuarioAdmin(emailGen, empData.nombre_completo, adminToken, 'FGE2026*');
+    await registrarLog(adminToken, 'ALTA_MANUAL', `Agregó a ${empData.nombre_completo} (${nuevoEmp.cuota} vales)`);
     
     alert(`✅ Empleado agregado con acceso: ${emailGen}`);
     setNuevoEmp({ nombre: '', dependencia: '', cuota: 1 });
@@ -190,6 +192,7 @@ export default function AdminDashboard() {
 
   const handleEliminarEmpleado = async () => {
     if (!empleadoEdit) return;
+    if (!adminToken) return alert("Error de sesión: Faltan credenciales de seguridad.");
     
     if (empleadoEdit.email === 'cristobal.dev@fge.gob.mx' || empleadoEdit.email === 'admin.cristobal@fge.gob.mx' || empleadoEdit.rol === 'dev') {
       return alert("⛔ ACCIÓN DENEGADA: Cuenta maestra protegida.");
@@ -198,8 +201,8 @@ export default function AdminDashboard() {
     if (!confirm(`⚠️ ¿ELIMINAR DEFINITIVAMENTE a ${empleadoEdit.nombre_completo}?`)) return;
     setCargando(true);
     await supabase.from('perfiles').delete().eq('id', empleadoEdit.id);
-    await eliminarUsuarioAdmin(empleadoEdit.email, userEmail || 'Sistema');
-    await registrarLog(userEmail || 'Sistema', 'ELIMINAR_EMPLEADO', `Eliminó el perfil de ${empleadoEdit.nombre_completo}`);
+    await eliminarUsuarioAdmin(empleadoEdit.email, adminToken);
+    await registrarLog(adminToken, 'ELIMINAR_EMPLEADO', `Eliminó el perfil de ${empleadoEdit.nombre_completo}`);
     
     alert("✅ Empleado eliminado");
     setEmpleadoEdit(null);
@@ -209,8 +212,9 @@ export default function AdminDashboard() {
 
   const handleCambiarPassword = async () => {
     if (nuevaPass.length < 6) return alert("La contraseña debe tener al menos 6 caracteres");
+    if (!adminToken) return alert("Error de sesión: Faltan credenciales de seguridad.");
     setCargando(true);
-    const res = await actualizarPasswordAdmin(empleadoEdit.email, nuevaPass, userEmail || 'Sistema');
+    const res = await actualizarPasswordAdmin(empleadoEdit.email, nuevaPass, adminToken);
     setCargando(false);
     if (res.success) { alert("✅ Contraseña actualizada"); setNuevaPass(''); } else { alert("❌ Error: " + res.error); }
   };
@@ -320,6 +324,7 @@ export default function AdminDashboard() {
   };
 
   const confirmarCargaExcel = async () => {
+    if (!adminToken) return alert("Error de sesión: Faltan credenciales de seguridad.");
     setCargando(true);
     let procesados = 0;
     
@@ -334,7 +339,7 @@ export default function AdminDashboard() {
             email: empData.emailGen
           }, { onConflict: 'nombre_completo' });
           
-          await crearUsuarioAdmin(empData.emailGen, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
+          await crearUsuarioAdmin(empData.emailGen, empData.nombre_completo, adminToken, 'FGE2026*');
           procesados++;
         }
       } else {
@@ -355,7 +360,7 @@ export default function AdminDashboard() {
             
             if (nuevoPerfil) {
               empId = nuevoPerfil.id;
-              await crearUsuarioAdmin(empData.emailGen, empData.nombre_completo, userEmail || 'Sistema', 'FGE2026*');
+              await crearUsuarioAdmin(empData.emailGen, empData.nombre_completo, adminToken, 'FGE2026*');
             }
           }
 
@@ -367,7 +372,7 @@ export default function AdminDashboard() {
         }
       }
 
-      await registrarLog(userEmail || 'Sistema', 'CARGAR_EXCEL', `Programó nómina: ${procesados} empleados (${semanaDestino === 'actual' ? 'Semana Actual' : semanaDestino})`);
+      await registrarLog(adminToken, 'CARGAR_EXCEL', `Programó nómina: ${procesados} empleados (${semanaDestino === 'actual' ? 'Semana Actual' : semanaDestino})`);
       alert(`✅ Éxito: Se programaron ${procesados} empleados para ${semanaDestino === 'actual' ? 'la semana actual' : 'el lunes ' + semanaDestino}.`);
     } catch (err) {
        console.error(err);
@@ -424,6 +429,7 @@ export default function AdminDashboard() {
 
   const reiniciarSemana = async () => {
     if (!confirm("🔵 ¿CERRAR SEMANA? Esto guardará el reporte de sobrantes y pondrá los contadores en 0 para cargar la nueva nómina.")) return;
+    if (!adminToken) return alert("Error de sesión: Faltan credenciales de seguridad.");
     setCargando(true);
 
     const { data: empCierre } = await supabase.from('perfiles').select('tickets_canjeado, tickets_restantes').neq('id', '00000000-0000-0000-0000-000000000000');
@@ -442,7 +448,7 @@ export default function AdminDashboard() {
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('vales_activos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
-    await registrarLog(userEmail || 'Sistema', 'REINICIO_SEMANA', `Cierre semanal. Sobraron: ${s_semana} | Canjeados: ${c_semana}`);
+    await registrarLog(adminToken, 'REINICIO_SEMANA', `Cierre semanal. Sobraron: ${s_semana} | Canjeados: ${c_semana}`);
     
     alert("✅ Cierre exitoso y contadores en 0. Sistema listo para cargar el nuevo Excel de la semana.");
     cargarDatosGenerales(); setCargando(false);
@@ -450,23 +456,24 @@ export default function AdminDashboard() {
 
   const limpiarHistorialPruebas = async () => {
     if (!confirm("⚠️ ¿PURGAR SISTEMA? Se vaciarán historiales, reservas y vales activos. Los perfiles de empleados quedarán INTACTOS con saldo en 0.")) return;
+    if (!adminToken) return alert("Error de sesión: Faltan credenciales de seguridad.");
     setCargando(true);
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('vales_activos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('reservas_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
     
-    await registrarLog(userEmail || 'Sistema', 'LIMPIEZA_TOTAL', 'Vació historiales y puso contadores en 0. Empleados intactos.');
+    await registrarLog(adminToken, 'LIMPIEZA_TOTAL', 'Vació historiales y puso contadores en 0. Empleados intactos.');
     
     alert("✅ Sistema purgado exitosamente. Los empleados se conservaron.");
     cargarDatosGenerales(); setCargando(false);
   };
 
   const actualizarCuota = async (id: string, n: number) => { 
-    if (n >= 0) { 
+    if (n >= 0 && adminToken) { 
       const emp = empleados.find(e => e.id === id);
       await supabase.from('perfiles').update({ tickets_restantes: n }).eq('id', id); 
-      if (emp) await registrarLog(userEmail || 'Sistema', 'AJUSTE_CUOTA', `Modificó cuota de ${emp.nombre_completo} a ${n} vales`);
+      if (emp) await registrarLog(adminToken, 'AJUSTE_CUOTA', `Modificó cuota de ${emp.nombre_completo} a ${n} vales`);
       cargarDatosGenerales(); 
     } 
   };

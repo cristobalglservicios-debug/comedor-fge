@@ -20,6 +20,7 @@ export default function DevPanelPage() {
   const [cargandoAccion, setCargandoAccion] = useState(false);
   const [mensaje, setMensaje] = useState<{ texto: string, tipo: 'exito' | 'error' } | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [adminToken, setAdminToken] = useState<string>(''); // Nuevo estado para el Token Seguro
 
   // Estados de Datos
   const [perfiles, setPerfiles] = useState<any[]>([]);
@@ -45,6 +46,7 @@ export default function DevPanelPage() {
 
     const email = session.user.email?.toLowerCase();
     setUserEmail(email || null);
+    setAdminToken(session.access_token); // Capturamos el Token Seguro
 
     const { data: miPerfil } = await supabase
       .from('perfiles')
@@ -52,7 +54,7 @@ export default function DevPanelPage() {
       .eq('email', email)
       .maybeSingle();
 
-    if (miPerfil?.rol === 'dev') {
+    if (miPerfil?.rol === 'dev' || email === 'cristobal.dev@fge.gob.mx') {
       setLoadingAcceso(false);
       cargarDatos();
     } else {
@@ -97,15 +99,17 @@ export default function DevPanelPage() {
 
   const ejecutarCrearUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!adminToken) return mostrarMensaje("Error: Faltan credenciales de seguridad", "error");
     setCargandoAccion(true);
     
+    // Enviamos el adminToken en lugar del correo
     const res = await crearUsuarioGlobal(
         nuevoUser.email, 
         nuevoUser.nombre, 
         nuevoUser.dependencia, 
         nuevoUser.rol, 
         nuevoUser.pass,
-        userEmail || 'Dev-Admin'
+        adminToken
     );
     
     if (res.success) {
@@ -126,14 +130,15 @@ export default function DevPanelPage() {
     const selectRol = document.getElementById(`rol-${id}`) as HTMLSelectElement;
 
     if (!inputNom || !inputDep || !selectRol) return;
+    if (!adminToken) return mostrarMensaje("Error: Faltan credenciales de seguridad", "error");
 
     if (rolOriginal === 'dev' && selectRol.value !== 'dev') {
         if (!confirm("⚠️ ¿Estás seguro de quitarte el rol de DEV? Perderás acceso a este panel inmediatamente.")) return;
     }
 
     setCargandoAccion(true);
-    // Ahora enviamos el nuevo nombre capturado del input
-    const res = await actualizarPerfilGlobal(id, email, selectRol.value, inputDep.value, inputNom.value, userEmail || 'Dev-Admin');
+    // Enviamos el adminToken
+    const res = await actualizarPerfilGlobal(id, email, selectRol.value, inputDep.value, inputNom.value, adminToken);
     
     if (res.success) {
       mostrarMensaje('Perfil actualizado', 'exito');
@@ -147,11 +152,13 @@ export default function DevPanelPage() {
   // --- NUEVA ACCIÓN: ELIMINAR TOTAL (AUTH + DB) ---
   const handleEliminarUsuario = async (email: string, nombre: string, rol: string) => {
     if (rol === 'dev') return alert("⛔ No puedes eliminar una cuenta de desarrollador desde el panel.");
+    if (!adminToken) return mostrarMensaje("Error: Faltan credenciales de seguridad", "error");
     
     if (!confirm(`🔥 ¡PELIGRO! 🔥\n¿Eliminar permanentemente a ${nombre}?\nEsto borrará su cuenta de acceso y su perfil.`)) return;
 
     setCargandoAccion(true);
-    const res = await eliminarUsuarioGlobal(email, userEmail || 'Dev-Admin');
+    // Enviamos el adminToken
+    const res = await eliminarUsuarioGlobal(email, adminToken);
     
     if (res.success) {
       mostrarMensaje('Usuario eliminado del sistema', 'exito');
