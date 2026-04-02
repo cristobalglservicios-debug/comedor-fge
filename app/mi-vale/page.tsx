@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck, UtensilsCrossed, MessageCircle, UserX } from 'lucide-react';
+import { LogOut, QrCode, Utensils, History, TicketCheck, ChefHat, Check, Calendar, Loader2, Sunrise, Sun, Moon, X, Lock, Minus, Plus, AlertTriangle, Layers, Clock, Hash, Flame, Star, Store, ChevronRight, Terminal, ShieldCheck, UtensilsCrossed, MessageCircle, UserX, Send, MessageSquare, LifeBuoy, CheckCircle2 } from 'lucide-react';
 import Barcode from 'react-barcode';
 
 const supabase = createClient(
@@ -62,6 +62,13 @@ export default function MiValePage() {
   const [cantidadACanjear, setCantidadACanjear] = useState(1);
   const [tokenSeguridad, setTokenSeguridad] = useState('');
   const [mostrarMenuFijo, setMostrarMenuFijo] = useState(false);
+
+  // Estados para el Buzón de Quejas/Sugerencias
+  const [showBuzon, setShowBuzon] = useState(false);
+  const [buzonTipo, setBuzonTipo] = useState('Sugerencia');
+  const [buzonMensaje, setBuzonMensaje] = useState('');
+  const [enviandoBuzon, setEnviandoBuzon] = useState(false);
+  const [mensajeExito, setMensajeExito] = useState(false);
 
   useEffect(() => {
     const intentarAutoLogin = async () => {
@@ -282,6 +289,33 @@ export default function MiValePage() {
     localStorage.removeItem('debe_cambiar_password_fge');
     await supabase.auth.signOut();
     router.push('/');
+  };
+
+  // --- LÓGICA DE ENVÍO DE BUZÓN ---
+  const enviarBuzon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (buzonMensaje.trim().length < 10) return alert("Por favor, detalla un poco más tu mensaje.");
+    
+    setEnviandoBuzon(true);
+    const { error } = await supabase.from('buzon_mensajes').insert([{
+      tipo: buzonTipo,
+      mensaje: buzonMensaje.trim()
+    }]);
+    
+    setEnviandoBuzon(false);
+    
+    if (error) {
+      alert("Error al enviar el mensaje. Intenta de nuevo.");
+      console.error(error);
+    } else {
+      setMensajeExito(true);
+      setTimeout(() => {
+        setShowBuzon(false);
+        setMensajeExito(false);
+        setBuzonMensaje('');
+        setBuzonTipo('Sugerencia');
+      }, 3000);
+    }
   };
 
   const formatearFechaPestaña = (fechaISO: string) => {
@@ -729,6 +763,28 @@ export default function MiValePage() {
                 {historial.length === 0 && <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6 border-2 border-dashed border-slate-100 rounded-2xl">No hay canjes previos</p>}
               </div>
             </div>
+
+            {/* SECCIÓN DE CONTACTO INSTITUCIONAL */}
+            <div className="grid grid-cols-2 gap-4 mb-6 anim-fade-up" style={{animationDelay: '600ms'}}>
+              <a
+                href={`https://wa.me/5219991190990?text=${encodeURIComponent(`Hola Soporte, soy ${empleado.nombre_completo} (${empleado.dependencia}). Necesito ayuda con la app Comedor FGE:`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white border border-blue-100 shadow-sm p-4 rounded-[2rem] flex flex-col items-center justify-center text-center gap-2 hover:bg-blue-50 active:scale-95 transition-all group"
+              >
+                <div className="bg-blue-50 text-blue-500 p-3 rounded-2xl group-hover:scale-110 transition-transform"><LifeBuoy size={24}/></div>
+                <span className="text-[10px] font-black text-[#1A2744] uppercase tracking-widest mt-1">Soporte Técnico</span>
+              </a>
+
+              <button
+                onClick={() => setShowBuzon(true)}
+                className="bg-white border border-amber-100 shadow-sm p-4 rounded-[2rem] flex flex-col items-center justify-center text-center gap-2 hover:bg-amber-50 active:scale-95 transition-all group"
+              >
+                <div className="bg-amber-50 text-amber-500 p-3 rounded-2xl group-hover:scale-110 transition-transform"><MessageSquare size={24}/></div>
+                <span className="text-[10px] font-black text-[#1A2744] uppercase tracking-widest mt-1">Buzón de Quejas</span>
+              </button>
+            </div>
+
           </div>
         )}
 
@@ -822,17 +878,67 @@ export default function MiValePage() {
 
       </div>
 
-      {/* BOTÓN FLOTANTE DE SOPORTE WHATSAPP */}
-      {empleado && estadoVista !== 'animando' && (
-        <a
-          href={`https://wa.me/529991190990?text=${encodeURIComponent(`Hola Soporte, soy ${empleado.nombre_completo} (${empleado.dependencia}). Necesito ayuda con la app Comedor FGE:`)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="fixed bottom-6 right-6 z-[100] bg-[#25D366] text-white px-4 py-3.5 rounded-[1.5rem] shadow-[0_8px_30px_rgba(37,211,102,0.3)] hover:shadow-[0_15px_40px_rgba(37,211,102,0.4)] active:scale-90 hover:-translate-y-1 transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-widest"
-        >
-          <MessageCircle size={20} />
-          <span className="mt-0.5">Soporte</span>
-        </a>
+      {/* MODAL BUZÓN DE SUGERENCIAS / QUEJAS */}
+      {showBuzon && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-[#1A2744]/90 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl relative">
+            
+            <div className="bg-slate-50 p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="bg-amber-100 text-amber-600 p-2 rounded-xl">
+                  <MessageSquare size={20} />
+                </div>
+                <h3 className="font-black text-[#1A2744] uppercase tracking-tight text-sm">Buzón FGE</h3>
+              </div>
+              <button onClick={() => setShowBuzon(false)} className="text-slate-400 hover:text-red-500 transition-colors bg-white p-2 rounded-full shadow-sm border border-slate-100 active:scale-90">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {mensajeExito ? (
+                <div className="text-center py-8">
+                  <CheckCircle2 size={48} className="text-emerald-500 mx-auto mb-4" />
+                  <h4 className="font-black text-[#1A2744] text-lg uppercase tracking-tight mb-2">¡Enviado!</h4>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Tu reporte es anónimo y ha sido entregado a Gerencia.</p>
+                </div>
+              ) : (
+                <form onSubmit={enviarBuzon} className="space-y-4">
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2 block ml-1">Tipo de Mensaje</label>
+                    <select 
+                      value={buzonTipo} 
+                      onChange={(e) => setBuzonTipo(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-xs font-black uppercase text-[#1A2744] outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all cursor-pointer"
+                    >
+                      <option value="Sugerencia">Sugerencia</option>
+                      <option value="Queja">Queja / Reporte</option>
+                      <option value="Problema Tecnico">Falla Técnica</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2 block ml-1">Detalle (Anónimo)</label>
+                    <textarea 
+                      required
+                      rows={4}
+                      placeholder="Escribe tu reporte aquí..."
+                      value={buzonMensaje}
+                      onChange={(e) => setBuzonMensaje(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-xs outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all resize-none text-[#1A2744]"
+                    ></textarea>
+                  </div>
+                  <button 
+                    type="submit" 
+                    disabled={enviandoBuzon}
+                    className="w-full bg-[#1A2744] text-white p-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl shadow-[#1A2744]/20 disabled:opacity-50"
+                  >
+                    {enviandoBuzon ? <Loader2 className="animate-spin text-amber-400" size={16} /> : <><Send size={16} className="text-amber-400"/> Enviar a Gerencia</>}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL BOTTOM SHEET: MENÚ DE ANTOJITOS */}
@@ -902,6 +1008,10 @@ export default function MiValePage() {
         @keyframes shimmer {
           100% { transform: translateX(100%); }
         }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
         .anim-fade-up {
           opacity: 0;
           animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -915,6 +1025,9 @@ export default function MiValePage() {
         }
         .anim-girar {
           animation: spinSlow 1s linear infinite;
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.3s ease-out forwards;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
