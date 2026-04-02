@@ -392,35 +392,92 @@ export default function MiValePage() {
     );
   }
 
-  // --- COMPONENTE DE TARJETA OPTIMIZADO PARA MÓVIL (TÁCTIL) ---
-  const TarjetaPlatillo = ({ m, index }: { m: any, index: number }) => (
-    <div 
-      className="anim-fade-up bg-white p-5 rounded-3xl flex justify-between items-center border border-slate-100 shadow-sm active:scale-[0.98] active:bg-slate-50 transition-all duration-200 mb-3 relative overflow-hidden"
-      style={{ animationDelay: `${index * 100}ms` }}
-    >
-      <div className="flex-1 pr-4 relative z-10">
-        <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1">{m.platillo}</h3>
-        {m.descripcion && <p className="text-slate-400 text-[10px] leading-snug font-medium mb-1">{m.descripcion}</p>}
-        {m.porciones_disponibles <= 15 && m.porciones_totales < 9000 && (
-          <span className="text-red-500 text-[9px] font-black uppercase flex items-center gap-1 anim-latido mt-1 bg-red-50 inline-flex px-2 py-0.5 rounded-lg border border-red-100"><Flame size={12}/> ¡Quedan {m.porciones_disponibles}!</span>
-        )}
-      </div>
-      
-      <div className="flex flex-col items-center gap-3 shrink-0 relative z-10">
-        <div className={`text-center flex flex-col items-center justify-center p-2 rounded-2xl w-14 h-14 border transition-colors duration-300 ${m.porciones_disponibles <= 15 ? 'bg-red-50 border-red-100 text-red-600 anim-latido' : 'bg-slate-50 border-slate-100 text-[#1A2744]'}`}>
-          <p className="text-2xl font-black leading-none tracking-tighter">{m.porciones_disponibles}</p>
-          <p className="text-[8px] font-black uppercase mt-0.5 opacity-60">Disp.</p>
+  // =========================================================================
+  // --- NUEVA TARJETA RAPPI STYLE (CONGELANDO LÓGICA, CAMBIANDO SÓLO UX) ---
+  // =========================================================================
+  const TarjetaPlatilloRappi = ({ m, index }: { m: any, index: number }) => {
+    const isDesayuno = m.tipo_comida === 'DESAYUNO';
+    const isAlmuerzo = m.tipo_comida === 'ALMUERZO';
+    const isAntojito = m.porciones_totales >= 9000;
+    
+    // Asignación de Paleta de Colores
+    const tema = isDesayuno ? {
+      bg: 'bg-amber-50', text: 'text-amber-500', border: 'border-amber-100',
+      btnFrom: 'from-amber-500', btnTo: 'to-amber-400', shadow: 'shadow-amber-500/20',
+      icon: <Sunrise size={28} className="text-amber-500" />
+    } : isAlmuerzo ? {
+      bg: 'bg-emerald-50', text: 'text-emerald-500', border: 'border-emerald-100',
+      btnFrom: 'from-emerald-500', btnTo: 'to-emerald-400', shadow: 'shadow-emerald-500/20',
+      icon: <Utensils size={26} className="text-emerald-500" />
+    } : {
+      bg: 'bg-indigo-50', text: 'text-indigo-500', border: 'border-indigo-100',
+      btnFrom: 'from-indigo-500', btnTo: 'to-indigo-400', shadow: 'shadow-indigo-500/20',
+      icon: <Moon size={28} className="text-indigo-500" />
+    };
+
+    const isAgotado = m.porciones_disponibles <= 0;
+
+    return (
+      <div 
+        className={`anim-fade-up bg-white p-4 rounded-[2rem] flex gap-4 items-center border shadow-[0_10px_20px_rgba(0,0,0,0.03)] transition-all duration-300 relative overflow-hidden group ${isAgotado ? 'opacity-50 grayscale border-slate-200' : `border-slate-100 hover:shadow-[0_15px_30px_rgba(0,0,0,0.08)] hover:-translate-y-1 hover:border-slate-200 active:scale-[0.98]`}`}
+        style={{ animationDelay: `${index * 50}ms` }}
+      >
+        {/* Imagen Circular (Placeholder Premium) */}
+        <div className={`w-[85px] h-[85px] shrink-0 rounded-[1.5rem] flex items-center justify-center border ${tema.border} ${tema.bg} relative overflow-hidden transition-transform duration-300 ${!isAgotado && 'group-hover:rotate-3 group-hover:scale-105'}`}>
+           <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-transparent"></div>
+           {tema.icon}
         </div>
-        <button 
-          onClick={() => apartarComida(m)}
-          disabled={cargandoApartado}
-          className="relative overflow-hidden w-full bg-gradient-to-r from-emerald-500 to-emerald-400 text-white py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-[0_4px_10px_rgba(16,185,129,0.3)] active:scale-90 active:shadow-sm transition-all flex items-center justify-center gap-1 before:absolute before:inset-0 before:bg-white/30 before:-translate-x-full before:animate-[shimmer_3s_infinite]"
-        >
-          {cargandoApartado ? <Loader2 className="anim-girar relative z-10" size={14}/> : <><Plus size={14} className="relative z-10"/> <span className="relative z-10">Apartar</span></>}
-        </button>
+
+        {/* Textos y Badges */}
+        <div className="flex-1 min-w-0 py-1 z-10 flex flex-col justify-between h-full">
+          <div>
+            <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-1 truncate">{m.platillo}</h3>
+            {m.descripcion && <p className="text-slate-400 text-[10px] leading-snug font-medium mb-2 truncate">{m.descripcion}</p>}
+          </div>
+          
+          <div className="flex items-center gap-2 mt-auto">
+            {isAntojito ? (
+              <span className="text-emerald-600 text-[9px] font-black uppercase flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                <Check size={12}/> Menú Fijo
+              </span>
+            ) : m.porciones_disponibles <= 15 && !isAgotado ? (
+              <span className="text-red-600 text-[9px] font-black uppercase flex items-center gap-1 anim-latido bg-red-50 px-2 py-1 rounded-lg border border-red-100">
+                <Flame size={12}/> Quedan {m.porciones_disponibles}
+              </span>
+            ) : isAgotado ? (
+              <span className="text-slate-400 text-[9px] font-black uppercase flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                Agotado
+              </span>
+            ) : (
+              <span className="text-slate-500 text-[9px] font-black uppercase flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                Stock: {m.porciones_disponibles}
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Botón de Acción (Agregar) */}
+        <div className="shrink-0 flex flex-col justify-center pl-2 z-10">
+          <button 
+            onClick={() => apartarComida(m)}
+            disabled={cargandoApartado || isAgotado}
+            className={`relative overflow-hidden w-12 h-12 bg-gradient-to-br ${isAgotado ? 'from-slate-300 to-slate-200 text-white shadow-none cursor-not-allowed' : `${tema.btnFrom} ${tema.btnTo} text-white shadow-lg ${tema.shadow} active:scale-90 transition-all sm:w-auto sm:px-5`} rounded-[1.2rem] flex items-center justify-center gap-1`}
+          >
+            {cargandoApartado ? (
+               <Loader2 className="anim-girar" size={18}/> 
+            ) : isAgotado ? (
+               <X size={20} />
+            ) : (
+               <>
+                 <Plus size={20} />
+                 <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest">Agregar</span>
+               </>
+            )}
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-10 relative">
@@ -591,6 +648,11 @@ export default function MiValePage() {
                </div>
             </div>
 
+            {/* ==================================================================== */}
+            {/* INICIO: SECCIÓN DEL MENÚ (RAPPI STYLE UX)                            */}
+            {/* ==================================================================== */}
+
+            {/* HEADER DARK DEL MENÚ (Calendario) */}
             <div className="bg-gradient-to-br from-[#1A2744] to-[#25365d] rounded-[2.5rem] shadow-2xl p-6 border border-slate-700 relative overflow-hidden">
               <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-amber-400/10 rounded-full blur-[40px] pointer-events-none"></div>
               
@@ -600,12 +662,12 @@ export default function MiValePage() {
                 </div>
                 <div>
                   <h2 className="text-white text-xl font-black uppercase tracking-wider">Menú FGE</h2>
-                  <p className="text-amber-400/80 text-[9px] uppercase font-black tracking-[0.2em] mt-1">Planifica tus comidas</p>
+                  <p className="text-amber-400/80 text-[9px] uppercase font-black tracking-[0.2em] mt-1">Descubre qué comerás hoy</p>
                 </div>
               </div>
 
               {fechasDisponibles.length > 0 && (
-                <div className="flex gap-3 overflow-x-auto pb-6 mb-2 no-scrollbar border-b border-white/5 relative z-10">
+                <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar border-b border-white/5 relative z-10 snap-x">
                   {fechasDisponibles.map(fecha => {
                     const { day, weekday } = formatearFechaPestaña(fecha);
                     const isActive = fechaActiva === fecha;
@@ -613,7 +675,7 @@ export default function MiValePage() {
                       <button 
                         key={fecha} 
                         onClick={() => setFechaActiva(fecha)}
-                        className={`flex flex-col items-center justify-center rounded-[1.2rem] min-w-[70px] h-[85px] transition-all duration-300 border active:scale-95 ${isActive ? 'bg-amber-400 text-[#1A2744] shadow-lg shadow-amber-400/20 border-amber-300 scale-105' : 'bg-[#2A3F6D]/50 border-[#2A3F6D] text-slate-300'}`}
+                        className={`snap-start flex flex-col items-center justify-center rounded-[1.2rem] min-w-[70px] h-[85px] transition-all duration-300 border active:scale-95 ${isActive ? 'bg-amber-400 text-[#1A2744] shadow-lg shadow-amber-400/20 border-amber-300 scale-105' : 'bg-[#2A3F6D]/50 border-[#2A3F6D] text-slate-300 hover:bg-[#2A3F6D]'}`}
                       >
                         <span className="font-black text-2xl tracking-tighter">{day}</span>
                         <span className="text-[9px] font-black uppercase mt-1 tracking-widest opacity-80">{weekday}</span>
@@ -622,128 +684,104 @@ export default function MiValePage() {
                   })}
                 </div>
               )}
-
-              {/* BANNER DE ANTOJITOS FIJOS */}
-              <button 
-                onClick={() => setMostrarMenuFijo(true)}
-                className="relative z-10 w-full mb-8 bg-[#2A3F6D]/40 border border-[#2A3F6D] active:bg-[#2A3F6D] p-4 rounded-2xl flex items-center justify-between transition-all active:scale-95"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="bg-[#1A2744] p-2.5 rounded-xl text-amber-400 shadow-inner">
-                    <Store size={18}/>
-                  </div>
-                  <div className="text-left">
-                    <h4 className="text-white font-black text-xs uppercase tracking-widest mb-0.5">Comida Rápida</h4>
-                    <p className="text-slate-400 text-[9px] font-bold uppercase tracking-wider">Ver menú mostrador</p>
-                  </div>
-                </div>
-                <ChevronRight className="text-slate-500" size={20}/>
-              </button>
-
-              <div key={fechaActiva} className="min-h-[150px] relative z-10">
-                
-                {reservasDelDia.length > 0 && (
-                  <div className="space-y-4 mb-8">
-                    {reservasDelDia.map((reserva) => (
-                      <div key={reserva.id} className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-[2rem] flex flex-col items-center text-center anim-fade-up relative overflow-hidden" style={{animationDelay: '0ms'}}>
-                        <div className="bg-emerald-500 text-white p-3 rounded-2xl mb-4 shadow-[0_0_20px_rgba(16,185,129,0.5)]">
-                          <Check size={24}/>
-                        </div>
-                        <p className="text-emerald-400 font-black uppercase text-[10px] tracking-[0.2em] mb-1">Apartado Confirmado</p>
-                        <p className="text-white text-sm font-black uppercase leading-tight mt-2 mb-6 max-w-full">
-                          {reserva.menu_comedor?.platillo}
-                        </p>
-                        <button 
-                          onClick={() => cancelarReserva(reserva)}
-                          disabled={cargandoApartado || reserva.estado === 'CAPTURADO'}
-                          className={`w-full py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2 relative z-10 ${reserva.estado === 'CAPTURADO' ? 'bg-[#1A2744] text-slate-500 cursor-not-allowed' : 'bg-red-500/10 active:bg-red-500 text-red-400 active:text-white border border-red-500/20'}`}
-                        >
-                          {cargandoApartado ? <Loader2 className="anim-girar" size={14}/> : reserva.estado === 'CAPTURADO' ? 'En preparación' : <><X size={14}/> Cancelar Apartado</>}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {menusParaMostrar.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center text-slate-400 py-12 border-2 border-dashed border-[#2A3F6D] rounded-[2rem] bg-[#2A3F6D]/10">
-                    <Calendar size={32} className="mb-4 opacity-40"/>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-center leading-relaxed">Menú no publicado<br/>para esta fecha</p>
-                  </div>
-                ) : (
-                  <div className="space-y-10">
-                    {desayunos.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="bg-amber-400/10 p-2 rounded-lg"><Sunrise className="text-amber-400" size={18} /></div>
-                          <h3 className="text-white font-black text-sm uppercase tracking-[0.2em]">Desayunos</h3>
-                        </div>
-                        <div className="space-y-3">
-                          {desayunos.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={i} />)}
-                        </div>
-                      </div>
-                    )}
-
-                    {almuerzos.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="bg-emerald-400/10 p-2 rounded-lg"><Sun className="text-emerald-400" size={18} /></div>
-                          <h3 className="text-white font-black text-sm uppercase tracking-[0.2em]">Almuerzos</h3>
-                        </div>
-
-                        {almuerzos.filter(m => m.porciones_totales < 9000).length > 0 && (
-                          <div className="mb-10">
-                             <div className="space-y-3">
-                               {almuerzos.filter(m => m.porciones_totales < 9000).map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + i} />)}
-                             </div>
-                          </div>
-                        )}
-
-                        {almuerzos.filter(m => m.porciones_totales >= 9000).length > 0 && (
-                          <div className="bg-[#2A3F6D]/30 p-5 rounded-[2rem] border border-[#2A3F6D]">
-                            <h4 className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-black mb-4 flex items-center gap-2"><Star size={12} className="text-amber-400"/> Menú Fijo</h4>
-                            <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x">
-                               {almuerzos.filter(m => m.porciones_totales >= 9000).map((m, i) => (
-                                 <div key={m.id} className="snap-start min-w-[240px] bg-white p-5 rounded-3xl flex flex-col justify-between border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] active:scale-[0.98] transition-all duration-200">
-                                   <div>
-                                       <h3 className="text-[#1A2744] font-black text-sm uppercase leading-tight mb-4">{m.platillo}</h3>
-                                   </div>
-                                   <div className="flex items-end justify-between gap-2 mt-auto">
-                                       <div className="flex flex-col">
-                                         <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Check size={10}/> Siempre</span>
-                                         <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest">Disponible</span>
-                                       </div>
-                                       <button 
-                                          onClick={() => apartarComida(m)} 
-                                          disabled={cargandoApartado} 
-                                          className="relative overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-400 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-[0_4px_10px_rgba(16,185,129,0.3)] active:scale-90 active:shadow-sm transition-all flex items-center justify-center gap-1 before:absolute before:inset-0 before:bg-white/30 before:-translate-x-full before:animate-[shimmer_3s_infinite]"
-                                        >
-                                          {cargandoApartado ? <Loader2 className="anim-girar relative z-10" size={12}/> : <><Plus size={12} className="relative z-10"/><span className="relative z-10">Apartar</span></>}
-                                       </button>
-                                   </div>
-                                 </div>
-                               ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {cenas.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="bg-blue-400/10 p-2 rounded-lg"><Moon className="text-blue-400" size={18} /></div>
-                          <h3 className="text-white font-black text-sm uppercase tracking-[0.2em]">Cenas</h3>
-                        </div>
-                        <div className="space-y-3">
-                          {cenas.map((m, i) => <TarjetaPlatillo key={m.id} m={m} index={desayunos.length + almuerzos.length + i} />)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
+
+            {/* BANNER DE ANTOJITOS FIJOS */}
+            <button 
+              onClick={() => setMostrarMenuFijo(true)}
+              className="relative w-full bg-white border border-slate-100 shadow-[0_10px_20px_rgba(0,0,0,0.03)] p-5 rounded-[2rem] flex items-center justify-between transition-all hover:border-amber-200 hover:shadow-md active:scale-[0.98] group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="bg-amber-50 p-3 rounded-xl text-amber-500 border border-amber-100 group-hover:scale-110 transition-transform">
+                  <Store size={20}/>
+                </div>
+                <div className="text-left">
+                  <h4 className="text-[#1A2744] font-black text-sm uppercase tracking-tight mb-0.5">Antojitos / Comida Rápida</h4>
+                  <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest">Disponibles en mostrador</p>
+                </div>
+              </div>
+              <ChevronRight className="text-amber-400" size={24}/>
+            </button>
+
+            {/* RESERVAS DEL DÍA (Tickets flotantes) */}
+            <div key={fechaActiva} className="relative z-10">
+              {reservasDelDia.length > 0 && (
+                <div className="space-y-4 mb-8">
+                  <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-4 ml-2">Tu pedido para hoy:</h3>
+                  {reservasDelDia.map((reserva) => (
+                    <div key={reserva.id} className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-[2rem] flex flex-col items-center text-center anim-fade-up relative overflow-hidden" style={{animationDelay: '0ms'}}>
+                      <div className="bg-emerald-500 text-white p-3 rounded-2xl mb-4 shadow-[0_0_20px_rgba(16,185,129,0.5)]">
+                        <Check size={24}/>
+                      </div>
+                      <p className="text-emerald-500 font-black uppercase text-[10px] tracking-[0.2em] mb-1">Apartado Confirmado</p>
+                      <p className="text-[#1A2744] text-sm font-black uppercase leading-tight mt-2 mb-6 max-w-full">
+                        {reserva.menu_comedor?.platillo}
+                      </p>
+                      <button 
+                        onClick={() => cancelarReserva(reserva)}
+                        disabled={cargandoApartado || reserva.estado === 'CAPTURADO'}
+                        className={`w-full py-3.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2 relative z-10 ${reserva.estado === 'CAPTURADO' ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white border border-red-200'}`}
+                      >
+                        {cargandoApartado ? <Loader2 className="anim-girar" size={14}/> : reserva.estado === 'CAPTURADO' ? 'En preparación' : <><X size={14}/> Cancelar Apartado</>}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* LISTADO DE PLATILLOS (LIGHT / RAPPI STYLE) */}
+              {menusParaMostrar.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-slate-400 py-16 border-2 border-dashed border-slate-200 rounded-[2.5rem] bg-slate-50">
+                  <Calendar size={36} className="mb-4 text-slate-300"/>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-center leading-relaxed">Menú no publicado<br/>para esta fecha</p>
+                </div>
+              ) : (
+                <div className="space-y-12">
+                  
+                  {/* SECCIÓN: DESAYUNOS */}
+                  {desayunos.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-3 mb-5 pl-2">
+                        <div className="bg-amber-100 p-2.5 rounded-xl"><Sunrise className="text-amber-500" size={20} /></div>
+                        <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Desayunos</h3>
+                      </div>
+                      <div className="space-y-4">
+                        {desayunos.map((m, i) => <TarjetaPlatilloRappi key={m.id} m={m} index={i} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECCIÓN: ALMUERZOS */}
+                  {almuerzos.filter(m => m.porciones_totales < 9000).length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-3 mb-5 pl-2">
+                        <div className="bg-emerald-100 p-2.5 rounded-xl"><Sun className="text-emerald-500" size={20} /></div>
+                        <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Almuerzos</h3>
+                      </div>
+                      <div className="space-y-4">
+                        {almuerzos.filter(m => m.porciones_totales < 9000).map((m, i) => <TarjetaPlatilloRappi key={m.id} m={m} index={desayunos.length + i} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECCIÓN: CENAS */}
+                  {cenas.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-3 mb-5 pl-2">
+                        <div className="bg-indigo-100 p-2.5 rounded-xl"><Moon className="text-indigo-500" size={20} /></div>
+                        <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Cenas</h3>
+                      </div>
+                      <div className="space-y-4">
+                        {cenas.map((m, i) => <TarjetaPlatilloRappi key={m.id} m={m} index={desayunos.length + almuerzos.length + i} />)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* ==================================================================== */}
+            {/* FIN: SECCIÓN DEL MENÚ                                                */}
+            {/* ==================================================================== */}
 
             <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 mb-6">
               <div className="flex items-center gap-3 mb-6">
