@@ -432,7 +432,7 @@ export default function AdminDashboard() {
     if (!adminToken) return alert("Error de sesión: Faltan credenciales de seguridad.");
     setCargando(true);
 
-    const { data: empCierre } = await supabase.from('perfiles').select('tickets_canjeado, tickets_restantes').neq('id', '00000000-0000-0000-0000-000000000000');
+    const { data: empCierre } = await supabase.from('perfiles').select('tickets_canjeado, tickets_restantes').not('id', 'is', null);
     let c_semana = 0; let s_semana = 0;
     if (empCierre) {
       empCierre.forEach(e => { c_semana += (e.tickets_canjeado || 0); s_semana += (e.tickets_restantes || 0); });
@@ -445,9 +445,9 @@ export default function AdminDashboard() {
       vales_asignados_total: c_semana + s_semana
     });
 
-    await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('vales_activos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('historial_comedor').delete().not('id', 'is', null);
+    await supabase.from('vales_activos').delete().not('id', 'is', null);
+    await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).not('id', 'is', null);
     await registrarLog(adminToken, 'REINICIO_SEMANA', `Cierre semanal. Sobraron: ${s_semana} | Canjeados: ${c_semana}`);
     
     alert("✅ Cierre exitoso y contadores en 0. Sistema listo para cargar el nuevo Excel de la semana.");
@@ -459,14 +459,14 @@ export default function AdminDashboard() {
     if (!adminToken) return alert("Error de sesión: Faltan credenciales de seguridad.");
     setCargando(true);
     
-    // --- LIMPIEZA ABSOLUTA DE TODAS LAS TABLAS TRANSACCIONALES ---
-    await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('vales_activos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('reservas_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('cuotas_programadas').delete().neq('id', 'uuid-imposible'); // Borra todas las cuotas futuras
+    // --- LIMPIEZA ABSOLUTA DE TODAS LAS TABLAS TRANSACCIONALES USANDO FILTROS UNIVERSALES ---
+    await supabase.from('historial_comedor').delete().not('id', 'is', null);
+    await supabase.from('vales_activos').delete().not('id', 'is', null);
+    await supabase.from('reservas_comedor').delete().not('id', 'is', null);
+    await supabase.from('cuotas_programadas').delete().not('empleado_id', 'is', null);
     
     // --- RESETEO DE SALDOS ACTUALES ---
-    await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).not('id', 'is', null);
     
     await registrarLog(adminToken, 'LIMPIEZA_TOTAL', 'Vació historiales, reservas, cuotas futuras y puso contadores en 0. Empleados intactos.');
     
