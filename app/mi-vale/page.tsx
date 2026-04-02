@@ -781,7 +781,7 @@ export default function MiValePage() {
                 className="bg-white border border-amber-100 shadow-sm p-4 rounded-[2rem] flex flex-col items-center justify-center text-center gap-2 hover:bg-amber-50 active:scale-95 transition-all group"
               >
                 <div className="bg-amber-50 text-amber-500 p-3 rounded-2xl group-hover:scale-110 transition-transform"><MessageSquare size={24}/></div>
-                <span className="text-[10px] font-black text-[#1A2744] uppercase tracking-widest mt-1">Buzón de Quejas</span>
+                <span className="text-[10px] font-black text-[#1A2744] uppercase tracking-widest mt-1">Buzón de Sugerencias</span>
               </button>
             </div>
 
