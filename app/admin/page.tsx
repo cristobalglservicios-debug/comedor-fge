@@ -455,17 +455,22 @@ export default function AdminDashboard() {
   };
 
   const limpiarHistorialPruebas = async () => {
-    if (!confirm("⚠️ ¿PURGAR SISTEMA? Se vaciarán historiales, reservas y vales activos. Los perfiles de empleados quedarán INTACTOS con saldo en 0.")) return;
+    if (!confirm("⚠️ ¿PURGAR SISTEMA? Se vaciarán historiales, reservas, vales activos y CUOTAS PROGRAMADAS. Los perfiles de empleados quedarán INTACTOS con saldo en 0.")) return;
     if (!adminToken) return alert("Error de sesión: Faltan credenciales de seguridad.");
     setCargando(true);
+    
+    // --- LIMPIEZA ABSOLUTA DE TODAS LAS TABLAS TRANSACCIONALES ---
     await supabase.from('historial_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('vales_activos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('reservas_comedor').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('cuotas_programadas').delete().neq('id', 'uuid-imposible'); // Borra todas las cuotas futuras
+    
+    // --- RESETEO DE SALDOS ACTUALES ---
     await supabase.from('perfiles').update({ tickets_restantes: 0, tickets_canjeado: 0 }).neq('id', '00000000-0000-0000-0000-000000000000');
     
-    await registrarLog(adminToken, 'LIMPIEZA_TOTAL', 'Vació historiales y puso contadores en 0. Empleados intactos.');
+    await registrarLog(adminToken, 'LIMPIEZA_TOTAL', 'Vació historiales, reservas, cuotas futuras y puso contadores en 0. Empleados intactos.');
     
-    alert("✅ Sistema purgado exitosamente. Los empleados se conservaron.");
+    alert("✅ Sistema purgado exitosamente. Historial, reservas y programación futura eliminados. Los empleados se conservaron.");
     cargarDatosGenerales(); setCargando(false);
   };
 
