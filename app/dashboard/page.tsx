@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Loader2, Lock, Mail, ArrowRight, ChefHat, UtensilsCrossed } from 'lucide-react';
+import { Loader2, Lock, User, ArrowRight, ChefHat, UtensilsCrossed, LifeBuoy } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,7 +11,7 @@ const supabase = createClient(
 );
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,8 +34,15 @@ export default function LoginScreen() {
     setLoading(true);
     setError('');
 
+    // === LÓGICA INTELIGENTE DE USUARIO CORTO ===
+    let emailToLogin = usuario.toLowerCase().trim();
+    // Si el usuario no escribió el '@', el sistema lo autocompleta
+    if (emailToLogin && !emailToLogin.includes('@')) {
+      emailToLogin = `${emailToLogin}@comedorfge.gob.mx`;
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.toLowerCase().trim(),
+      email: emailToLogin,
       password: password
     });
 
@@ -86,6 +93,13 @@ export default function LoginScreen() {
     }
   };
 
+  // --- LÓGICA DE SOPORTE WHATSAPP ---
+  const handleSoporte = () => {
+    const numeroWhatsApp = "5219991190990"; 
+    const texto = encodeURIComponent("Hola, tengo problemas para acceder a mi cuenta del Comedor FGE.");
+    window.open(`https://wa.me/${numeroWhatsApp}?text=${texto}`, '_blank');
+  };
+
   // Cálculos para el Parallax (movimiento inverso y suave)
   const parallaxX = (mousePos.x - (typeof window !== 'undefined' ? window.innerWidth / 2 : 0)) * -0.05;
   const parallaxY = (mousePos.y - (typeof window !== 'undefined' ? window.innerHeight / 2 : 0)) * -0.05;
@@ -127,21 +141,21 @@ export default function LoginScreen() {
         <div className="w-full bg-white/90 backdrop-blur-xl p-8 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white anim-fade-up transition-transform duration-500 hover:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)]" style={{animationDelay: '300ms'}}>
           <form onSubmit={handleLogin} className="space-y-6">
             
-            {/* Input Correo */}
+            {/* Input Usuario */}
             <div className="space-y-2 group/input">
-              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2 group-focus-within/input:text-[#1A2744] transition-colors duration-300">Correo Institucional</label>
+              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase ml-2 group-focus-within/input:text-[#1A2744] transition-colors duration-300">Usuario (Nombre.Apellido)</label>
               <div className="relative overflow-hidden rounded-2xl">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within/input:text-amber-500 transition-all duration-500 group-focus-within/input:scale-110 z-10">
-                  <Mail size={18} className="transition-transform duration-300 group-focus-within/input:-rotate-6" />
+                  <User size={18} className="transition-transform duration-300 group-focus-within/input:-rotate-6" />
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-transparent opacity-0 group-focus-within/input:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={usuario}
+                  onChange={(e) => setUsuario(e.target.value)}
                   className="w-full pl-11 pr-4 py-4 bg-slate-50/80 border border-slate-200 rounded-2xl text-[#1A2744] font-bold focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all duration-300 placeholder:font-normal placeholder:text-slate-300 relative z-0"
-                  placeholder="ejemplo@fge.gob.mx"
+                  placeholder="juan.perez"
                 />
               </div>
             </div>
@@ -187,6 +201,15 @@ export default function LoginScreen() {
                     <>Iniciar Sesión <ArrowRight className="text-amber-400 transition-transform group-hover/btn:translate-x-1" size={16} /></>
                   )}
               </span>
+            </button>
+            
+            {/* Botón Secundario de Soporte (WA) */}
+            <button
+              type="button"
+              onClick={handleSoporte}
+              className="w-full mt-2 flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-blue-500 transition-colors active:scale-95"
+            >
+              <LifeBuoy size={14} /> ¿Problemas con tu acceso?
             </button>
           </form>
         </div>
