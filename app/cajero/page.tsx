@@ -35,8 +35,6 @@ export default function PantallaCajero() {
   const [userEmail, setUserEmail] = useState('');
   const [miRol, setMiRol] = useState('');
   const [usarCamara, setUsarCamara] = useState(false);
-  const [directorio, setDirectorio] = useState<any[]>([]);
-  const [sugerencias, setSugerencias] = useState<any[]>([]);
   
   const [todosMenus, setTodosMenus] = useState<any[]>([]);
   const [todasReservas, setTodasReservas] = useState<any[]>([]);
@@ -45,10 +43,6 @@ export default function PantallaCajero() {
   const [fechaMonitor, setFechaMonitor] = useState(getHoyMerida());
   const [textosPlan, setTextosPlan] = useState({ desayuno: '', almuerzo: '', cena: '' });
   const [porcionesPlan, setPorcionesPlan] = useState({ desayuno: 20, almuerzo: 30, cena: 20 });
-
-  const [modalManual, setModalManual] = useState(false);
-  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<any>(null);
-  const [cantidadManual, setCantidadManual] = useState(1);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -77,9 +71,6 @@ export default function PantallaCajero() {
       setLoadingAcceso(false); 
       await cargarDatosDia(); 
       await cargarDatosGlobales();
-      
-      const { data: perfiles } = await supabase.from('perfiles').select('nombre_completo, dependencia, tickets_restantes, id');
-      if (perfiles) setDirectorio(perfiles);
       
       setTimeout(() => inputRef.current?.focus(), 500);
     };
@@ -128,39 +119,13 @@ export default function PantallaCajero() {
       }
     }
   };
-
-  const manejarInput = () => {
-    if (!inputRef.current) return;
-    const val = inputRef.current.value.toUpperCase();
-    
-    // Si son puros números y son 10, es que el láser acaba de disparar el código gordo
-    if (/^\d{10}$/.test(val)) {
-        setSugerencias([]);
-        return;
-    }
-
-    if (val.length >= 3) { 
-        const resultados = directorio.filter(p => p.nombre_completo.toUpperCase().includes(val)).slice(0, 5); 
-        setSugerencias(resultados); 
-    } else { 
-        setSugerencias([]); 
-    }
-  };
-  
-  const seleccionarSugerencia = (emp: any) => { 
-    setSugerencias([]); 
-    if (inputRef.current) inputRef.current.value = '';
-    setEmpleadoSeleccionado(emp);
-    setCantidadManual(1);
-    setModalManual(true); 
-  };
   
   const hoyReal = getHoyMerida();
   const reservasHoy = todasReservas.filter(r => r.menu_comedor?.fecha === hoyReal);
   const menuMonitor = todosMenus.filter(m => m.fecha === fechaMonitor);
   const reservasMonitor = todasReservas.filter(r => r.menu_comedor?.fecha === fechaMonitor);
 
-  // NUEVA LÓGICA DE ESCANEO ULTRARRÁPIDO
+  // LÓGICA DE ESCANEO ULTRARRÁPIDO Y SEGURIDAD ZERO-TRUST
   const procesarEscaneo = async (e?: React.FormEvent | null, codigoDirecto?: string) => {
     if (e) e.preventDefault();
     const valorDOM = codigoDirecto || inputRef.current?.value || '';
@@ -168,7 +133,7 @@ export default function PantallaCajero() {
     
     if (!uidCorto) return;
     if (uidCorto.length !== 10 || !/^\d+$/.test(uidCorto)) {
-        setMensaje({ tipo: 'error', texto: `VALE INVÁLIDO. LECTURA: "${uidCorto}"` });
+        setMensaje({ tipo: 'error', texto: `CÓDIGO DEBE SER DE 10 DÍGITOS. LECTURA: "${uidCorto}"` });
         if (inputRef.current) inputRef.current.value = '';
         return;
     }
@@ -179,7 +144,7 @@ export default function PantallaCajero() {
     const { data: valeActivo } = await supabase.from('vales_activos').select('*').eq('id', uidCorto).maybeSingle();
 
     if (!valeActivo) {
-        setMensaje({ tipo: 'quemado', texto: 'VALE NO EXISTE O YA FUE COBRADO/CANCELADO.' });
+        setMensaje({ tipo: 'quemado', texto: 'CÓDIGO NO EXISTE O YA FUE COBRADO/CANCELADO.' });
         setCargando(false);
         if (inputRef.current) inputRef.current.value = '';
         return;
@@ -217,38 +182,6 @@ export default function PantallaCajero() {
         inputRef.current.focus();
     }
   };
-
-  const ejecutarCanjeManual = async () => {
-      if(!empleadoSeleccionado) return;
-      setMensaje({ tipo: null, texto: '' }); setCargando(true);
-
-      const { data: empleado } = await supabase.from('perfiles').select('*').eq('id', empleadoSeleccionado.id).maybeSingle();
-      
-      if (!empleado) { 
-        setMensaje({ tipo: 'error', texto: `PERFIL NO ENCONTRADO EN BASE DE DATOS.` }); 
-      } 
-      else if (empleado.tickets_restantes < cantidadManual) { 
-        setMensaje({ tipo: 'error', texto: `${empleado.nombre_completo} NO TIENE SALDO PARA ${cantidadManual} RACIONES.` }); 
-      } 
-      else {
-        await supabase.from('perfiles').update({ tickets_restantes: empleado.tickets_restantes - cantidadManual, tickets_canjeado: (empleado.tickets_canjeado || 0) + cantidadManual }).eq('id', empleado.id);
-        const registrosHistorial = Array(cantidadManual).fill({ nombre_empleado: empleado.nombre_completo, dependencia: empleado.dependencia });
-        await supabase.from('historial_comedor').insert(registrosHistorial);
-        
-        const reservaExistente = reservasHoy.find(r => r.nombre_empleado === empleado.nombre_completo && r.estado === 'APARTADO');
-        if (reservaExistente) await supabase.from('reservas_comedor').update({ estado: 'CAPTURADO' }).eq('id', reservaExistente.id);
-
-        setMensaje({ tipo: 'exito', texto: cantidadManual > 1 ? `COBRO MANUAL MÚLTIPLE OK (${cantidadManual})` : '¡COBRO MANUAL EXITOSO!', empleado, cantidad: cantidadManual, hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) });
-        await cargarDatosDia(); await cargarDatosGlobales();
-        setModalManual(false);
-      }
-      
-      setCargando(false);
-      if (inputRef.current) {
-        inputRef.current.value = '';
-        inputRef.current.focus();
-      }
-  }
 
   const procesarPlanificador = async () => {
     setCargando(true);
@@ -447,22 +380,8 @@ export default function PantallaCajero() {
                 <form onSubmit={procesarEscaneo} className="flex flex-col gap-4 relative max-w-2xl mx-auto">
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 relative">
                     <div className="flex-1 relative group">
-                      <input ref={inputRef} type="text" onChange={manejarInput} defaultValue="" className="w-full p-5 pl-14 bg-slate-50 border-2 border-slate-200 rounded-2xl text-lg font-black outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all uppercase tracking-widest text-[#1A2744] placeholder:font-normal placeholder:text-slate-300" placeholder="NOMBRE O CÓDIGO MANUAL..." autoFocus />
-                      <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={22} />
-                      
-                      {sugerencias.length > 0 && (
-                        <div className="absolute top-[calc(100%+0.5rem)] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-50 animate-in fade-in duration-200">
-                          {sugerencias.map((s, i) => (
-                            <div key={i} onClick={() => seleccionarSugerencia(s)} className="p-4 hover:bg-amber-50 cursor-pointer flex justify-between items-center transition-colors group/item">
-                              <div>
-                                <p className="font-black text-sm text-[#1A2744] uppercase group-hover/item:text-amber-600 transition-colors">{s.nombre_completo}</p>
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{s.dependencia}</p>
-                              </div>
-                              <span className="bg-white text-[#1A2744] border border-slate-200 shadow-sm px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest group-hover/item:border-amber-200 group-hover/item:bg-amber-100 transition-colors">Cobrar</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <input ref={inputRef} type="text" defaultValue="" className="w-full p-5 pl-14 bg-slate-50 border-2 border-slate-200 rounded-2xl text-lg font-black outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all uppercase tracking-widest text-[#1A2744] placeholder:font-normal placeholder:text-slate-300" placeholder="ESPERANDO LECTURA DEL LÁSER..." autoFocus />
+                      <Scan className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={22} />
                     </div>
                     <button type="submit" disabled={cargando} className="bg-[#1A2744] hover:bg-[#25365d] active:scale-95 text-white px-8 py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 transition-all shrink-0 flex items-center justify-center min-w-[140px] text-[10px]">
                       {cargando ? <Loader2 className="animate-spin text-amber-400" size={20} /> : 'Procesar'}
@@ -762,43 +681,6 @@ export default function PantallaCajero() {
           </div>
         </div>
       </div>
-
-      {/* MODAL DE COBRO MANUAL SUPER MEJORADO */}
-      {modalManual && empleadoSeleccionado && (
-        <div className="fixed inset-0 bg-[#1A2744]/95 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-[3rem] w-full max-w-md overflow-hidden shadow-2xl shadow-black/50 border border-white/10 animate-in zoom-in-95 duration-300 relative">
-            
-            <div className="bg-gradient-to-b from-slate-50 to-white p-10 text-center relative border-b border-slate-100">
-                <button onClick={()=>setModalManual(false)} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 bg-white p-2 rounded-full shadow-sm border border-slate-100 transition-colors"><X size={16}/></button>
-                <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-[2rem] rotate-3 flex items-center justify-center mx-auto mb-6 shadow-sm border border-amber-100"><KeyRound size={36} className="-rotate-3"/></div>
-                <h2 className="text-2xl font-black text-[#1A2744] uppercase mb-2 tracking-tight">Cobro Manual</h2>
-                <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] bg-slate-100 inline-block px-3 py-1 rounded-md">Sin código de barras</p>
-            </div>
-
-            <div className="p-10">
-                <div className="bg-slate-50/80 p-5 rounded-2xl mb-8 text-center border border-slate-100">
-                    <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mb-2">Identidad Seleccionada</p>
-                    <p className="text-[#1A2744] font-black text-xl uppercase leading-tight">{empleadoSeleccionado.nombre_completo}</p>
-                </div>
-                
-                <div className="mb-8">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 block text-center">Raciones a cobrar</label>
-                    <div className="flex items-center bg-slate-50 rounded-2xl border border-slate-200 shadow-sm p-1 max-w-[200px] mx-auto">
-                        <button onClick={()=>setCantidadManual(Math.max(1, cantidadManual-1))} className="p-3 hover:bg-white rounded-xl text-slate-400 hover:text-[#1A2744] hover:shadow-sm transition-all"><Minus size={16}/></button>
-                        <span className="flex-1 text-center font-black text-2xl text-[#1A2744]">{cantidadManual}</span>
-                        <button onClick={()=>setCantidadManual(Math.min(empleadoSeleccionado.tickets_restantes, cantidadManual+1))} className="p-3 hover:bg-white rounded-xl text-slate-400 hover:text-[#1A2744] hover:shadow-sm transition-all"><Plus size={16}/></button>
-                    </div>
-                </div>
-
-                <div className="flex gap-4">
-                    <button onClick={ejecutarCanjeManual} disabled={cargando} className="w-full bg-[#1A2744] text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-[#1A2744]/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-[#25365d]">
-                      {cargando ? <Loader2 className="animate-spin text-amber-400" size={18}/> : <><ShieldCheck size={16} className="text-amber-400"/> Ejecutar Cobro Directo</>}
-                    </button>
-                </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <style dangerouslySetInnerHTML={{__html: `
         .no-scrollbar::-webkit-scrollbar { display: none; }
