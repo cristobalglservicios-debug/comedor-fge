@@ -370,7 +370,6 @@ export default function MiValePage() {
     );
   }
 
-  // --- INTERFAZ MEJORADA: PERFIL NO ENCONTRADO ---
   if (estadoVista === 'busqueda') {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center relative overflow-hidden p-6 text-center">
@@ -400,7 +399,6 @@ export default function MiValePage() {
     const isAlmuerzo = m.tipo_comida === 'ALMUERZO';
     const isAntojito = m.porciones_totales >= 9000;
     
-    // Asignación de Paleta de Colores
     const tema = isDesayuno ? {
       bg: 'bg-amber-50', text: 'text-amber-500', border: 'border-amber-100',
       btnFrom: 'from-amber-500', btnTo: 'to-amber-400', shadow: 'shadow-amber-500/20',
@@ -752,15 +750,36 @@ export default function MiValePage() {
                   )}
 
                   {/* SECCIÓN: ALMUERZOS */}
-                  {almuerzos.filter(m => m.porciones_totales < 9000).length > 0 && (
+                  {almuerzos.length > 0 && (
                     <div>
-                      <div className="flex items-center gap-3 mb-5 pl-2">
-                        <div className="bg-emerald-100 p-2.5 rounded-xl"><Sun className="text-emerald-500" size={20} /></div>
-                        <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Almuerzos</h3>
-                      </div>
-                      <div className="space-y-4">
-                        {almuerzos.filter(m => m.porciones_totales < 9000).map((m, i) => <TarjetaPlatilloRappi key={m.id} m={m} index={desayunos.length + i} />)}
-                      </div>
+                      {/* Sub-sección: Almuerzos del Día */}
+                      {almuerzos.filter(m => m.porciones_totales < 9000).length > 0 && (
+                        <div className="mb-8">
+                          <div className="flex items-center gap-3 mb-5 pl-2">
+                            <div className="bg-emerald-100 p-2.5 rounded-xl"><Sun className="text-emerald-500" size={20} /></div>
+                            <h3 className="text-[#1A2744] font-black text-lg uppercase tracking-tight">Almuerzos del Día</h3>
+                          </div>
+                          <div className="space-y-4">
+                            {almuerzos.filter(m => m.porciones_totales < 9000).map((m, i) => <TarjetaPlatilloRappi key={m.id} m={m} index={desayunos.length + i} />)}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sub-sección: Platillos Fijos (Peghuga, Milanesa, etc.) */}
+                      {almuerzos.filter(m => m.porciones_totales >= 9000).length > 0 && (
+                        <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-200 shadow-inner">
+                          <div className="flex items-center gap-3 mb-5 pl-2">
+                            <div className="bg-amber-100 p-2.5 rounded-xl"><Star className="text-amber-500" size={20} /></div>
+                            <div>
+                              <h3 className="text-[#1A2744] font-black text-sm uppercase tracking-tight">Menú Fijo</h3>
+                              <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest">Siempre disponibles</p>
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            {almuerzos.filter(m => m.porciones_totales >= 9000).map((m, i) => <TarjetaPlatilloRappi key={m.id} m={m} index={desayunos.length + almuerzos.filter(x => x.porciones_totales < 9000).length + i} />)}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
