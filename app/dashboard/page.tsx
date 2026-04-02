@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Loader2, Lock, User, ArrowRight, ChefHat, UtensilsCrossed, LifeBuoy } from 'lucide-react';
+import { Loader2, Lock, User, ArrowRight, ChefHat, UtensilsCrossed, LifeBuoy, Eye, EyeOff } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +13,7 @@ const supabase = createClient(
 export default function LoginScreen() {
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -169,13 +170,20 @@ export default function LoginScreen() {
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-transparent opacity-0 group-focus-within/input:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-4 bg-slate-50/80 border border-slate-200 rounded-2xl text-[#1A2744] font-bold focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all duration-300 placeholder:font-normal placeholder:text-slate-300 tracking-widest relative z-0"
+                  className="w-full pl-11 pr-12 py-4 bg-slate-50/80 border border-slate-200 rounded-2xl text-[#1A2744] font-bold focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 outline-none transition-all duration-300 placeholder:font-normal placeholder:text-slate-300 tracking-widest relative z-0"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-amber-500 focus:outline-none transition-colors z-10 active:scale-90"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
