@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, ChefHat, UtensilsCrossed, Loader2 } from 'lucide-react';
+import { ChevronRight, ChefHat, UtensilsCrossed, Loader2, LifeBuoy, MessageSquare, X, Send, CheckCircle2 } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,6 +15,13 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
   const [isRouting, setIsRouting] = useState(false);
+
+  // Estados para el Buzón de Quejas/Sugerencias
+  const [showBuzon, setShowBuzon] = useState(false);
+  const [buzonTipo, setBuzonTipo] = useState('Sugerencia');
+  const [buzonMensaje, setBuzonMensaje] = useState('');
+  const [enviandoBuzon, setEnviandoBuzon] = useState(false);
+  const [mensajeExito, setMensajeExito] = useState(false);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -71,6 +78,40 @@ export default function Home() {
     }
   };
 
+  // --- LÓGICA DE SOPORTE WHATSAPP ---
+  const handleSoporte = () => {
+    const numeroWhatsApp = "5219991190990"; 
+    const texto = encodeURIComponent("Hola, necesito ayuda con mi acceso al sistema del Comedor FGE.");
+    window.open(`https://wa.me/${numeroWhatsApp}?text=${texto}`, '_blank');
+  };
+
+  // --- LÓGICA DE ENVÍO DE BUZÓN ---
+  const enviarBuzon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (buzonMensaje.trim().length < 10) return alert("Por favor, detalla un poco más tu mensaje.");
+    
+    setEnviandoBuzon(true);
+    const { error } = await supabase.from('buzon_mensajes').insert([{
+      tipo: buzonTipo,
+      mensaje: buzonMensaje.trim()
+    }]);
+    
+    setEnviandoBuzon(false);
+    
+    if (error) {
+      alert("Error al enviar el mensaje. Intenta de nuevo.");
+      console.error(error);
+    } else {
+      setMensajeExito(true);
+      setTimeout(() => {
+        setShowBuzon(false);
+        setMensajeExito(false);
+        setBuzonMensaje('');
+        setBuzonTipo('Sugerencia');
+      }, 3000);
+    }
+  };
+
   if (loading || isRouting) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center relative overflow-hidden">
@@ -105,9 +146,9 @@ export default function Home() {
       <div className="absolute top-0 left-0 w-full h-[40vh] bg-gradient-to-b from-[#1A2744] to-[#F8FAFC] -z-10"></div>
       <div className="absolute top-[-20%] right-[-10%] w-[60vh] h-[60vh] bg-amber-500/10 rounded-full blur-[100px] -z-10"></div>
 
-      <div className="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-md mx-auto">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-md mx-auto z-10">
         
-        <div className="w-full bg-white/80 backdrop-blur-xl p-10 rounded-[3rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white flex flex-col items-center text-center anim-fade-up">
+        <div className="w-full bg-white/80 backdrop-blur-xl p-8 sm:p-10 rounded-[3rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white flex flex-col items-center text-center anim-fade-up relative">
           
           {/* PREMIUM LOGO ICON */}
           <div className="relative mb-8 group anim-scale-in" style={{animationDelay: '100ms'}}>
@@ -131,7 +172,7 @@ export default function Home() {
           </div>
 
           {/* DIVIDER */}
-          <div className="w-12 h-1 bg-amber-400 rounded-full mb-10 anim-scale-in" style={{animationDelay: '300ms'}}></div>
+          <div className="w-12 h-1 bg-amber-400 rounded-full mb-8 anim-scale-in" style={{animationDelay: '300ms'}}></div>
 
           {/* ACTION BUTTON */}
           <button 
@@ -147,15 +188,90 @@ export default function Home() {
             </span>
             <ChevronRight className="absolute right-6 text-amber-400 transition-transform group-hover:translate-x-2 z-10" size={20} />
           </button>
+
+          {/* SOPORTE Y BUZÓN (NUEVOS BOTONES) */}
+          <div className="w-full grid grid-cols-2 gap-3 mt-4 anim-fade-up" style={{animationDelay: '500ms'}}>
+            <button onClick={handleSoporte} className="flex flex-col items-center justify-center gap-1.5 p-4 rounded-2xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors border border-blue-100 active:scale-95">
+              <LifeBuoy size={20} />
+              <span className="text-[9px] font-black uppercase tracking-widest">Soporte</span>
+            </button>
+            <button onClick={() => setShowBuzon(true)} className="flex flex-col items-center justify-center gap-1.5 p-4 rounded-2xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors border border-amber-100 active:scale-95">
+              <MessageSquare size={20} />
+              <span className="text-[9px] font-black uppercase tracking-widest">Buzón</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* FOOTER */}
-      <div className="pb-8 text-center anim-fade-up" style={{animationDelay: '500ms'}}>
+      <div className="pb-8 text-center anim-fade-up z-10" style={{animationDelay: '600ms'}}>
         <p className="text-[9px] font-black tracking-[0.5em] text-slate-400/60 uppercase">
           FGE Yucatán • App Interna
         </p>
       </div>
+
+      {/* MODAL BUZÓN DE SUGERENCIAS / QUEJAS */}
+      {showBuzon && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#1A2744]/90 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl relative">
+            
+            <div className="bg-slate-50 p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="bg-amber-100 text-amber-600 p-2 rounded-xl">
+                  <MessageSquare size={20} />
+                </div>
+                <h3 className="font-black text-[#1A2744] uppercase tracking-tight text-sm">Buzón de Atención</h3>
+              </div>
+              <button onClick={() => setShowBuzon(false)} className="text-slate-400 hover:text-red-500 transition-colors bg-white p-2 rounded-full shadow-sm border border-slate-100 active:scale-90">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {mensajeExito ? (
+                <div className="text-center py-8">
+                  <CheckCircle2 size={48} className="text-emerald-500 mx-auto mb-4" />
+                  <h4 className="font-black text-[#1A2744] text-lg uppercase tracking-tight mb-2">¡Enviado!</h4>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Gracias por tu mensaje.</p>
+                </div>
+              ) : (
+                <form onSubmit={enviarBuzon} className="space-y-4">
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2 block ml-1">Tipo de Mensaje</label>
+                    <select 
+                      value={buzonTipo} 
+                      onChange={(e) => setBuzonTipo(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-xs font-black uppercase text-[#1A2744] outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all cursor-pointer"
+                    >
+                      <option value="Sugerencia">Sugerencia</option>
+                      <option value="Queja">Queja / Reporte</option>
+                      <option value="Problema Tecnico">Falla Técnica</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2 block ml-1">Detalle (Anónimo)</label>
+                    <textarea 
+                      required
+                      rows={4}
+                      placeholder="Escribe tu mensaje aquí..."
+                      value={buzonMensaje}
+                      onChange={(e) => setBuzonMensaje(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-xs outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all resize-none text-[#1A2744]"
+                    ></textarea>
+                  </div>
+                  <button 
+                    type="submit" 
+                    disabled={enviandoBuzon}
+                    className="w-full bg-[#1A2744] text-white p-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl shadow-[#1A2744]/20 disabled:opacity-50"
+                  >
+                    {enviandoBuzon ? <Loader2 className="animate-spin text-amber-400" size={16} /> : <><Send size={16} className="text-amber-400"/> Enviar Mensaje</>}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CUSTOM ANIMATIONS */}
       <style dangerouslySetInnerHTML={{__html: `
@@ -170,6 +286,10 @@ export default function Home() {
         @keyframes shimmer {
           100% { transform: translateX(100%); }
         }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
         .anim-fade-up {
           opacity: 0;
           animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -177,6 +297,9 @@ export default function Home() {
         .anim-scale-in {
           opacity: 0;
           animation: scaleIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.3s ease-out forwards;
         }
       `}} />
     </div>
