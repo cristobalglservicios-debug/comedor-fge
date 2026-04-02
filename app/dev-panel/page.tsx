@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings, Ticket, ClipboardList, Save, Radar } from 'lucide-react';
+import { Terminal, ShieldAlert, Users, Database, Activity, Power, Trash2, LogOut, Search, UserPlus, AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, ShieldCheck, DollarSign, ScanLine, Settings, Ticket, ClipboardList, Save, Radar, Mail } from 'lucide-react';
 import { crearUsuarioGlobal, eliminarUsuarioGlobal, actualizarPerfilGlobal } from '../admin/actions'; 
 
 const supabase = createClient(
@@ -11,7 +11,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Tab = 'roles' | 'switches' | 'danger' | 'auditoria' | 'monitor';
+type Tab = 'roles' | 'switches' | 'danger' | 'auditoria' | 'monitor' | 'buzon';
 
 export default function DevPanelPage() {
   const router = useRouter();
@@ -28,11 +28,8 @@ export default function DevPanelPage() {
   const [busqueda, setBusqueda] = useState('');
   const [configuraciones, setConfiguraciones] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
-  const [alertasSeguridad, setAlertasSeguridad] = useState<any[]>([]); // Nuevo estado para alertas
-
-  // Estado Modal Nuevo Usuario
-  const [modalNuevo, setModalNuevo] = useState(false);
-  const [nuevoUser, setNuevoUser] = useState({ nombre: '', email: '', rol: 'empleado', dependencia: '', pass: 'FGE2026*' });
+  const [alertasSeguridad, setAlertasSeguridad] = useState<any[]>([]);
+  const [mensajesBuzon, setMensajesBuzon] = useState<any[]>([]); // Nuevo estado para el buzón
 
   useEffect(() => {
     validarAccesoDev();
@@ -76,9 +73,12 @@ export default function DevPanelPage() {
     const { data: dataLogs } = await supabase.from('historial_comedor').select('*').order('fecha_hora', { ascending: false }).limit(50);
     if (dataLogs) setLogs(dataLogs);
 
-    // Cargar alertas de seguridad
     const { data: dataAlertas } = await supabase.from('alertas_seguridad').select('*').order('creado_en', { ascending: false }).limit(50);
     if (dataAlertas) setAlertasSeguridad(dataAlertas);
+
+    // CARGAR MENSAJES DEL BUZÓN
+    const { data: dataBuzon } = await supabase.from('buzon_mensajes').select('*').order('creado_en', { ascending: false });
+    if (dataBuzon) setMensajesBuzon(dataBuzon);
   };
 
   const manejarBusqueda = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -221,6 +221,9 @@ export default function DevPanelPage() {
     setCargandoAccion(false);
   };
 
+  const [modalNuevo, setModalNuevo] = useState(false);
+  const [nuevoUser, setNuevoUser] = useState({ nombre: '', email: '', rol: 'empleado', dependencia: '', pass: 'FGE2026*' });
+
   if (loadingAcceso) {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center font-mono text-emerald-500 font-bold"><Loader2 className="animate-spin mr-3"/> INICIANDO PROTOCOLO DEV...</div>;
   }
@@ -285,15 +288,16 @@ export default function DevPanelPage() {
             { id: 'switches', label: 'Kill Switches', icon: <Power size={16}/> },
             { id: 'auditoria', label: 'Logs Auditoría', icon: <Activity size={16}/> },
             { id: 'monitor', label: 'Monitor Brechas', icon: <Radar size={16}/> },
+            { id: 'buzon', label: 'Buzón FGE', icon: <Mail size={16}/> },
             { id: 'danger', label: 'Danger Zone', icon: <ShieldAlert size={16}/> }
           ].map(t => (
             <button 
               key={t.id} 
               onClick={() => setActiveTab(t.id as Tab)}
-              className={`flex-1 min-w-[150px] py-3 rounded-lg text-[11px] font-bold uppercase flex items-center justify-center gap-2 transition-all ${activeTab === t.id ? (t.id === 'monitor' ? 'bg-red-900/50 text-red-400 shadow-inner' : 'bg-slate-800 text-emerald-400 shadow-inner') : 'text-slate-500 hover:bg-slate-800/50'}`}
+              className={`flex-1 min-w-[150px] py-3 rounded-lg text-[11px] font-bold uppercase flex items-center justify-center gap-2 transition-all ${activeTab === t.id ? (t.id === 'monitor' || t.id === 'buzon' ? 'bg-blue-900/50 text-blue-400 shadow-inner' : 'bg-slate-800 text-emerald-400 shadow-inner') : 'text-slate-500 hover:bg-slate-800/50'}`}
             >
               {t.icon} {t.label}
-              {t.id === 'monitor' && alertasSeguridad.length > 0 && <span className="bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full animate-pulse">{alertasSeguridad.length}</span>}
+              {t.id === 'buzon' && mensajesBuzon.length > 0 && <span className="bg-blue-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">{mensajesBuzon.length}</span>}
             </button>
           ))}
         </div>
@@ -406,6 +410,47 @@ export default function DevPanelPage() {
           </div>
         )}
 
+        {/* MONITOR DE BUZÓN (NUEVO) */}
+        {activeTab === 'buzon' && (
+          <div className="bg-slate-900 border border-blue-900/30 rounded-2xl overflow-hidden shadow-2xl animate-fade-in">
+            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-blue-950/10">
+              <h2 className="text-lg font-black text-blue-400 uppercase tracking-widest flex items-center gap-2"><Mail /> Buzón de Quejas y Sugerencias</h2>
+              <button onClick={cargarDatos} className="bg-blue-900/30 hover:bg-blue-900/50 p-2 rounded-lg text-blue-400 transition-colors border border-blue-900/50"><RefreshCw size={16}/></button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[10px] whitespace-nowrap font-mono">
+                <thead className="bg-slate-950/80 text-blue-400/70 uppercase tracking-widest border-b border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4 w-48">Fecha / Hora</th>
+                    <th className="px-6 py-4">Tipo</th>
+                    <th className="px-6 py-4">Mensaje</th>
+                    <th className="px-6 py-4">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/30 text-slate-300">
+                  {mensajesBuzon.map((msg, i) => (
+                    <tr key={i} className="hover:bg-blue-950/20 transition-colors">
+                      <td className="px-6 py-4 text-slate-500">{new Date(msg.creado_en).toLocaleString('es-MX')}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${msg.tipo === 'Queja' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                          {msg.tipo}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-normal min-w-[300px] leading-relaxed py-4">{msg.mensaje}</td>
+                      <td className="px-6 py-4">
+                        <span className="text-slate-500 uppercase tracking-widest font-black text-[8px]">{msg.estado}</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {mensajesBuzon.length === 0 && (
+                    <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-500 uppercase font-black tracking-widest">El buzón está vacío</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'auditoria' && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl animate-fade-in">
             <div className="p-6 border-b border-slate-800 flex justify-between items-center">
@@ -430,9 +475,8 @@ export default function DevPanelPage() {
           </div>
         )}
 
-        {/* NUEVA PESTAÑA DE MONITOR DE BRECHAS */}
         {activeTab === 'monitor' && (
-          <div className="bg-slate-900 border border-red-900/30 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(220,38,38,0.05)] animate-fade-in">
+          <div className="bg-slate-900 border border-red-900/30 rounded-2xl overflow-hidden shadow-2xl animate-fade-in">
             <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-red-950/10">
               <h2 className="text-lg font-black text-red-500 uppercase tracking-widest flex items-center gap-2"><Radar className="animate-spin-slow"/> Radar de Intrusiones</h2>
               <button onClick={cargarDatos} className="bg-red-900/30 hover:bg-red-900/50 p-2 rounded-lg text-red-400 transition-colors border border-red-900/50"><RefreshCw size={16}/></button>

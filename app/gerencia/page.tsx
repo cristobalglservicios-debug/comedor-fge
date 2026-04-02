@@ -3,14 +3,14 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft, Wallet, Users, ShoppingCart, Plus, CheckCircle2, AlertTriangle, Calendar, DollarSign, FileText, Tag, User, MapPin, Clock, UserCheck, ShieldCheck, KeyRound, UserPlus } from 'lucide-react';
+import { Loader2, ArrowLeft, Wallet, Users, ShoppingCart, Plus, CheckCircle2, AlertTriangle, Calendar, DollarSign, FileText, Tag, User, MapPin, Clock, UserCheck, ShieldCheck, KeyRound, UserPlus, Mail } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Tab = 'gastos' | 'ventas' | 'personal' | 'asistencia';
+type Tab = 'gastos' | 'ventas' | 'personal' | 'asistencia' | 'buzon';
 
 export default function GerenciaDashboard() {
   const router = useRouter();
@@ -25,6 +25,7 @@ export default function GerenciaDashboard() {
   const [ventasRecientes, setVentasRecientes] = useState<any[]>([]);
   const [empleados, setEmpleados] = useState<any[]>([]);
   const [asistenciasHoy, setAsistenciasHoy] = useState<any[]>([]);
+  const [mensajesBuzon, setMensajesBuzon] = useState<any[]>([]);
 
   // Estados de los Formularios
   const [formGastos, setFormGastos] = useState({ fecha_gasto: '', categoria: 'Insumos Cocina', proveedor: '', concepto: '', monto: '', tipo_comprobante: 'Ticket' });
@@ -65,11 +66,12 @@ export default function GerenciaDashboard() {
   const cargarDatosGenerales = async () => {
     const hoy = new Date().toLocaleDateString('en-CA');
 
-    const [reqGastos, reqVentas, reqEmpleados, reqAsistencia] = await Promise.all([
+    const [reqGastos, reqVentas, reqEmpleados, reqAsistencia, reqBuzon] = await Promise.all([
       supabase.from('finanzas_gastos').select('*').order('created_at', { ascending: false }).limit(10),
       supabase.from('finanzas_ventas_extra').select('*').order('created_at', { ascending: false }).limit(10),
       supabase.from('cat_empleados').select('*').order('nombre_completo', { ascending: true }),
-      supabase.from('asistencia_diaria').select('*, cat_empleados(nombre_completo, puesto)').eq('fecha', hoy).order('hora_registro', { ascending: false })
+      supabase.from('asistencia_diaria').select('*, cat_empleados(nombre_completo, puesto)').eq('fecha', hoy).order('hora_registro', { ascending: false }),
+      supabase.from('buzon_mensajes').select('*').order('creado_en', { ascending: false })
     ]);
 
     if (reqGastos.data) setGastosRecientes(reqGastos.data);
@@ -79,6 +81,7 @@ export default function GerenciaDashboard() {
         if(reqEmpleados.data.length > 0) setFormAsistencia(prev => ({ ...prev, empleado_id: reqEmpleados.data[0].id }));
     }
     if (reqAsistencia.data) setAsistenciasHoy(reqAsistencia.data);
+    if (reqBuzon.data) setMensajesBuzon(reqBuzon.data);
   };
 
   const mostrarMensaje = (texto: string, tipo: 'exito' | 'error') => {
@@ -244,6 +247,10 @@ export default function GerenciaDashboard() {
           <button onClick={() => setActiveTab('ventas')} className={`flex-1 min-w-[150px] py-3.5 rounded-xl text-[11px] font-black uppercase flex items-center justify-center gap-2 transition-all ${activeTab === 'ventas' ? 'bg-[#1A2744] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
             <DollarSign size={16}/> Ventas Tienda
           </button>
+          <button onClick={() => setActiveTab('buzon')} className={`flex-1 min-w-[150px] py-3.5 rounded-xl text-[11px] font-black uppercase flex items-center justify-center gap-2 transition-all ${activeTab === 'buzon' ? 'bg-[#1A2744] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <Mail size={16}/> Buzón FGE
+            {mensajesBuzon.length > 0 && <span className="bg-amber-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">{mensajesBuzon.length}</span>}
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 anim-fade-up">
@@ -252,6 +259,23 @@ export default function GerenciaDashboard() {
           <div className="lg:col-span-5">
             <div className="bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 sticky top-28">
               
+              {/* === INFO BUZÓN (SIN FORMULARIO) === */}
+              {activeTab === 'buzon' && (
+                <div className="space-y-5">
+                  <div className="mb-6 border-b border-slate-100 pb-4">
+                    <h2 className="text-lg font-black text-[#1A2744] flex items-center gap-2"><Mail className="text-blue-500"/> Buzón de Atención</h2>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-1">Sugerencias y Reportes</p>
+                  </div>
+                  <div className="bg-blue-50/50 p-8 rounded-2xl border border-blue-100 text-center">
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-blue-50">
+                      <Mail size={32} className="text-blue-500" />
+                    </div>
+                    <p className="text-sm font-black text-[#1A2744] mb-2 uppercase tracking-wide">Monitor de Lectura</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest leading-relaxed">Aquí llegan los mensajes anónimos de la pantalla de inicio. Revisa el panel derecho para leer el contenido de cada reporte.</p>
+                  </div>
+                </div>
+              )}
+
               {/* === FORMULARIO ASISTENCIA MANUAL === */}
               {activeTab === 'asistencia' && (
                 <form onSubmit={submitAsistenciaManual} className="space-y-5">
@@ -421,12 +445,38 @@ export default function GerenciaDashboard() {
                  <FileText className="text-slate-400" size={20} />
                  <div>
                     <h3 className="text-sm font-black text-[#1A2744] uppercase tracking-widest">Auditoría en Tiempo Real</h3>
-                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Registros de {new Date().toLocaleDateString('es-MX')}</p>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Registros y Movimientos Activos</p>
                  </div>
               </div>
 
               <div className="overflow-x-auto flex-1 no-scrollbar">
                 
+                {/* LISTA BUZÓN */}
+                {activeTab === 'buzon' && (
+                  <table className="w-full text-left whitespace-nowrap">
+                    <thead className="text-[9px] uppercase font-black text-slate-400 tracking-widest border-b border-slate-100">
+                      <tr><th className="pb-3 pr-4">Fecha</th><th className="pb-3 pr-4">Tipo</th><th className="pb-3 pr-4">Mensaje</th><th className="pb-3 text-right">Estado</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {mensajesBuzon.length === 0 && <tr><td colSpan={4} className="py-8 text-center text-[10px] font-bold text-slate-400 uppercase">El buzón está vacío</td></tr>}
+                      {mensajesBuzon.map(msg => (
+                        <tr key={msg.id} className="hover:bg-slate-50/50">
+                          <td className="py-4 pr-4 text-[10px] font-bold text-slate-500">{new Date(msg.creado_en).toLocaleDateString('es-MX')}</td>
+                          <td className="py-4 pr-4">
+                            <span className={`px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest ${msg.tipo === 'Queja' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                              {msg.tipo}
+                            </span>
+                          </td>
+                          <td className="py-4 pr-4 whitespace-normal min-w-[200px] text-[11px] font-medium text-[#1A2744] leading-relaxed">{msg.mensaje}</td>
+                          <td className="py-4 text-right">
+                             <span className="text-slate-400 font-black text-[9px] uppercase tracking-widest">{msg.estado}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
                 {/* LISTA ASISTENCIA */}
                 {activeTab === 'asistencia' && (
                   <table className="w-full text-left whitespace-nowrap">
@@ -444,9 +494,9 @@ export default function GerenciaDashboard() {
                           <td className="py-4 pr-4 text-[11px] font-black text-slate-500">{a.hora_registro.substring(0,5)}</td>
                           <td className="py-4 pr-4 text-[9px] font-bold text-slate-400">{a.registrado_desde_ip === 'EXCEPCION_MANUAL' ? 'Gerencia' : 'App GPS'}</td>
                           <td className="py-4 text-right">
-                             <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest ${a.estatus.includes('OK') ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+                              <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest ${a.estatus.includes('OK') ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
                                 {a.estatus}
-                             </span>
+                              </span>
                           </td>
                         </tr>
                       ))}
